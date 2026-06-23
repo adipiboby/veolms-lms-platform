@@ -9,7 +9,7 @@ import StudentDashboardPage from "./pages/StudentDashboardPage";
 import AdminDashboardPage from "./pages/AdminDashboardPage";
 import ProtectedRoute from "./routes/ProtectedRoute";
 import RoleRoute from "./routes/RoleRoute";
-
+import AdminCoursesPage from "./pages/AdminCoursesPage";
 const App = () => {
   return (
     <>
@@ -28,6 +28,7 @@ const App = () => {
             <ProtectedRoute>
               <RoleRoute allowedRoles={["student", "admin"]}>
                 <StudentDashboardPage />
+                 <AdminCoursesPage />
               </RoleRoute>
             </ProtectedRoute>
           }
