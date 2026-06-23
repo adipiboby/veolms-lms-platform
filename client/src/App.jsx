@@ -1,45 +1,79 @@
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes, useLocation } from "react-router-dom";
+
 import Navbar from "./components/Navbar";
+
 import HomePage from "./pages/HomePage";
 import CoursesPage from "./pages/CoursesPage";
 import CourseDetailsPage from "./pages/CourseDetailsPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import StudentDashboardPage from "./pages/StudentDashboardPage";
+
 import AdminDashboardPage from "./pages/AdminDashboardPage";
+import AdminCoursesPage from "./pages/AdminCoursesPage";
+import AdminCourseCreatePage from "./pages/AdminCourseCreatePage";
+
 import ProtectedRoute from "./routes/ProtectedRoute";
 import RoleRoute from "./routes/RoleRoute";
-import AdminCoursesPage from "./pages/AdminCoursesPage";
+
 const App = () => {
+  const location = useLocation();
+
+  const isAdminRoute = location.pathname.startsWith("/admin");
+
   return (
     <>
-      <Navbar />
+      {!isAdminRoute && <Navbar />}
 
       <Routes>
+        {/* Public routes */}
         <Route path="/" element={<HomePage />} />
         <Route path="/courses" element={<CoursesPage />} />
         <Route path="/courses/:slug" element={<CourseDetailsPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
 
+        {/* Student routes */}
         <Route
           path="/student/dashboard"
           element={
             <ProtectedRoute>
-              <RoleRoute allowedRoles={["student", "admin"]}>
+              <RoleRoute allowedRoles={["student"]}>
                 <StudentDashboardPage />
-                 <AdminCoursesPage />
               </RoleRoute>
             </ProtectedRoute>
           }
         />
 
+        {/* Admin routes */}
         <Route
           path="/admin/dashboard"
           element={
             <ProtectedRoute>
               <RoleRoute allowedRoles={["admin"]}>
                 <AdminDashboardPage />
+              </RoleRoute>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/admin/courses"
+          element={
+            <ProtectedRoute>
+              <RoleRoute allowedRoles={["admin"]}>
+                <AdminCoursesPage />
+              </RoleRoute>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/admin/courses/create"
+          element={
+            <ProtectedRoute>
+              <RoleRoute allowedRoles={["admin"]}>
+                <AdminCourseCreatePage />
               </RoleRoute>
             </ProtectedRoute>
           }
