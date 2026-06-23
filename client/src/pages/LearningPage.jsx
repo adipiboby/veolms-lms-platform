@@ -31,6 +31,22 @@ const LearningPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const [progress, setProgress] = useState({
+    totalLessons: 0,
+    completedLessons: 0,
+    progressPercentage: 0,
+    lessonProgress: [],
+    currentLessonId: null,
+  });
+
+  const [markingComplete, setMarkingComplete] = useState(false);
+
+  const completedLessonIds = new Set(
+    progress.lessonProgress
+      ?.filter((item) => item.isCompleted)
+      .map((item) => item.lessonId)
+  );
+
   const lessons = useMemo(() => {
     if (!course?.sections) return [];
 
@@ -50,18 +66,31 @@ const LearningPage = () => {
 
         const res = await api.get(`/enrollments/learn/${slug}`);
 
-        setCourse(res.data.course);
+        const loadedCourse = res.data.course;
+        setCourse(loadedCourse);
 
-        const firstLesson = res.data.course.sections
-          ?.flatMap((section) =>
-            section.lessons.map((lesson) => ({
-              ...lesson,
-              sectionTitle: section.title,
-            }))
-          )
-          ?.sort((a, b) => a.order - b.order)[0];
+        const progressRes = await api.get(
+          `/progress/course/${loadedCourse._id}`
+        );
 
-        setCurrentLesson(firstLesson || null);
+        setProgress(progressRes.data);
+
+        const allLessons =
+          loadedCourse.sections
+            ?.flatMap((section) =>
+              section.lessons.map((lesson) => ({
+                ...lesson,
+                sectionTitle: section.title,
+              }))
+            )
+            ?.sort((a, b) => a.order - b.order) || [];
+
+        const resumeLesson =
+          allLessons.find(
+            (lesson) => lesson._id === progressRes.data.currentLessonId
+          ) || allLessons[0];
+
+        setCurrentLesson(resumeLesson || null);
       } catch (error) {
         console.error(error);
         setError(
@@ -74,6 +103,47 @@ const LearningPage = () => {
 
     fetchLearningCourse();
   }, [slug]);
+
+  const handleLessonClick = async (lesson, sectionTitle) => {
+    try {
+      setCurrentLesson({
+        ...lesson,
+        sectionTitle,
+      });
+
+      await api.post("/progress/lesson", {
+        courseId: course._id,
+        lessonId: lesson._id,
+        isCompleted: completedLessonIds.has(lesson._id),
+      });
+
+      const progressRes = await api.get(`/progress/course/${course._id}`);
+      setProgress(progressRes.data);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const handleMarkLessonComplete = async () => {
+    if (!course?._id || !currentLesson?._id) return;
+
+    try {
+      setMarkingComplete(true);
+
+      await api.post("/progress/lesson", {
+        courseId: course._id,
+        lessonId: currentLesson._id,
+        isCompleted: true,
+      });
+
+      const progressRes = await api.get(`/progress/course/${course._id}`);
+      setProgress(progressRes.data);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setMarkingComplete(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -90,6 +160,7 @@ const LearningPage = () => {
           <h1 className="text-3xl font-black text-red-300 mb-3">
             Access Denied
           </h1>
+
           <p className="text-slate-300 mb-6">{error}</p>
 
           <Link
@@ -152,8 +223,43 @@ const LearningPage = () => {
 
               <p className="text-slate-400">
                 Watch this lesson and continue through the course curriculum.
-                Progress tracking will be connected next.
               </p>
+
+              <div className="mt-6">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm text-slate-400">Course Progress</p>
+
+                  <p className="text-sm font-bold text-blue-300">
+                    {progress.progressPercentage}%
+                  </p>
+                </div>
+
+                <div className="h-3 rounded-full bg-slate-800 overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-blue-600 to-purple-600"
+                    style={{ width: `${progress.progressPercentage}%` }}
+                  />
+                </div>
+
+                <p className="text-sm text-slate-400 mt-2">
+                  {progress.completedLessons} of {progress.totalLessons} lessons
+                  completed
+                </p>
+              </div>
+
+              <button
+                onClick={handleMarkLessonComplete}
+                disabled={
+                  markingComplete || completedLessonIds.has(currentLesson?._id)
+                }
+                className="mt-6 px-6 py-3 rounded-2xl bg-green-600 text-white font-bold hover:bg-green-700 disabled:opacity-60"
+              >
+                {completedLessonIds.has(currentLesson?._id)
+                  ? "Completed"
+                  : markingComplete
+                  ? "Saving..."
+                  : "Mark as Complete"}
+              </button>
             </div>
           </div>
 
@@ -183,15 +289,13 @@ const LearningPage = () => {
                   <div className="p-3 space-y-2">
                     {section.lessons.map((lesson) => {
                       const isActive = currentLesson?._id === lesson._id;
+                      const isCompleted = completedLessonIds.has(lesson._id);
 
                       return (
                         <button
                           key={lesson._id}
                           onClick={() =>
-                            setCurrentLesson({
-                              ...lesson,
-                              sectionTitle: section.title,
-                            })
+                            handleLessonClick(lesson, section.title)
                           }
                           className={`w-full text-left p-4 rounded-2xl border ${
                             isActive
@@ -202,13 +306,17 @@ const LearningPage = () => {
                           <div className="flex items-start gap-3">
                             <div
                               className={`mt-1 ${
-                                isActive ? "text-blue-300" : "text-slate-400"
+                                isCompleted
+                                  ? "text-green-300"
+                                  : isActive
+                                  ? "text-blue-300"
+                                  : "text-slate-400"
                               }`}
                             >
-                              {isActive ? (
-                                <PlayCircle size={18} />
-                              ) : (
+                              {isCompleted ? (
                                 <CheckCircle size={18} />
+                              ) : (
+                                <PlayCircle size={18} />
                               )}
                             </div>
 
@@ -216,6 +324,7 @@ const LearningPage = () => {
                               <p className="font-bold text-white">
                                 {lesson.title}
                               </p>
+
                               <p className="text-sm text-slate-400 mt-1">
                                 {lesson.duration}
                               </p>

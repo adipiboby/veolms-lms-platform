@@ -14,6 +14,8 @@ import courseRoutes from "./routes/course.routes.js";
 import paymentRoutes from "./routes/payment.routes.js";
 
 import enrollmentRoutes from "./routes/enrollment.routes.js";
+
+import progressRoutes from "./routes/progress.routes.js";
 const app = express();
 
 const corsOptions = {
@@ -45,6 +47,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/courses", courseRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/enrollments", enrollmentRoutes);
+app.use("/api/progress", progressRoutes);
 app.get("/api/health", (req, res) => {
   res.status(200).json({
     success: true,

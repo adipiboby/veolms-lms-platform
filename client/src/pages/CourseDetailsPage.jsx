@@ -1,311 +1,342 @@
-import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
-import ReactPlayer from "react-player";
-import { api } from "../../src/services/api";
-import { CheckCircle, Clock, Lock, PlayCircle } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { BookOpen, CheckCircle, Clock, PlayCircle, Star } from "lucide-react";
+import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { loadRazorpayScript } from "../utils/loadRazorpay";
+
 const CourseDetailsPage = () => {
   const { slug } = useParams();
+  const navigate = useNavigate();
+  const { user, isAuthenticated } = useAuth();
 
   const [course, setCourse] = useState(null);
-  const [selectedVideo, setSelectedVideo] = useState("");
   const [loading, setLoading] = useState(true);
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [paymentError, setPaymentError] = useState("");
+  const [isEnrolled, setIsEnrolled] = useState(false);
+  const [checkingEnrollment, setCheckingEnrollment] = useState(false);
 
-  const navigate = useNavigate();
-const { user, isAuthenticated } = useAuth();
-const [paymentLoading, setPaymentLoading] = useState(false);
-const [paymentError, setPaymentError] = useState("");
+  const lessonsCount = useMemo(() => {
+    if (!course?.sections) return 0;
+
+    return course.sections.reduce((total, section) => {
+      return total + (section.lessons?.length || 0);
+    }, 0);
+  }, [course]);
 
   useEffect(() => {
     const fetchCourse = async () => {
       try {
-        const res = await api.get(`/courses/${slug}`);
-        const courseData = res.data.course;
+        setLoading(true);
+        setPaymentError("");
 
-        setCourse(courseData);
-        setSelectedVideo(courseData.trailerVideoUrl);
+        const res = await api.get(`/courses/${slug}`);
+        const loadedCourse = res.data.course;
+
+        setCourse(loadedCourse);
+
+        if (isAuthenticated && user?.role === "student") {
+          try {
+            setCheckingEnrollment(true);
+
+            const statusRes = await api.get(
+              `/enrollments/status/${loadedCourse._id}`,
+            );
+
+            setIsEnrolled(statusRes.data.isEnrolled);
+          } catch (error) {
+            console.error("Failed to check enrollment status", error);
+          } finally {
+            setCheckingEnrollment(false);
+          }
+        }
       } catch (error) {
-        console.error("Failed to fetch course", error);
+        console.error(error);
+        setPaymentError(
+          error.response?.data?.message || "Failed to load course",
+        );
       } finally {
         setLoading(false);
       }
     };
 
     fetchCourse();
-  }, [slug]);
+  }, [slug, isAuthenticated, user?.role]);
+
+  const handleBuyCourse = async () => {
+    try {
+      setPaymentError("");
+
+      if (!isAuthenticated) {
+        navigate("/login");
+        return;
+      }
+
+      if (user?.role !== "student") {
+        setPaymentError("Only students can purchase courses.");
+        return;
+      }
+
+      setPaymentLoading(true);
+
+      const scriptLoaded = await loadRazorpayScript();
+
+      if (!scriptLoaded) {
+        setPaymentError("Failed to load Razorpay. Please try again.");
+        return;
+      }
+
+      const orderRes = await api.post("/payments/create-order", {
+        courseId: course._id,
+      });
+
+      const { key, order } = orderRes.data;
+
+      const options = {
+        key,
+        amount: order.amount,
+        currency: order.currency,
+        name: "VeoLMS",
+        description: course.title,
+        order_id: order.id,
+        handler: async function (response) {
+          try {
+            await api.post("/payments/verify", {
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            });
+
+            setIsEnrolled(true);
+            navigate(`/learn/${course.slug}`);
+          } catch (error) {
+            setPaymentError(
+              error.response?.data?.message || "Payment verification failed",
+            );
+          }
+        },
+        prefill: {
+          name: user?.name,
+          email: user?.email,
+        },
+        theme: {
+          color: "#2563eb",
+        },
+      };
+
+      const razorpay = new window.Razorpay(options);
+      razorpay.open();
+    } catch (error) {
+      setPaymentError(
+        error.response?.data?.message || "Failed to start payment",
+      );
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
 
   if (loading) {
-    return <p className="max-w-7xl mx-auto px-4 py-12">Loading course...</p>;
-  }
-
-  if (!course) {
     return (
-      <main className="max-w-7xl mx-auto px-4 py-12">
-        <h1 className="text-3xl font-bold">Course not found</h1>
+      <main className="min-h-screen bg-slate-950 text-white pt-28 px-4">
+        <p className="text-slate-400">Loading course...</p>
       </main>
     );
   }
 
-  const lessonsCount =
-    course.sections?.reduce(
-      (total, section) => total + section.lessons.length,
-      0,
-    ) || 0;
-
-    const handleBuyCourse = async () => {
-  try {
-    setPaymentError("");
-
-    if (!isAuthenticated) {
-      navigate("/login");
-      return;
-    }
-
-    if (user?.role !== "student") {
-      setPaymentError("Only students can purchase courses.");
-      return;
-    }
-
-    setPaymentLoading(true);
-
-    const scriptLoaded = await loadRazorpayScript();
-
-    if (!scriptLoaded) {
-      setPaymentError("Failed to load Razorpay. Please try again.");
-      return;
-    }
-
-    const orderRes = await api.post("/payments/create-order", {
-      courseId: course._id,
-    });
-
-    const { key, order } = orderRes.data;
-
-    const options = {
-      key,
-      amount: order.amount,
-      currency: order.currency,
-      name: "VeoLMS",
-      description: course.title,
-      order_id: order.id,
-      handler: async function (response) {
-        try {
-          await api.post("/payments/verify", {
-            razorpay_order_id: response.razorpay_order_id,
-            razorpay_payment_id: response.razorpay_payment_id,
-            razorpay_signature: response.razorpay_signature,
-          });
-
-          navigate("/student/dashboard");
-        } catch (error) {
-          setPaymentError(
-            error.response?.data?.message || "Payment verification failed"
-          );
-        }
-      },
-      prefill: {
-        name: user?.name,
-        email: user?.email,
-      },
-      theme: {
-        color: "#2563eb",
-      },
-    };
-
-    const razorpay = new window.Razorpay(options);
-    razorpay.open();
-  } catch (error) {
-    setPaymentError(
-      error.response?.data?.message || "Failed to start payment"
+  if (!course) {
+    return (
+      <main className="min-h-screen bg-slate-950 text-white pt-28 px-4">
+        <p className="text-red-300">Course not found.</p>
+      </main>
     );
-  } finally {
-    setPaymentLoading(false);
   }
-};
 
   return (
-    <main>
-      <section className="bg-slate-950 text-white">
-        <div className="max-w-7xl mx-auto px-4 py-12 grid lg:grid-cols-2 gap-10 items-center">
+    <main className="min-h-screen bg-slate-950 text-white pt-24">
+      <section className="max-w-7xl mx-auto px-4 md:px-6 py-10">
+        <div className="grid lg:grid-cols-[1fr_380px] gap-8">
           <div>
-            <p className="text-blue-400 font-semibold mb-3">
-              {course.category} • {course.level}
-            </p>
+            <Link
+              to="/courses"
+              className="text-blue-400 font-semibold hover:text-blue-300"
+            >
+              ← Back to Courses
+            </Link>
 
-            <h1 className="text-4xl md:text-5xl font-extrabold mb-5">
-              {course.title}
-            </h1>
+            <div className="mt-8">
+              <div className="flex flex-wrap gap-3 mb-5">
+                <span className="px-3 py-1 rounded-full bg-blue-500/10 text-blue-300 text-sm font-bold border border-blue-500/20">
+                  {course.category}
+                </span>
 
-            <p className="text-slate-300 text-lg mb-6">{course.description}</p>
+                <span className="px-3 py-1 rounded-full bg-purple-500/10 text-purple-300 text-sm font-bold border border-purple-500/20">
+                  {course.level}
+                </span>
+              </div>
 
-            <p className="text-slate-300 mb-6">
-              Created by{" "}
-              <span className="text-white font-semibold">
-                {course.instructorName}
-              </span>
-            </p>
+              <h1 className="text-4xl md:text-6xl font-black leading-tight mb-5">
+                {course.title}
+              </h1>
 
-            <div className="flex flex-wrap gap-4 mb-8 text-slate-300">
-              <span className="flex items-center gap-2">
-                <Clock size={18} />
-                {lessonsCount} lessons
-              </span>
-
-              <span className="flex items-center gap-2">
-                <CheckCircle size={18} />
-                Lifetime access
-              </span>
-            </div>
-
-            <div className="flex items-center gap-5">
-            <button
-  onClick={handleBuyCourse}
-  disabled={paymentLoading}
-  className="px-8 py-4 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 disabled:opacity-60"
->
-  {paymentLoading ? "Processing..." : `Buy Now ₹${course.price}`}
-</button>
-
-              <button
-                onClick={() => setSelectedVideo(course.trailerVideoUrl)}
-                className="px-8 py-4 bg-white text-slate-900 rounded-xl font-bold"
-              >
-                Watch Trailer
-              </button>
-            </div>
-          </div>
-
-          <div className="bg-black rounded-2xl overflow-hidden shadow-2xl">
-            <div className="aspect-video">
-              <ReactPlayer
-                src={selectedVideo}
-                controls
-                width="100%"
-                height="100%"
-              />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="max-w-7xl mx-auto px-4 py-14 grid lg:grid-cols-3 gap-10">
-        <div className="lg:col-span-2">
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 mb-8">
-            <h2 className="text-2xl font-bold mb-4">What you will learn</h2>
-
-            <div className="grid md:grid-cols-2 gap-4">
-              <p className="flex items-start gap-2 text-slate-700">
-                <CheckCircle className="text-green-600 mt-1" size={18} />
-                Build real-world web development skills.
+              <p className="text-xl text-slate-300 leading-relaxed mb-6">
+                {course.shortDescription}
               </p>
 
-              <p className="flex items-start gap-2 text-slate-700">
-                <CheckCircle className="text-green-600 mt-1" size={18} />
-                Understand concepts with practical examples.
-              </p>
-
-              <p className="flex items-start gap-2 text-slate-700">
-                <CheckCircle className="text-green-600 mt-1" size={18} />
-                Learn through structured lessons.
-              </p>
-
-              <p className="flex items-start gap-2 text-slate-700">
-                <CheckCircle className="text-green-600 mt-1" size={18} />
-                Track progress after enrollment.
-              </p>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl border border-slate-200 p-6">
-            <h2 className="text-2xl font-bold mb-6">Course Curriculum</h2>
-
-            <div className="space-y-5">
-              {course.sections.map((section) => (
-                <div
-                  key={section._id}
-                  className="border border-slate-200 rounded-xl overflow-hidden"
-                >
-                  <div className="bg-slate-50 px-5 py-4 font-bold">
-                    {section.title}
-                  </div>
-
-                  <div>
-                    {section.lessons.map((lesson) => (
-                      <div
-                        key={lesson._id}
-                        className="px-5 py-4 border-t border-slate-200 flex items-center justify-between"
-                      >
-                        <div className="flex items-center gap-3">
-                          {lesson.isPreview ? (
-                            <PlayCircle className="text-blue-600" size={20} />
-                          ) : (
-                            <Lock className="text-slate-400" size={20} />
-                          )}
-
-                          <div>
-                            <h3 className="font-semibold text-slate-900">
-                              {lesson.title}
-                            </h3>
-
-                            <p className="text-sm text-slate-500">
-                              {lesson.duration}
-                            </p>
-                          </div>
-                        </div>
-
-                        {lesson.isPreview ? (
-                          <button
-                            onClick={() => setSelectedVideo(lesson.videoUrl)}
-                            className="text-blue-600 font-semibold"
-                          >
-                            Preview
-                          </button>
-                        ) : (
-                          <span className="text-sm text-slate-500">
-                            Enroll to watch
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+              <div className="flex flex-wrap items-center gap-6 text-slate-400 mb-8">
+                <div className="flex items-center gap-2">
+                  <Star size={18} className="text-yellow-300" />
+                  <span>4.8 rating</span>
                 </div>
-              ))}
+
+                <div className="flex items-center gap-2">
+                  <BookOpen size={18} />
+                  <span>{lessonsCount} lessons</span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Clock size={18} />
+                  <span>Lifetime access</span>
+                </div>
+              </div>
+
+              <div className="rounded-3xl bg-white/5 border border-white/10 overflow-hidden mb-8">
+                <img
+                  src={course.thumbnail}
+                  alt={course.title}
+                  className="w-full h-[360px] object-cover"
+                />
+              </div>
+
+              {paymentError && (
+                <div className="mb-6 rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-red-300">
+                  {paymentError}
+                </div>
+              )}
+
+              <div className="mb-10">
+                {isEnrolled ? (
+                  <Link
+                    to={`/learn/${course.slug}`}
+                    className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700"
+                  >
+                    Continue Learning
+                    <PlayCircle size={20} />
+                  </Link>
+                ) : (
+                  <button
+                    onClick={handleBuyCourse}
+                    disabled={paymentLoading || checkingEnrollment}
+                    className="px-8 py-4 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 disabled:opacity-60"
+                  >
+                    {paymentLoading
+                      ? "Processing..."
+                      : checkingEnrollment
+                        ? "Checking..."
+                        : `Buy Now ₹${course.price}`}
+                  </button>
+                )}
+              </div>
+
+              <div className="rounded-3xl bg-white/5 border border-white/10 p-6 mb-8">
+                <h2 className="text-2xl font-black mb-4">About this course</h2>
+
+                <p className="text-slate-300 leading-relaxed">
+                  {course.description}
+                </p>
+              </div>
+
+              <div className="rounded-3xl bg-white/5 border border-white/10 p-6">
+                <h2 className="text-2xl font-black mb-5">Course Curriculum</h2>
+
+                <div className="space-y-4">
+                  {course.sections?.map((section) => (
+                    <div
+                      key={section._id}
+                      className="rounded-2xl bg-slate-950 border border-white/10 overflow-hidden"
+                    >
+                      <div className="px-5 py-4 border-b border-white/10">
+                        <h3 className="font-black">{section.title}</h3>
+                      </div>
+
+                      <div className="p-4 space-y-3">
+                        {section.lessons?.map((lesson) => (
+                          <div
+                            key={lesson._id}
+                            className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-white/5"
+                          >
+                            <div className="flex items-center gap-3">
+                              <CheckCircle
+                                size={18}
+                                className="text-slate-500"
+                              />
+
+                              <div>
+                                <p className="font-bold">{lesson.title}</p>
+                                <p className="text-sm text-slate-400">
+                                  {lesson.duration}
+                                </p>
+                              </div>
+                            </div>
+
+                            {lesson.isPreview && (
+                              <span className="text-xs font-bold text-blue-300">
+                                Preview
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
+
+          <aside className="lg:sticky lg:top-28 h-fit rounded-3xl bg-white/5 border border-white/10 p-6">
+            <img
+              src={course.thumbnail}
+              alt={course.title}
+              className="w-full h-48 object-cover rounded-2xl mb-5"
+            />
+
+            <h2 className="text-4xl font-black mb-2">₹{course.price}</h2>
+
+            <p className="text-slate-400 mb-6">
+              Full lifetime access to this course.
+            </p>
+
+            {isEnrolled ? (
+              <Link
+                to={`/learn/${course.slug}`}
+                className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 mb-4"
+              >
+                Continue Learning
+                <PlayCircle size={20} />
+              </Link>
+            ) : (
+              <button
+                onClick={handleBuyCourse}
+                disabled={paymentLoading || checkingEnrollment}
+                className="w-full px-6 py-4 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 mb-4 disabled:opacity-60"
+              >
+                {paymentLoading
+                  ? "Processing..."
+                  : checkingEnrollment
+                    ? "Checking..."
+                    : "Buy Course"}
+              </button>
+            )}
+
+            <div className="space-y-3 text-sm text-slate-300">
+              <p>✅ {lessonsCount} lessons</p>
+              <p>✅ Lifetime access</p>
+              <p>✅ Secure payment</p>
+              <p>✅ Progress tracking</p>
+            </div>
+          </aside>
         </div>
-
-        <aside className="bg-white rounded-2xl border border-slate-200 p-6 h-fit sticky top-24">
-          <img
-            src={course.thumbnail}
-            alt={course.title}
-            className="rounded-xl mb-5"
-          />
-
-          <h3 className="text-3xl font-bold mb-4">₹{course.price}</h3>
-{paymentError && (
-  <p className="mt-4 text-red-400 font-semibold">{paymentError}</p>
-)}
-         <button
-  onClick={handleBuyCourse}
-  disabled={paymentLoading}
-  className="w-full px-6 py-4 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 mb-4 disabled:opacity-60"
->
-  {paymentLoading ? "Processing..." : "Buy Course"}
-</button>
-
-          <button className="w-full px-6 py-4 border border-slate-300 rounded-xl font-bold">
-            Add to Wishlist
-          </button>
-
-          <div className="mt-6 space-y-3 text-slate-600 text-sm">
-            <p>✅ {lessonsCount} lessons</p>
-            <p>✅ Preview lessons available</p>
-            <p>✅ Progress tracking after enrollment</p>
-            <p>✅ Lifetime access</p>
-          </div>
-        </aside>
       </section>
     </main>
   );
