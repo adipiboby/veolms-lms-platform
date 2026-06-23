@@ -4,13 +4,27 @@
   box-sizing: border-box;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   margin: 0;
   font-family: Inter, system-ui, Arial, sans-serif;
-  background: #f8fafc;
-  color: #0f172a;
+  background: #020617;
+  color: #f8fafc;
+}
+
+button,
+a {
+  transition: all 0.2s ease;
 }
 
 button {
   cursor: pointer;
+}
+
+::selection {
+  background: #2563eb;
+  color: white;
 }

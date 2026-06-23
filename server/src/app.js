@@ -1,19 +1,26 @@
+import dotenv from "dotenv";
+dotenv.config();
+
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import morgan from "morgan";
 import rateLimit from "express-rate-limit";
-import courseRoutes from "./routes/course.routes.js";
+
 import authRoutes from "./routes/auth.routes.js";
+import courseRoutes from "./routes/course.routes.js";
+
 const app = express();
 
-app.use(
-  cors({
-    origin: process.env.CLIENT_URL,
-    credentials: true,
-  })
-);
+const corsOptions = {
+  origin: process.env.CLIENT_URL || "http://localhost:5173",
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+};
+
+app.use(cors(corsOptions));
 
 app.use(helmet());
 app.use(express.json());
@@ -30,12 +37,15 @@ const limiter = rateLimit({
 });
 
 app.use(limiter);
+
 app.use("/api/auth", authRoutes);
 app.use("/api/courses", courseRoutes);
+
 app.get("/api/health", (req, res) => {
   res.status(200).json({
     success: true,
     message: "VeoLMS backend is running",
+    clientUrl: process.env.CLIENT_URL,
   });
 });
 
