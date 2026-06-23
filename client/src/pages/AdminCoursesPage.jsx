@@ -10,7 +10,7 @@ const AdminCoursesPage = () => {
 
   const fetchCourses = async () => {
     try {
-      const res = await api.get("/courses");
+      const res = await api.get("/courses/admin/all");
       setCourses(Array.isArray(res.data?.courses) ? res.data.courses : []);
     } catch (error) {
       console.error("Failed to fetch courses", error);
