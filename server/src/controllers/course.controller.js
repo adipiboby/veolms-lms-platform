@@ -213,3 +213,27 @@ export const deleteCourse = async (req, res) => {
     });
   }
 };
+
+export const getAdminCourseById = async (req, res) => {
+  try {
+    const course = await Course.findById(req.params.id);
+
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: "Course not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      course,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch course",
+      error: error.message,
+    });
+  }
+};

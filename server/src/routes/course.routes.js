@@ -2,6 +2,7 @@ import express from "express";
 import {
   getAllCourses,
   getAdminCourses,
+  getAdminCourseById,
   getFeaturedCourses,
   getCourseBySlug,
   createCourse,
@@ -26,7 +27,12 @@ router.get(
   authorizeRoles("admin"),
   getAdminCourses
 );
-
+router.get(
+  "/admin/:id",
+  protect,
+  authorizeRoles("admin"),
+  getAdminCourseById
+);
 router.post(
   "/admin",
   protect,
