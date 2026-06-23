@@ -17,7 +17,10 @@ const StudentDashboardPage = () => {
       setError("");
 
       const res = await api.get("/enrollments/my-courses");
-      setEnrolledCourses(Array.isArray(res.data?.courses) ? res.data.courses : []);
+
+      setEnrolledCourses(
+        Array.isArray(res.data?.courses) ? res.data.courses : [],
+      );
     } catch (error) {
       console.error("Failed to fetch my courses", error);
       setError(error.response?.data?.message || "Failed to fetch your courses");
@@ -33,14 +36,17 @@ const StudentDashboardPage = () => {
   const totalCourses = enrolledCourses.length;
 
   const totalLessons = enrolledCourses.reduce((total, item) => {
-    const sections = item.course?.sections || [];
-
-    const lessonCount = sections.reduce((sectionTotal, section) => {
-      return sectionTotal + (section.lessons?.length || 0);
-    }, 0);
-
-    return total + lessonCount;
+    return total + (item.progress?.totalLessons || 0);
   }, 0);
+
+  const averageProgress =
+    totalCourses === 0
+      ? 0
+      : Math.round(
+          enrolledCourses.reduce((total, item) => {
+            return total + (item.progress?.progressPercentage || 0);
+          }, 0) / totalCourses,
+        );
 
   return (
     <main className="min-h-screen bg-slate-950 text-white pt-28 pb-16">
@@ -81,11 +87,8 @@ const StudentDashboardPage = () => {
               <TrendingUp />
             </div>
 
-            <p className="text-slate-400">Progress</p>
-            <h2 className="text-4xl font-black mt-2">0%</h2>
-            <p className="text-xs text-slate-500 mt-2">
-              Progress tracking coming next
-            </p>
+            <p className="text-slate-400">Average Progress</p>
+            <h2 className="text-4xl font-black mt-2">{averageProgress}%</h2>
           </div>
         </div>
 
@@ -93,6 +96,7 @@ const StudentDashboardPage = () => {
           <div className="flex items-center justify-between gap-4 mb-6">
             <div>
               <h2 className="text-2xl font-black">My Learning</h2>
+
               <p className="text-slate-400 text-sm mt-1">
                 Courses you purchased successfully
               </p>
@@ -120,7 +124,9 @@ const StudentDashboardPage = () => {
                 <BookOpen size={30} />
               </div>
 
-              <h3 className="text-2xl font-black mb-3">No enrolled courses yet</h3>
+              <h3 className="text-2xl font-black mb-3">
+                No enrolled courses yet
+              </h3>
 
               <p className="text-slate-400 mb-6">
                 Buy a course to start learning.
@@ -137,11 +143,11 @@ const StudentDashboardPage = () => {
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {enrolledCourses.map((item) => {
                 const course = item.course;
-
-                const lessonsCount =
-                  course.sections?.reduce((total, section) => {
-                    return total + (section.lessons?.length || 0);
-                  }, 0) || 0;
+                const progress = item.progress || {
+                  totalLessons: 0,
+                  completedLessons: 0,
+                  progressPercentage: 0,
+                };
 
                 return (
                   <div
@@ -173,9 +179,33 @@ const StudentDashboardPage = () => {
                         {course.shortDescription}
                       </p>
 
-                      <div className="flex items-center gap-2 text-slate-400 text-sm mb-5">
+                      <div className="flex items-center gap-2 text-slate-400 text-sm mb-4">
                         <Clock size={16} />
-                        {lessonsCount} lessons
+                        {progress.totalLessons} lessons
+                      </div>
+
+                      <div className="mb-5">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-sm text-slate-400">Progress</p>
+
+                          <p className="text-sm font-bold text-blue-300">
+                            {progress.progressPercentage}%
+                          </p>
+                        </div>
+
+                        <div className="h-3 rounded-full bg-slate-800 overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-blue-600 to-purple-600"
+                            style={{
+                              width: `${progress.progressPercentage}%`,
+                            }}
+                          />
+                        </div>
+
+                        <p className="text-xs text-slate-500 mt-2">
+                          {progress.completedLessons} of {progress.totalLessons}{" "}
+                          lessons completed
+                        </p>
                       </div>
 
                       <Link

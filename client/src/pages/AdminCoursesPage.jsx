@@ -32,7 +32,7 @@ const AdminCoursesPage = () => {
 
   const handleDeleteCourse = async (courseId, courseTitle) => {
     const confirmed = window.confirm(
-      `Are you sure you want to delete "${courseTitle}"?`
+      `Are you sure you want to delete "${courseTitle}"?`,
     );
 
     if (!confirmed) return;
@@ -44,7 +44,7 @@ const AdminCoursesPage = () => {
       await api.delete(`/courses/admin/${courseId}`);
 
       setCourses((prevCourses) =>
-        prevCourses.filter((course) => course._id !== courseId)
+        prevCourses.filter((course) => course._id !== courseId),
       );
     } catch (error) {
       console.error("Failed to delete course", error);

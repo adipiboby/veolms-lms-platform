@@ -19,6 +19,7 @@ import RoleRoute from "./routes/RoleRoute";
 import AdminCourseEditPage from "./pages/AdminCourseEditPage";
 
 import LearningPage from "./pages/LearningPage";
+import AdminStudentsPage from "./pages/AdminStudentsPage";
 const App = () => {
   const location = useLocation();
 
@@ -97,6 +98,16 @@ const App = () => {
     <ProtectedRoute>
       <RoleRoute allowedRoles={["student"]}>
         <LearningPage />
+      </RoleRoute>
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/admin/students"
+  element={
+    <ProtectedRoute>
+      <RoleRoute allowedRoles={["admin"]}>
+        <AdminStudentsPage />
       </RoleRoute>
     </ProtectedRoute>
   }

@@ -16,10 +16,14 @@ import paymentRoutes from "./routes/payment.routes.js";
 import enrollmentRoutes from "./routes/enrollment.routes.js";
 
 import progressRoutes from "./routes/progress.routes.js";
+import adminRoutes from "./routes/admin.routes.js";
 const app = express();
 
 const corsOptions = {
-  origin: process.env.CLIENT_URL || "http://localhost:5173"||"http://192.168.31.78:5173",
+  origin:
+    process.env.CLIENT_URL ||
+    "http://localhost:5173" ||
+    "http://192.168.31.78:5173",
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
@@ -48,6 +52,7 @@ app.use("/api/courses", courseRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/enrollments", enrollmentRoutes);
 app.use("/api/progress", progressRoutes);
+app.use("/api/admin", adminRoutes);
 app.get("/api/health", (req, res) => {
   res.status(200).json({
     success: true,
