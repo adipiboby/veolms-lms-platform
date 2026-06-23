@@ -11,6 +11,9 @@ import rateLimit from "express-rate-limit";
 import authRoutes from "./routes/auth.routes.js";
 import courseRoutes from "./routes/course.routes.js";
 
+import paymentRoutes from "./routes/payment.routes.js";
+
+import enrollmentRoutes from "./routes/enrollment.routes.js";
 const app = express();
 
 const corsOptions = {
@@ -40,7 +43,8 @@ app.use(limiter);
 
 app.use("/api/auth", authRoutes);
 app.use("/api/courses", courseRoutes);
-
+app.use("/api/payments", paymentRoutes);
+app.use("/api/enrollments", enrollmentRoutes);
 app.get("/api/health", (req, res) => {
   res.status(200).json({
     success: true,

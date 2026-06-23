@@ -3,13 +3,20 @@ import { useParams } from "react-router-dom";
 import ReactPlayer from "react-player";
 import { api } from "../../src/services/api";
 import { CheckCircle, Clock, Lock, PlayCircle } from "lucide-react";
-
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import { loadRazorpayScript } from "../utils/loadRazorpay";
 const CourseDetailsPage = () => {
   const { slug } = useParams();
 
   const [course, setCourse] = useState(null);
   const [selectedVideo, setSelectedVideo] = useState("");
   const [loading, setLoading] = useState(true);
+
+  const navigate = useNavigate();
+const { user, isAuthenticated } = useAuth();
+const [paymentLoading, setPaymentLoading] = useState(false);
+const [paymentError, setPaymentError] = useState("");
 
   useEffect(() => {
     const fetchCourse = async () => {
@@ -47,6 +54,77 @@ const CourseDetailsPage = () => {
       0,
     ) || 0;
 
+    const handleBuyCourse = async () => {
+  try {
+    setPaymentError("");
+
+    if (!isAuthenticated) {
+      navigate("/login");
+      return;
+    }
+
+    if (user?.role !== "student") {
+      setPaymentError("Only students can purchase courses.");
+      return;
+    }
+
+    setPaymentLoading(true);
+
+    const scriptLoaded = await loadRazorpayScript();
+
+    if (!scriptLoaded) {
+      setPaymentError("Failed to load Razorpay. Please try again.");
+      return;
+    }
+
+    const orderRes = await api.post("/payments/create-order", {
+      courseId: course._id,
+    });
+
+    const { key, order } = orderRes.data;
+
+    const options = {
+      key,
+      amount: order.amount,
+      currency: order.currency,
+      name: "VeoLMS",
+      description: course.title,
+      order_id: order.id,
+      handler: async function (response) {
+        try {
+          await api.post("/payments/verify", {
+            razorpay_order_id: response.razorpay_order_id,
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_signature: response.razorpay_signature,
+          });
+
+          navigate("/student/dashboard");
+        } catch (error) {
+          setPaymentError(
+            error.response?.data?.message || "Payment verification failed"
+          );
+        }
+      },
+      prefill: {
+        name: user?.name,
+        email: user?.email,
+      },
+      theme: {
+        color: "#2563eb",
+      },
+    };
+
+    const razorpay = new window.Razorpay(options);
+    razorpay.open();
+  } catch (error) {
+    setPaymentError(
+      error.response?.data?.message || "Failed to start payment"
+    );
+  } finally {
+    setPaymentLoading(false);
+  }
+};
+
   return (
     <main>
       <section className="bg-slate-950 text-white">
@@ -82,9 +160,13 @@ const CourseDetailsPage = () => {
             </div>
 
             <div className="flex items-center gap-5">
-              <button className="px-8 py-4 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700">
-                Buy Now ₹{course.price}
-              </button>
+            <button
+  onClick={handleBuyCourse}
+  disabled={paymentLoading}
+  className="px-8 py-4 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 disabled:opacity-60"
+>
+  {paymentLoading ? "Processing..." : `Buy Now ₹${course.price}`}
+</button>
 
               <button
                 onClick={() => setSelectedVideo(course.trailerVideoUrl)}
@@ -202,10 +284,16 @@ const CourseDetailsPage = () => {
           />
 
           <h3 className="text-3xl font-bold mb-4">₹{course.price}</h3>
-
-          <button className="w-full px-6 py-4 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 mb-4">
-            Buy Course
-          </button>
+{paymentError && (
+  <p className="mt-4 text-red-400 font-semibold">{paymentError}</p>
+)}
+         <button
+  onClick={handleBuyCourse}
+  disabled={paymentLoading}
+  className="w-full px-6 py-4 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 mb-4 disabled:opacity-60"
+>
+  {paymentLoading ? "Processing..." : "Buy Course"}
+</button>
 
           <button className="w-full px-6 py-4 border border-slate-300 rounded-xl font-bold">
             Add to Wishlist
