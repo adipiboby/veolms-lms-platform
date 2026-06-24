@@ -49,6 +49,7 @@ const LearningPage = () => {
     try {
       setVideoLoading(true);
       setVideoError("");
+      setVideoSource("");
 
       const res = await api.post("/videos/signed-url", {
         courseId: course._id,
@@ -221,7 +222,11 @@ const LearningPage = () => {
                 {videoError}
               </div>
             ) : videoSource ? (
-              <VideoPlayer src={videoSource} title={currentLesson?.title} />
+              <VideoPlayer
+                key={currentLesson?._id}
+                src={videoSource}
+                title={currentLesson?.title}
+              />
             ) : (
               <div className="aspect-video bg-black flex items-center justify-center text-slate-400">
                 No video selected

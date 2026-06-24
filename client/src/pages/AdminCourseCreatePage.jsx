@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Plus, Trash2 } from "lucide-react";
 import { api } from "../services/api";
 import AdminLayout from "../components/admin/AdminLayout";
-
+import VideoUploadField from "../components/admin/VideoUploadField";
 const emptyLesson = {
   title: "",
   videoUrl: "",
@@ -48,8 +48,8 @@ const AdminCourseCreatePage = () => {
         type === "checkbox"
           ? checked
           : name === "price"
-          ? Number(value)
-          : value,
+            ? Number(value)
+            : value,
     }));
   };
 
@@ -76,8 +76,8 @@ const AdminCourseCreatePage = () => {
           field === "order"
             ? Number(value)
             : field === "isPreview"
-            ? Boolean(value)
-            : value,
+              ? Boolean(value)
+              : value,
       };
 
       sections[sectionIndex] = {
@@ -137,7 +137,7 @@ const AdminCourseCreatePage = () => {
       sections[sectionIndex] = {
         ...sections[sectionIndex],
         lessons: sections[sectionIndex].lessons.filter(
-          (_, index) => index !== lessonIndex
+          (_, index) => index !== lessonIndex,
         ),
       };
 
@@ -169,7 +169,28 @@ const AdminCourseCreatePage = () => {
       setLoading(false);
     }
   };
+  const updateLesson = (sectionIndex, lessonIndex, field, value) => {
+    setFormData((prev) => {
+      const updatedSections = [...prev.sections];
 
+      const updatedLessons = [...updatedSections[sectionIndex].lessons];
+
+      updatedLessons[lessonIndex] = {
+        ...updatedLessons[lessonIndex],
+        [field]: value,
+      };
+
+      updatedSections[sectionIndex] = {
+        ...updatedSections[sectionIndex],
+        lessons: updatedLessons,
+      };
+
+      return {
+        ...prev,
+        sections: updatedSections,
+      };
+    });
+  };
   return (
     <AdminLayout>
       <div className="px-4 md:px-8 py-8">
@@ -392,7 +413,7 @@ const AdminCourseCreatePage = () => {
                         handleSectionChange(
                           sectionIndex,
                           "title",
-                          e.target.value
+                          e.target.value,
                         )
                       }
                       required
@@ -407,7 +428,7 @@ const AdminCourseCreatePage = () => {
                         handleSectionChange(
                           sectionIndex,
                           "order",
-                          e.target.value
+                          e.target.value,
                         )
                       }
                       required
@@ -448,7 +469,7 @@ const AdminCourseCreatePage = () => {
                                 sectionIndex,
                                 lessonIndex,
                                 "title",
-                                e.target.value
+                                e.target.value,
                               )
                             }
                             required
@@ -456,19 +477,16 @@ const AdminCourseCreatePage = () => {
                             placeholder="Lesson title"
                           />
 
-                          <input
+                          <VideoUploadField
                             value={lesson.videoUrl}
-                            onChange={(e) =>
-                              handleLessonChange(
+                            onChange={(uploadedVideoSource) => {
+                              updateLesson(
                                 sectionIndex,
                                 lessonIndex,
                                 "videoUrl",
-                                e.target.value
-                              )
-                            }
-                            required
-                            className="px-4 py-3 rounded-2xl bg-slate-900 border border-white/10 text-white outline-none focus:border-blue-500"
-                            placeholder="YouTube lesson URL"
+                                uploadedVideoSource,
+                              );
+                            }}
                           />
 
                           <input
@@ -478,7 +496,7 @@ const AdminCourseCreatePage = () => {
                                 sectionIndex,
                                 lessonIndex,
                                 "duration",
-                                e.target.value
+                                e.target.value,
                               )
                             }
                             className="px-4 py-3 rounded-2xl bg-slate-900 border border-white/10 text-white outline-none focus:border-blue-500"
@@ -493,7 +511,7 @@ const AdminCourseCreatePage = () => {
                                 sectionIndex,
                                 lessonIndex,
                                 "order",
-                                e.target.value
+                                e.target.value,
                               )
                             }
                             required
@@ -511,7 +529,7 @@ const AdminCourseCreatePage = () => {
                                 sectionIndex,
                                 lessonIndex,
                                 "isPreview",
-                                e.target.checked
+                                e.target.checked,
                               )
                             }
                           />
