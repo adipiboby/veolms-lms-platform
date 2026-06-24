@@ -3,42 +3,58 @@ import { User } from "../models/user.model.js";
 
 export const protect = async (req, res, next) => {
   try {
-    const token = req.cookies.token;
+    const token =
+      req.cookies?.token ||
+      req.cookies?.jwt ||
+      req.cookies?.accessToken ||
+      req.headers.authorization?.replace("Bearer ", "");
 
     if (!token) {
       return res.status(401).json({
         success: false,
-        message: "Not authorized, please login",
+        message: "Not authorized, token missing",
       });
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    const user = await User.findById(decoded.userId);
+    const userId = decoded.id || decoded.userId || decoded._id;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authorized, invalid token payload",
+      });
+    }
+
+    const user = await User.findById(userId).select("-password");
 
     if (!user) {
       return res.status(401).json({
         success: false,
-        message: "User not found",
+        message: "Not authorized, user not found",
       });
     }
 
     req.user = user;
+
     next();
   } catch (error) {
-    res.status(401).json({
+    console.error("Auth middleware error:", error);
+
+    return res.status(401).json({
       success: false,
-      message: "Invalid or expired token",
+      message: "Not authorized, token failed",
     });
   }
 };
 
 export const authorizeRoles = (...roles) => {
   return (req, res, next) => {
-    if (!roles.includes(req.user.role)) {
+    if (!req.user || !roles.includes(req.user.role)) {
       return res.status(403).json({
         success: false,
-        message: "You do not have permission to access this resource",
+        message: "Forbidden: You do not have permission",
       });
     }
 

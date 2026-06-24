@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-
+import GoogleLoginButton from "../components/auth/GoogleLoginButton";
 const LoginPage = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
@@ -93,6 +93,13 @@ const LoginPage = () => {
           >
             {loading ? "Logging in..." : "Login"}
           </button>
+          <div className="my-6 flex items-center gap-3">
+            <div className="h-px flex-1 bg-white/10" />
+            <span className="text-sm text-slate-400">or</span>
+            <div className="h-px flex-1 bg-white/10" />
+          </div>
+
+          <GoogleLoginButton />
         </form>
 
         <p className="text-slate-400 text-sm mt-6 text-center">

@@ -30,6 +30,21 @@ const userSchema = new mongoose.Schema(
       enum: ["student", "admin"],
       default: "student",
     },
+    googleId: {
+  type: String,
+  default: "",
+},
+
+avatar: {
+  type: String,
+  default: "",
+},
+
+authProvider: {
+  type: String,
+  enum: ["local", "google"],
+  default: "local",
+},
   },
   { timestamps: true }
 );

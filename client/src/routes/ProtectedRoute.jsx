@@ -1,19 +1,24 @@
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
+import { Loader2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated, authLoading } = useAuth();
+  const location = useLocation();
+  const { user, authLoading } = useAuth();
 
   if (authLoading) {
     return (
-      <main className="min-h-screen flex items-center justify-center">
-        <p className="text-slate-600">Checking authentication...</p>
+      <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
+        <div className="flex items-center gap-3 text-slate-400">
+          <Loader2 className="animate-spin text-blue-400" size={24} />
+          Checking authentication...
+        </div>
       </main>
     );
   }
 
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+  if (!user) {
+    return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
   return children;

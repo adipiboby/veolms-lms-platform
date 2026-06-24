@@ -10,23 +10,17 @@ import rateLimit from "express-rate-limit";
 
 import authRoutes from "./routes/auth.routes.js";
 import courseRoutes from "./routes/course.routes.js";
-
 import paymentRoutes from "./routes/payment.routes.js";
-
 import enrollmentRoutes from "./routes/enrollment.routes.js";
-
 import progressRoutes from "./routes/progress.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
-
 import videoRoutes from "./routes/video.routes.js";
 import certificateRoutes from "./routes/certificate.routes.js";
+
 const app = express();
 
 const corsOptions = {
-  origin:
-    process.env.CLIENT_URL ||
-    "http://localhost:5173" ||
-    "http://192.168.31.78:5173",
+  origin: process.env.CLIENT_URL || "http://localhost:5173",
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
@@ -34,14 +28,19 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-app.use(helmet());
+app.use(
+  helmet({
+    crossOriginOpenerPolicy: false,
+  }),
+);
+
 app.use(express.json());
 app.use(cookieParser());
 app.use(morgan("dev"));
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 300,
   message: {
     success: false,
     message: "Too many requests, please try again later.",
@@ -58,6 +57,7 @@ app.use("/api/progress", progressRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/videos", videoRoutes);
 app.use("/api/certificates", certificateRoutes);
+
 app.get("/api/health", (req, res) => {
   res.status(200).json({
     success: true,
