@@ -2,26 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { BookOpen, CheckCircle, PlayCircle } from "lucide-react";
 import { api } from "../services/api";
-
-const getYouTubeEmbedUrl = (url) => {
-  if (!url) return "";
-
-  if (url.includes("youtube.com/embed/")) {
-    return url;
-  }
-
-  if (url.includes("youtube.com/watch?v=")) {
-    const videoId = url.split("v=")[1]?.split("&")[0];
-    return `https://www.youtube.com/embed/${videoId}`;
-  }
-
-  if (url.includes("youtu.be/")) {
-    const videoId = url.split("youtu.be/")[1]?.split("?")[0];
-    return `https://www.youtube.com/embed/${videoId}`;
-  }
-
-  return url;
-};
+import VideoPlayer from "../components/video/VideoPlayer";
 
 const LearningPage = () => {
   const { slug } = useParams();
@@ -41,10 +22,14 @@ const LearningPage = () => {
 
   const [markingComplete, setMarkingComplete] = useState(false);
 
+  const [videoSource, setVideoSource] = useState("");
+  const [videoLoading, setVideoLoading] = useState(false);
+  const [videoError, setVideoError] = useState("");
+
   const completedLessonIds = new Set(
     progress.lessonProgress
       ?.filter((item) => item.isCompleted)
-      .map((item) => item.lessonId)
+      .map((item) => item.lessonId),
   );
 
   const lessons = useMemo(() => {
@@ -54,9 +39,35 @@ const LearningPage = () => {
       section.lessons.map((lesson) => ({
         ...lesson,
         sectionTitle: section.title,
-      }))
+      })),
     );
   }, [course]);
+
+  const loadSecureVideo = async (lesson) => {
+    if (!course?._id || !lesson?._id) return;
+
+    try {
+      setVideoLoading(true);
+      setVideoError("");
+
+      const res = await api.post("/videos/signed-url", {
+        courseId: course._id,
+        lessonId: lesson._id,
+      });
+
+      setVideoSource(res.data.videoUrl);
+    } catch (error) {
+      console.error("Failed to load secure video", error);
+
+      setVideoError(
+        error.response?.data?.message || "Failed to load secure video",
+      );
+
+      setVideoSource("");
+    } finally {
+      setVideoLoading(false);
+    }
+  };
 
   useEffect(() => {
     const fetchLearningCourse = async () => {
@@ -70,7 +81,7 @@ const LearningPage = () => {
         setCourse(loadedCourse);
 
         const progressRes = await api.get(
-          `/progress/course/${loadedCourse._id}`
+          `/progress/course/${loadedCourse._id}`,
         );
 
         setProgress(progressRes.data);
@@ -81,20 +92,21 @@ const LearningPage = () => {
               section.lessons.map((lesson) => ({
                 ...lesson,
                 sectionTitle: section.title,
-              }))
+              })),
             )
             ?.sort((a, b) => a.order - b.order) || [];
 
         const resumeLesson =
           allLessons.find(
-            (lesson) => lesson._id === progressRes.data.currentLessonId
+            (lesson) => lesson._id === progressRes.data.currentLessonId,
           ) || allLessons[0];
 
         setCurrentLesson(resumeLesson || null);
       } catch (error) {
         console.error(error);
+
         setError(
-          error.response?.data?.message || "Failed to load course lessons"
+          error.response?.data?.message || "Failed to load course lessons",
         );
       } finally {
         setLoading(false);
@@ -103,6 +115,12 @@ const LearningPage = () => {
 
     fetchLearningCourse();
   }, [slug]);
+
+  useEffect(() => {
+    if (course && currentLesson) {
+      loadSecureVideo(currentLesson);
+    }
+  }, [course?._id, currentLesson?._id]);
 
   const handleLessonClick = async (lesson, sectionTitle) => {
     try {
@@ -189,28 +207,26 @@ const LearningPage = () => {
             {course?.title}
           </h1>
 
-          <p className="text-slate-400 mt-2">
-            Enrolled course learning area
-          </p>
+          <p className="text-slate-400 mt-2">Enrolled course learning area</p>
         </div>
 
         <div className="grid lg:grid-cols-[1fr_380px] gap-6">
           <div className="rounded-3xl bg-white/5 border border-white/10 overflow-hidden">
-            <div className="aspect-video bg-black">
-              {currentLesson?.videoUrl ? (
-                <iframe
-                  src={getYouTubeEmbedUrl(currentLesson.videoUrl)}
-                  title={currentLesson.title}
-                  className="w-full h-full"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                />
-              ) : (
-                <div className="h-full flex items-center justify-center text-slate-400">
-                  No video selected
-                </div>
-              )}
-            </div>
+            {videoLoading ? (
+              <div className="aspect-video bg-black flex items-center justify-center text-slate-400">
+                Preparing secure video...
+              </div>
+            ) : videoError ? (
+              <div className="aspect-video bg-black flex items-center justify-center text-red-300">
+                {videoError}
+              </div>
+            ) : videoSource ? (
+              <VideoPlayer src={videoSource} title={currentLesson?.title} />
+            ) : (
+              <div className="aspect-video bg-black flex items-center justify-center text-slate-400">
+                No video selected
+              </div>
+            )}
 
             <div className="p-6">
               <p className="text-blue-400 font-bold mb-2">
@@ -257,8 +273,8 @@ const LearningPage = () => {
                 {completedLessonIds.has(currentLesson?._id)
                   ? "Completed"
                   : markingComplete
-                  ? "Saving..."
-                  : "Mark as Complete"}
+                    ? "Saving..."
+                    : "Mark as Complete"}
               </button>
             </div>
           </div>
@@ -272,6 +288,7 @@ const LearningPage = () => {
 
                 <div>
                   <h3 className="text-xl font-black">Course Lessons</h3>
+
                   <p className="text-sm text-slate-400">
                     {lessons.length} lessons
                   </p>
@@ -309,8 +326,8 @@ const LearningPage = () => {
                                 isCompleted
                                   ? "text-green-300"
                                   : isActive
-                                  ? "text-blue-300"
-                                  : "text-slate-400"
+                                    ? "text-blue-300"
+                                    : "text-slate-400"
                               }`}
                             >
                               {isCompleted ? (
