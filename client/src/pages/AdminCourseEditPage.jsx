@@ -247,7 +247,7 @@ const AdminCourseEditPage = () => {
     });
   };
   return (
-    <AdminLayout>
+   
       <div className="px-4 md:px-8 py-8">
         <div className="mb-10">
           <p className="text-blue-400 font-bold mb-3">Edit Course</p>
@@ -620,7 +620,7 @@ const AdminCourseEditPage = () => {
           </div>
         </form>
       </div>
-    </AdminLayout>
+    
   );
 };
 

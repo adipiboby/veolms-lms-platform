@@ -1,6 +1,7 @@
 import { Route, Routes, useLocation } from "react-router-dom";
 
 import Navbar from "./components/Navbar";
+import AdminLayout from "./components/admin/AdminLayout";
 
 import HomePage from "./pages/HomePage";
 import CoursesPage from "./pages/CoursesPage";
@@ -8,18 +9,17 @@ import CourseDetailsPage from "./pages/CourseDetailsPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import StudentDashboardPage from "./pages/StudentDashboardPage";
+import LearningPage from "./pages/LearningPage";
 
 import AdminDashboardPage from "./pages/AdminDashboardPage";
 import AdminCoursesPage from "./pages/AdminCoursesPage";
 import AdminCourseCreatePage from "./pages/AdminCourseCreatePage";
+import AdminCourseEditPage from "./pages/AdminCourseEditPage";
+import AdminStudentsPage from "./pages/AdminStudentsPage";
 
 import ProtectedRoute from "./routes/ProtectedRoute";
 import RoleRoute from "./routes/RoleRoute";
 
-import AdminCourseEditPage from "./pages/AdminCourseEditPage";
-
-import LearningPage from "./pages/LearningPage";
-import AdminStudentsPage from "./pages/AdminStudentsPage";
 const App = () => {
   const location = useLocation();
 
@@ -49,13 +49,26 @@ const App = () => {
           }
         />
 
+        <Route
+          path="/learn/:slug"
+          element={
+            <ProtectedRoute>
+              <RoleRoute allowedRoles={["student"]}>
+                <LearningPage />
+              </RoleRoute>
+            </ProtectedRoute>
+          }
+        />
+
         {/* Admin routes */}
         <Route
           path="/admin/dashboard"
           element={
             <ProtectedRoute>
               <RoleRoute allowedRoles={["admin"]}>
-                <AdminDashboardPage />
+                <AdminLayout>
+                  <AdminDashboardPage />
+                </AdminLayout>
               </RoleRoute>
             </ProtectedRoute>
           }
@@ -66,7 +79,9 @@ const App = () => {
           element={
             <ProtectedRoute>
               <RoleRoute allowedRoles={["admin"]}>
-                <AdminCoursesPage />
+                <AdminLayout>
+                  <AdminCoursesPage />
+                </AdminLayout>
               </RoleRoute>
             </ProtectedRoute>
           }
@@ -77,41 +92,39 @@ const App = () => {
           element={
             <ProtectedRoute>
               <RoleRoute allowedRoles={["admin"]}>
-                <AdminCourseCreatePage />
+                <AdminLayout>
+                  <AdminCourseCreatePage />
+                </AdminLayout>
               </RoleRoute>
             </ProtectedRoute>
           }
         />
+
         <Route
-  path="/admin/courses/:id/edit"
-  element={
-    <ProtectedRoute>
-      <RoleRoute allowedRoles={["admin"]}>
-        <AdminCourseEditPage />
-      </RoleRoute>
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/learn/:slug"
-  element={
-    <ProtectedRoute>
-      <RoleRoute allowedRoles={["student"]}>
-        <LearningPage />
-      </RoleRoute>
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/admin/students"
-  element={
-    <ProtectedRoute>
-      <RoleRoute allowedRoles={["admin"]}>
-        <AdminStudentsPage />
-      </RoleRoute>
-    </ProtectedRoute>
-  }
-/>
+          path="/admin/courses/:id/edit"
+          element={
+            <ProtectedRoute>
+              <RoleRoute allowedRoles={["admin"]}>
+                <AdminLayout>
+                  <AdminCourseEditPage />
+                </AdminLayout>
+              </RoleRoute>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/admin/students"
+          element={
+            <ProtectedRoute>
+              <RoleRoute allowedRoles={["admin"]}>
+                <AdminLayout>
+                  <AdminStudentsPage />
+                </AdminLayout>
+              </RoleRoute>
+            </ProtectedRoute>
+          }
+        />
       </Routes>
     </>
   );

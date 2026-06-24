@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, Trash2 } from "lucide-react";
 import { api } from "../services/api";
-import AdminLayout from "../components/admin/AdminLayout";
+
 import VideoUploadField from "../components/admin/VideoUploadField";
 const emptyLesson = {
   title: "",
@@ -192,7 +192,7 @@ const AdminCourseCreatePage = () => {
     });
   };
   return (
-    <AdminLayout>
+    
       <div className="px-4 md:px-8 py-8">
         <div className="mb-10">
           <p className="text-blue-400 font-bold mb-3">Create Course</p>
@@ -571,7 +571,7 @@ const AdminCourseCreatePage = () => {
           </div>
         </form>
       </div>
-    </AdminLayout>
+  
   );
 };
 

@@ -2,6 +2,7 @@ import express from "express";
 import {
   getSignedLessonVideoUrl,
   uploadAdminVideo,
+  getAdminStorageOverview,
 } from "../controllers/video.controller.js";
 import { protect, authorizeRoles } from "../middlewares/auth.middleware.js";
 import { uploadVideo } from "../middlewares/upload.middleware.js";
@@ -12,7 +13,7 @@ router.post(
   "/signed-url",
   protect,
   authorizeRoles("student"),
-  getSignedLessonVideoUrl
+  getSignedLessonVideoUrl,
 );
 
 router.post(
@@ -20,7 +21,13 @@ router.post(
   protect,
   authorizeRoles("admin"),
   uploadVideo.single("video"),
-  uploadAdminVideo
+  uploadAdminVideo,
 );
 
+router.get(
+  "/admin/storage",
+  protect,
+  authorizeRoles("admin"),
+  getAdminStorageOverview,
+);
 export default router;
