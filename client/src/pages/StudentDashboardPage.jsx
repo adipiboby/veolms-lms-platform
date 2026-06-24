@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { BookOpen, Clock, PlayCircle, TrendingUp } from "lucide-react";
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
-
+import StudentCertificatesPanel from "../components/student/StudentCertificatesPanel";
 const StudentDashboardPage = () => {
   const { user } = useAuth();
 
@@ -222,6 +222,7 @@ const StudentDashboardPage = () => {
             </div>
           )}
         </div>
+        <StudentCertificatesPanel />
       </section>
     </main>
   );
