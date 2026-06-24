@@ -1,9 +1,21 @@
+import fs from "fs/promises";
 import { Course } from "../models/course.model.js";
 import { Enrollment } from "../models/enrollment.model.js";
-import { createSignedVideoUrl } from "../services/s3.service.js";
+import {
+  createSignedVideoUrl,
+  uploadVideoToS3,
+} from "../services/s3.service.js";
 
 const isExternalUrl = (value = "") => {
   return value.startsWith("http://") || value.startsWith("https://");
+};
+
+const createSafeS3Key = ({ adminId, originalName }) => {
+  const safeName = originalName
+    .replace(/\s+/g, "-")
+    .replace(/[^a-zA-Z0-9._-]/g, "");
+
+  return `courses/videos/admin-${adminId}/${Date.now()}-${safeName}`;
 };
 
 export const getSignedLessonVideoUrl = async (req, res) => {
@@ -67,7 +79,6 @@ export const getSignedLessonVideoUrl = async (req, res) => {
       });
     }
 
-    // YouTube or normal external URL fallback
     if (isExternalUrl(videoValue)) {
       return res.status(200).json({
         success: true,
@@ -76,7 +87,6 @@ export const getSignedLessonVideoUrl = async (req, res) => {
       });
     }
 
-    // Private S3 object key
     const signedUrl = await createSignedVideoUrl(videoValue);
 
     res.status(200).json({
@@ -89,6 +99,51 @@ export const getSignedLessonVideoUrl = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to generate signed video URL",
+      error: error.message,
+    });
+  }
+};
+
+export const uploadAdminVideo = async (req, res) => {
+  let tempFilePath;
+
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "Video file is required",
+      });
+    }
+
+    tempFilePath = req.file.path;
+
+    const key = createSafeS3Key({
+      adminId: req.user._id.toString(),
+      originalName: req.file.originalname,
+    });
+
+    await uploadVideoToS3({
+      filePath: tempFilePath,
+      key,
+      contentType: req.file.mimetype,
+    });
+
+    await fs.unlink(tempFilePath);
+
+    res.status(201).json({
+      success: true,
+      message: "Video uploaded successfully",
+      key,
+      videoSource: key,
+    });
+  } catch (error) {
+    if (tempFilePath) {
+      await fs.unlink(tempFilePath).catch(() => {});
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to upload video",
       error: error.message,
     });
   }
