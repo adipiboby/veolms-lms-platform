@@ -1,11 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { BookOpen, CheckCircle, PlayCircle } from "lucide-react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import {
+  Award,
+  BookOpen,
+  CheckCircle,
+  Loader2,
+  PlayCircle,
+} from "lucide-react";
 import { api } from "../services/api";
 import VideoPlayer from "../components/video/VideoPlayer";
 
 const LearningPage = () => {
   const { slug } = useParams();
+  const navigate = useNavigate();
 
   const [course, setCourse] = useState(null);
   const [currentLesson, setCurrentLesson] = useState(null);
@@ -26,6 +33,10 @@ const LearningPage = () => {
   const [videoLoading, setVideoLoading] = useState(false);
   const [videoError, setVideoError] = useState("");
 
+  const [certificate, setCertificate] = useState(null);
+  const [certificateLoading, setCertificateLoading] = useState(false);
+  const [certificateError, setCertificateError] = useState("");
+
   const completedLessonIds = new Set(
     progress.lessonProgress
       ?.filter((item) => item.isCompleted)
@@ -43,6 +54,17 @@ const LearningPage = () => {
     );
   }, [course]);
 
+  const fetchCertificateForCourse = async (courseId) => {
+    try {
+      const res = await api.get(`/certificates/course/${courseId}`);
+      setCertificate(res.data.certificate);
+    } catch (error) {
+      if (error.response?.status !== 404) {
+        console.error("Certificate fetch failed:", error);
+      }
+    }
+  };
+
   const loadSecureVideo = async (lesson) => {
     if (!course?._id || !lesson?._id) return;
 
@@ -58,7 +80,7 @@ const LearningPage = () => {
 
       setVideoSource(res.data.videoUrl);
     } catch (error) {
-      console.error("Failed to load secure video", error);
+      console.error("Failed to load secure video:", error);
 
       setVideoError(
         error.response?.data?.message || "Failed to load secure video",
@@ -86,6 +108,8 @@ const LearningPage = () => {
         );
 
         setProgress(progressRes.data);
+
+        await fetchCertificateForCourse(loadedCourse._id);
 
         const allLessons =
           loadedCourse.sections
@@ -164,10 +188,38 @@ const LearningPage = () => {
     }
   };
 
+  const handleGenerateCertificate = async () => {
+    if (!course?._id) return;
+
+    try {
+      setCertificateLoading(true);
+      setCertificateError("");
+
+      const res = await api.post("/certificates/generate", {
+        courseId: course._id,
+      });
+
+      setCertificate(res.data.certificate);
+
+      navigate(`/certificates/${res.data.certificate.certificateId}`);
+    } catch (error) {
+      console.error("Certificate generation failed:", error);
+
+      setCertificateError(
+        error.response?.data?.message || "Failed to generate certificate",
+      );
+    } finally {
+      setCertificateLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <main className="min-h-screen bg-slate-950 text-white pt-28 px-4">
-        <p className="text-slate-400">Loading learning page...</p>
+        <div className="flex items-center gap-3 text-slate-400">
+          <Loader2 className="animate-spin text-blue-400" size={24} />
+          Loading learning page...
+        </div>
       </main>
     );
   }
@@ -214,8 +266,9 @@ const LearningPage = () => {
         <div className="grid lg:grid-cols-[1fr_380px] gap-6">
           <div className="rounded-3xl bg-white/5 border border-white/10 overflow-hidden">
             {videoLoading ? (
-              <div className="aspect-video bg-black flex items-center justify-center text-slate-400">
-                Preparing secure video...
+              <div className="aspect-video bg-black flex flex-col items-center justify-center text-slate-400">
+                <Loader2 className="animate-spin text-blue-400" size={36} />
+                <p className="mt-3 font-semibold">Preparing secure video...</p>
               </div>
             ) : videoError ? (
               <div className="aspect-video bg-black flex items-center justify-center text-red-300">
@@ -281,6 +334,52 @@ const LearningPage = () => {
                     ? "Saving..."
                     : "Mark as Complete"}
               </button>
+
+              {progress.progressPercentage === 100 && (
+                <div className="mt-6 rounded-2xl bg-yellow-500/10 border border-yellow-500/20 p-5">
+                  <div className="flex items-start gap-3">
+                    <div className="h-11 w-11 rounded-2xl bg-yellow-500/10 text-yellow-300 flex items-center justify-center">
+                      <Award size={24} />
+                    </div>
+
+                    <div>
+                      <h3 className="text-xl font-black text-yellow-300">
+                        Course Completed 🎉
+                      </h3>
+
+                      <p className="text-slate-300 mt-2">
+                        You completed all lessons. You can now generate your
+                        certificate.
+                      </p>
+
+                      {certificateError && (
+                        <p className="text-sm text-red-300 mt-3">
+                          {certificateError}
+                        </p>
+                      )}
+
+                      {certificate ? (
+                        <Link
+                          to={`/certificates/${certificate.certificateId}`}
+                          className="inline-flex mt-4 px-6 py-3 rounded-2xl bg-green-600 hover:bg-green-700 text-white font-bold"
+                        >
+                          View Certificate
+                        </Link>
+                      ) : (
+                        <button
+                          onClick={handleGenerateCertificate}
+                          disabled={certificateLoading}
+                          className="mt-4 px-6 py-3 rounded-2xl bg-yellow-500 hover:bg-yellow-600 text-slate-950 font-black disabled:opacity-60"
+                        >
+                          {certificateLoading
+                            ? "Generating..."
+                            : "Generate Certificate"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

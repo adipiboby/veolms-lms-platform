@@ -19,7 +19,7 @@ import AdminStudentsPage from "./pages/AdminStudentsPage";
 
 import ProtectedRoute from "./routes/ProtectedRoute";
 import RoleRoute from "./routes/RoleRoute";
-
+import CertificatePage from "./pages/CertificatePage";
 const App = () => {
   const location = useLocation();
 
@@ -124,6 +124,10 @@ const App = () => {
               </RoleRoute>
             </ProtectedRoute>
           }
+        />
+        <Route
+          path="/certificates/:certificateId"
+          element={<CertificatePage />}
         />
       </Routes>
     </>
