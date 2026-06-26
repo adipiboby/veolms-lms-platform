@@ -246,18 +246,44 @@ const TabButton = ({ active, icon: Icon, label, badge, onClick }) => {
   );
 };
 
-const LessonResources = ({ lesson }) => {
+const LessonResources = ({ courseId, lesson }) => {
   const resources = getLessonResources(lesson);
 
-  const handleOpenResource = (resource) => {
-    const url = getResourceUrl(resource);
+  const [openingResourceId, setOpeningResourceId] = useState("");
+  const [resourceError, setResourceError] = useState("");
 
-    if (!url) {
-      alert("Resource download link is not available yet.");
+  const handleOpenResource = async (resource) => {
+    if (!courseId || !lesson?._id || !resource?._id) {
+      setResourceError("Resource details are missing.");
       return;
     }
 
-    window.open(url, "_blank", "noopener,noreferrer");
+    try {
+      setOpeningResourceId(resource._id);
+      setResourceError("");
+
+      const response = await api.get(
+        `/lesson-resources/download-url/${courseId}/${lesson._id}/${resource._id}`,
+      );
+
+      const downloadUrl = response.data.downloadUrl;
+
+      if (!downloadUrl) {
+        throw new Error("Download URL not received.");
+      }
+
+      window.open(downloadUrl, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      console.error("STUDENT_RESOURCE_DOWNLOAD_ERROR:", error);
+
+      setResourceError(
+        error?.response?.data?.message ||
+          error?.message ||
+          "Unable to open resource.",
+      );
+    } finally {
+      setOpeningResourceId("");
+    }
   };
 
   return (
@@ -281,6 +307,12 @@ const LessonResources = ({ lesson }) => {
           {resources.length} files
         </span>
       </div>
+
+      {resourceError && (
+        <div className="mb-4 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm font-bold text-red-200">
+          {resourceError}
+        </div>
+      )}
 
       {resources.length === 0 ? (
         <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-center">
@@ -322,9 +354,14 @@ const LessonResources = ({ lesson }) => {
               <button
                 type="button"
                 onClick={() => handleOpenResource(resource)}
-                className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-bold text-slate-200 hover:bg-white/10"
+                disabled={openingResourceId === resource._id}
+                className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-bold text-slate-200 hover:bg-white/10 disabled:opacity-60"
               >
-                <Download size={16} />
+                {openingResourceId === resource._id ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <Download size={16} />
+                )}
                 Open
               </button>
             </article>
@@ -334,7 +371,6 @@ const LessonResources = ({ lesson }) => {
     </section>
   );
 };
-
 const LearningPage = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
@@ -1117,7 +1153,10 @@ ${noteContent.trim()}
                   )}
 
                 {activePanel === "resources" && (
-                  <LessonResources lesson={currentLesson} />
+                  <LessonResources
+                    courseId={course?._id}
+                    lesson={currentLesson}
+                  />
                 )}
               </div>
             </div>

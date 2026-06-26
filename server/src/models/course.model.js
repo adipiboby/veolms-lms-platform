@@ -1,11 +1,68 @@
 import mongoose from "mongoose";
 
+const resourceSchema = new mongoose.Schema(
+  {
+    title: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 120,
+    },
+
+    fileName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    fileKey: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    mimeType: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    size: {
+      type: Number,
+      default: 0,
+    },
+
+    type: {
+      type: String,
+      enum: ["pdf", "zip", "doc", "ppt", "image", "video", "audio", "other"],
+      default: "other",
+    },
+
+    uploadedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+
+    uploadedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  {
+    timestamps: true,
+  },
+);
+
 const lessonSchema = new mongoose.Schema(
   {
     title: {
       type: String,
       required: true,
       trim: true,
+    },
+    resources: {
+      type: [resourceSchema],
+      default: [],
     },
     videoUrl: {
       type: String,
@@ -25,7 +82,7 @@ const lessonSchema = new mongoose.Schema(
       required: true,
     },
   },
-  { _id: true }
+  { _id: true },
 );
 
 const sectionSchema = new mongoose.Schema(
@@ -41,7 +98,7 @@ const sectionSchema = new mongoose.Schema(
     },
     lessons: [lessonSchema],
   },
-  { _id: true }
+  { _id: true },
 );
 
 const courseSchema = new mongoose.Schema(
@@ -102,7 +159,7 @@ const courseSchema = new mongoose.Schema(
     },
     sections: [sectionSchema],
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 export const Course = mongoose.model("Course", courseSchema);
