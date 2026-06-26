@@ -8,6 +8,8 @@ import {
   Edit3,
   FileText,
   Loader2,
+  MessageCircle,
+  Paperclip,
   PlayCircle,
   Save,
   Trash2,
@@ -16,6 +18,7 @@ import {
 
 import { api } from "../services/api";
 import VideoPlayer from "../components/video/VideoPlayer";
+import LessonComments from "../components/comments/LessonComments";
 
 const LEARNING_COURSE_TITLE_KEY = "veolms_current_learning_course_title";
 
@@ -24,8 +27,17 @@ const getSafeCompletedLessonIds = (lessonProgress = []) => {
 
   return new Set(
     lessonProgress
-      .filter((item) => item?.isCompleted)
-      .map((item) => String(item.lessonId || item.lesson || ""))
+      .filter((item) => item?.isCompleted === true || item?.completed === true)
+      .map((item) => {
+        return (
+          item?.lessonId?._id ||
+          item?.lessonId ||
+          item?.lesson?._id ||
+          item?.lesson ||
+          ""
+        );
+      })
+      .map((id) => String(id))
       .filter(Boolean),
   );
 };
@@ -39,11 +51,9 @@ const getSafeProgressValues = ({ progress, completedLessonIds, lessons }) => {
   const completedFromUniqueIds = completedLessonIds?.size || 0;
   const completedFromApi = Number(progress?.completedLessons || 0);
 
-  const rawCompletedLessons = completedFromUniqueIds || completedFromApi;
-
   const completedLessons = totalLessons
-    ? Math.min(rawCompletedLessons, totalLessons)
-    : rawCompletedLessons;
+    ? Math.min(completedFromUniqueIds || completedFromApi, totalLessons)
+    : completedFromUniqueIds || completedFromApi;
 
   const progressPercentage = totalLessons
     ? Math.min(100, Math.round((completedLessons / totalLessons) * 100))
@@ -143,10 +153,194 @@ const NotePreview = ({ content }) => {
   );
 };
 
+const getLessonResources = (lesson) => {
+  if (Array.isArray(lesson?.resources)) return lesson.resources;
+  if (Array.isArray(lesson?.attachments)) return lesson.attachments;
+  if (Array.isArray(lesson?.files)) return lesson.files;
+
+  return [];
+};
+
+const getResourceTitle = (resource) => {
+  return (
+    resource?.title ||
+    resource?.name ||
+    resource?.fileName ||
+    resource?.originalName ||
+    "Lesson Resource"
+  );
+};
+
+const getResourceType = (resource) => {
+  return resource?.type || resource?.mimeType || resource?.fileType || "File";
+};
+
+const getResourceSize = (resource) => {
+  const size = Number(resource?.size || resource?.sizeBytes || 0);
+
+  if (!size) return "";
+
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  if (size < 1024 * 1024 * 1024) {
+    return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  return `${(size / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+};
+
+const getResourceUrl = (resource) => {
+  return (
+    resource?.signedUrl ||
+    resource?.cloudFrontUrl ||
+    resource?.cloudfrontUrl ||
+    resource?.downloadUrl ||
+    resource?.url ||
+    resource?.fileUrl ||
+    ""
+  );
+};
+
+const getProgressFromResponse = (response) => {
+  return (
+    response?.data?.progress || response?.data?.data || response?.data || {}
+  );
+};
+
+const normalizeProgress = (loadedProgress = {}) => {
+  return {
+    totalLessons: Number(loadedProgress?.totalLessons || 0),
+    completedLessons: Number(loadedProgress?.completedLessons || 0),
+    progressPercentage: Number(loadedProgress?.progressPercentage || 0),
+    lessonProgress: Array.isArray(loadedProgress?.lessonProgress)
+      ? loadedProgress.lessonProgress
+      : [],
+    currentLessonId: loadedProgress?.currentLessonId || null,
+  };
+};
+
+const TabButton = ({ active, icon: Icon, label, badge, onClick }) => {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-black transition ${
+        active
+          ? "border-blue-400/50 bg-blue-600 text-white shadow-lg shadow-blue-950/30"
+          : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white"
+      }`}
+    >
+      <Icon size={17} />
+      {label}
+
+      {badge !== undefined && badge !== null && (
+        <span
+          className={`rounded-full px-2 py-0.5 text-xs ${
+            active ? "bg-white/20 text-white" : "bg-white/10 text-slate-300"
+          }`}
+        >
+          {badge}
+        </span>
+      )}
+    </button>
+  );
+};
+
+const LessonResources = ({ lesson }) => {
+  const resources = getLessonResources(lesson);
+
+  const handleOpenResource = (resource) => {
+    const url = getResourceUrl(resource);
+
+    if (!url) {
+      alert("Resource download link is not available yet.");
+      return;
+    }
+
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  return (
+    <section className="mt-5 rounded-3xl border border-white/10 bg-slate-950/70 p-5">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-purple-500/10 text-purple-300">
+            <Paperclip size={24} />
+          </div>
+
+          <div>
+            <h2 className="text-2xl font-black text-white">Lesson Resources</h2>
+
+            <p className="mt-1 text-sm text-slate-400">
+              Files and materials added by admin for this lesson.
+            </p>
+          </div>
+        </div>
+
+        <span className="rounded-full border border-white/10 bg-slate-950/70 px-3 py-1 text-sm font-bold text-slate-300">
+          {resources.length} files
+        </span>
+      </div>
+
+      {resources.length === 0 ? (
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-center">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white/5 text-slate-400">
+            <FileText size={27} />
+          </div>
+
+          <h3 className="mt-4 font-black text-white">No resources added yet</h3>
+
+          <p className="mt-2 text-sm text-slate-400">
+            When admin attaches PDF, ZIP, notes, or assignment files, they will
+            appear here.
+          </p>
+        </div>
+      ) : (
+        <div className="grid gap-3 md:grid-cols-2">
+          {resources.map((resource, index) => (
+            <article
+              key={resource?._id || resource?.fileKey || resource?.url || index}
+              className="flex items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4"
+            >
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-300">
+                <FileText size={21} />
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <h3 className="truncate font-black text-white">
+                  {getResourceTitle(resource)}
+                </h3>
+
+                <p className="mt-1 text-xs text-slate-500">
+                  {getResourceType(resource)}
+                  {getResourceSize(resource)
+                    ? ` • ${getResourceSize(resource)}`
+                    : ""}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleOpenResource(resource)}
+                className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-bold text-slate-200 hover:bg-white/10"
+              >
+                <Download size={16} />
+                Open
+              </button>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+};
+
 const LearningPage = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
   const noteTextareaRef = useRef(null);
+
+  const [activePanel, setActivePanel] = useState("comments");
 
   const [course, setCourse] = useState(null);
   const [currentLesson, setCurrentLesson] = useState(null);
@@ -161,15 +355,17 @@ const LearningPage = () => {
     currentLessonId: null,
   });
 
-  const [markingComplete, setMarkingComplete] = useState(false);
-
-  const [videoSource, setVideoSource] = useState("");
-  const [videoLoading, setVideoLoading] = useState(false);
-  const [videoError, setVideoError] = useState("");
+  const [updatingCompletion, setUpdatingCompletion] = useState(false);
+  const [lessonCompleteMessage, setLessonCompleteMessage] = useState("");
+  const [lessonCompleteError, setLessonCompleteError] = useState("");
 
   const [certificate, setCertificate] = useState(null);
   const [certificateLoading, setCertificateLoading] = useState(false);
   const [certificateError, setCertificateError] = useState("");
+
+  const [videoSource, setVideoSource] = useState("");
+  const [videoLoading, setVideoLoading] = useState(false);
+  const [videoError, setVideoError] = useState("");
 
   const [noteContent, setNoteContent] = useState("");
   const [notesByLessonId, setNotesByLessonId] = useState({});
@@ -182,14 +378,18 @@ const LearningPage = () => {
   const [noteEditMode, setNoteEditMode] = useState(false);
 
   const lessons = useMemo(() => {
-    if (!course?.sections) return [];
+    if (!Array.isArray(course?.sections)) return [];
 
-    return course.sections.flatMap((section) =>
-      section.lessons.map((lesson) => ({
+    return course.sections.flatMap((section) => {
+      const sectionLessons = Array.isArray(section?.lessons)
+        ? section.lessons
+        : [];
+
+      return sectionLessons.map((lesson) => ({
         ...lesson,
         sectionTitle: section.title,
-      })),
-    );
+      }));
+    });
   }, [course]);
 
   const completedLessonIds = useMemo(() => {
@@ -206,6 +406,15 @@ const LearningPage = () => {
 
   const hasCurrentLessonNote = noteContent.trim().length > 0;
 
+  const currentLessonCompleted = completedLessonIds.has(
+    String(currentLesson?._id),
+  );
+
+  const currentLessonResourceCount = getLessonResources(currentLesson).length;
+
+  const isCourseCompleted =
+    safeProgress.totalLessons > 0 && safeProgress.progressPercentage === 100;
+
   const updateNavbarCourseTitle = (title) => {
     if (!title) return;
 
@@ -215,6 +424,34 @@ const LearningPage = () => {
       new CustomEvent("veolms-learning-course-change", {
         detail: {
           title,
+        },
+      }),
+    );
+
+    window.dispatchEvent(
+      new CustomEvent("veolms-learning-course-title", {
+        detail: {
+          title,
+        },
+      }),
+    );
+  };
+
+  const clearNavbarCourseTitle = () => {
+    localStorage.setItem(LEARNING_COURSE_TITLE_KEY, "");
+
+    window.dispatchEvent(
+      new CustomEvent("veolms-learning-course-change", {
+        detail: {
+          title: "",
+        },
+      }),
+    );
+
+    window.dispatchEvent(
+      new CustomEvent("veolms-learning-course-title", {
+        detail: {
+          title: "",
         },
       }),
     );
@@ -310,13 +547,17 @@ ${noteContent.trim()}
   };
 
   const fetchCertificateForCourse = async (courseId) => {
+    if (!courseId) return;
+
     try {
       const res = await api.get(`/certificates/course/${courseId}`);
-      setCertificate(res.data.certificate);
+      setCertificate(res.data.certificate || null);
     } catch (error) {
       if (error.response?.status !== 404) {
         console.error("Certificate fetch failed:", error);
       }
+
+      setCertificate(null);
     }
   };
 
@@ -355,7 +596,10 @@ ${noteContent.trim()}
         lessonId: lesson._id,
       });
 
-      setVideoSource(res.data.videoUrl);
+      const secureVideoUrl =
+        res.data.videoUrl || res.data.signedUrl || res.data.url || "";
+
+      setVideoSource(secureVideoUrl);
     } catch (error) {
       console.error("Failed to load secure video:", error);
 
@@ -402,11 +646,50 @@ ${noteContent.trim()}
         setNoteEditMode(!content.trim());
       }
     } catch (error) {
+      if (error.response?.status === 404) {
+        setNoteContent("");
+
+        if (notesOpen) {
+          setNoteEditMode(true);
+        }
+
+        return;
+      }
+
       console.error("LOAD_LESSON_NOTE_ERROR:", error);
 
       setNoteError(error.response?.data?.message || "Failed to load note");
     } finally {
       setNoteLoading(false);
+    }
+  };
+
+  const handleGenerateCertificate = async () => {
+    if (!course?._id) return;
+
+    try {
+      setCertificateLoading(true);
+      setCertificateError("");
+
+      const res = await api.post("/certificates/generate", {
+        courseId: course._id,
+      });
+
+      const generatedCertificate = res.data.certificate;
+
+      setCertificate(generatedCertificate);
+
+      if (generatedCertificate?.certificateId) {
+        navigate(`/certificates/${generatedCertificate.certificateId}`);
+      }
+    } catch (error) {
+      console.error("Certificate generation failed:", error);
+
+      setCertificateError(
+        error.response?.data?.message || "Failed to generate certificate.",
+      );
+    } finally {
+      setCertificateLoading(false);
     }
   };
 
@@ -419,6 +702,7 @@ ${noteContent.trim()}
         const res = await api.get(`/enrollments/learn/${slug}`);
 
         const loadedCourse = res.data.course;
+
         setCourse(loadedCourse);
         updateNavbarCourseTitle(loadedCourse.title);
 
@@ -426,25 +710,30 @@ ${noteContent.trim()}
           `/progress/course/${loadedCourse._id}`,
         );
 
-        setProgress(progressRes.data);
+        const loadedProgress = getProgressFromResponse(progressRes);
+        setProgress(normalizeProgress(loadedProgress));
 
         await fetchCertificateForCourse(loadedCourse._id);
         await fetchCourseNotes(loadedCourse._id);
 
         const allLessons =
           loadedCourse.sections
-            ?.flatMap((section) =>
-              section.lessons.map((lesson) => ({
+            ?.flatMap((section) => {
+              const sectionLessons = Array.isArray(section?.lessons)
+                ? section.lessons
+                : [];
+
+              return sectionLessons.map((lesson) => ({
                 ...lesson,
                 sectionTitle: section.title,
-              })),
-            )
-            ?.sort((a, b) => a.order - b.order) || [];
+              }));
+            })
+            ?.sort((a, b) => Number(a.order || 0) - Number(b.order || 0)) || [];
 
         const resumeLesson =
           allLessons.find(
             (lesson) =>
-              String(lesson._id) === String(progressRes.data.currentLessonId),
+              String(lesson._id) === String(loadedProgress.currentLessonId),
           ) || allLessons[0];
 
         setCurrentLesson(resumeLesson || null);
@@ -471,15 +760,18 @@ ${noteContent.trim()}
 
   useEffect(() => {
     return () => {
-      window.dispatchEvent(
-        new CustomEvent("veolms-learning-course-change", {
-          detail: {
-            title: "",
-          },
-        }),
-      );
+      clearNavbarCourseTitle();
     };
   }, []);
+
+  const refreshProgress = async () => {
+    if (!course?._id) return;
+
+    const progressRes = await api.get(`/progress/course/${course._id}`);
+    const loadedProgress = getProgressFromResponse(progressRes);
+
+    setProgress(normalizeProgress(loadedProgress));
+  };
 
   const handleLessonClick = async (lesson, sectionTitle) => {
     try {
@@ -488,37 +780,62 @@ ${noteContent.trim()}
         sectionTitle,
       });
 
+      setActivePanel("comments");
+      setLessonCompleteMessage("");
+      setLessonCompleteError("");
+      setCertificateError("");
+
       await api.post("/progress/lesson", {
         courseId: course._id,
         lessonId: lesson._id,
         isCompleted: completedLessonIds.has(String(lesson._id)),
       });
 
-      const progressRes = await api.get(`/progress/course/${course._id}`);
-      setProgress(progressRes.data);
+      await refreshProgress();
     } catch (error) {
       console.error(error);
     }
   };
 
-  const handleMarkLessonComplete = async () => {
+  const handleToggleLessonComplete = async () => {
     if (!course?._id || !currentLesson?._id) return;
 
+    const nextCompletedState = !currentLessonCompleted;
+
     try {
-      setMarkingComplete(true);
+      setUpdatingCompletion(true);
+      setLessonCompleteMessage("");
+      setLessonCompleteError("");
+      setCertificateError("");
 
       await api.post("/progress/lesson", {
         courseId: course._id,
         lessonId: currentLesson._id,
-        isCompleted: true,
+        isCompleted: nextCompletedState,
       });
 
-      const progressRes = await api.get(`/progress/course/${course._id}`);
-      setProgress(progressRes.data);
+      await refreshProgress();
+
+      if (!nextCompletedState) {
+        setCertificate(null);
+      } else {
+        await fetchCertificateForCourse(course._id);
+      }
+
+      setLessonCompleteMessage(
+        nextCompletedState
+          ? "Lesson marked as completed."
+          : "Lesson unmarked. Progress updated.",
+      );
     } catch (error) {
-      console.error(error);
+      console.error("TOGGLE_LESSON_COMPLETE_ERROR:", error);
+
+      setLessonCompleteError(
+        error.response?.data?.message ||
+          "Unable to update lesson progress. Please try again.",
+      );
     } finally {
-      setMarkingComplete(false);
+      setUpdatingCompletion(false);
     }
   };
 
@@ -604,31 +921,6 @@ ${noteContent.trim()}
     }
   };
 
-  const handleGenerateCertificate = async () => {
-    if (!course?._id) return;
-
-    try {
-      setCertificateLoading(true);
-      setCertificateError("");
-
-      const res = await api.post("/certificates/generate", {
-        courseId: course._id,
-      });
-
-      setCertificate(res.data.certificate);
-
-      navigate(`/certificates/${res.data.certificate.certificateId}`);
-    } catch (error) {
-      console.error("Certificate generation failed:", error);
-
-      setCertificateError(
-        error.response?.data?.message || "Failed to generate certificate",
-      );
-    } finally {
-      setCertificateLoading(false);
-    }
-  };
-
   if (loading) {
     return (
       <main className="min-h-screen bg-slate-950 px-4 py-4 text-white">
@@ -658,103 +950,128 @@ ${noteContent.trim()}
     <main className="min-h-screen bg-slate-950 text-white">
       <section className="mx-auto max-w-[1600px] px-4 pb-8 pt-4 md:px-6">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_460px] xl:grid-cols-[minmax(0,1fr)_520px]">
-          <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/5">
-            {videoLoading ? (
-              <div className="flex aspect-video flex-col items-center justify-center bg-black text-slate-400">
-                <Loader2 className="animate-spin text-blue-400" size={36} />
-                <p className="mt-3 font-semibold">Preparing secure video...</p>
-              </div>
-            ) : videoError ? (
-              <div className="flex aspect-video items-center justify-center bg-black text-red-300">
-                {videoError}
-              </div>
-            ) : videoSource ? (
-              <VideoPlayer
-                key={currentLesson?._id}
-                src={videoSource}
-                title={currentLesson?.title}
-                onEnded={handleMarkLessonComplete}
-              />
-            ) : (
-              <div className="flex aspect-video items-center justify-center bg-black text-slate-400">
-                No video selected
-              </div>
-            )}
-
-            <div className="p-6">
-              <p className="mb-2 text-sm font-black uppercase tracking-[0.18em] text-blue-300">
-                {currentLesson?.sectionTitle}
-              </p>
-
-              <h2 className="mb-3 text-2xl font-black leading-tight md:text-3xl">
-                {currentLesson?.title}
-              </h2>
-
-              <p className="text-slate-400">
-                Watch this lesson and continue through the course curriculum.
-              </p>
-
-              <div className="mt-6">
-                <div className="mb-2 flex items-center justify-between">
-                  <p className="text-sm text-slate-400">Course Progress</p>
-
-                  <p className="text-sm font-bold text-blue-300">
-                    {safeProgress.progressPercentage}%
+          <div className="space-y-5">
+            <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/5">
+              {videoLoading ? (
+                <div className="flex aspect-video flex-col items-center justify-center bg-black text-slate-400">
+                  <Loader2 className="animate-spin text-blue-400" size={36} />
+                  <p className="mt-3 font-semibold">
+                    Preparing secure video...
                   </p>
                 </div>
+              ) : videoError ? (
+                <div className="flex aspect-video items-center justify-center bg-black px-4 text-center text-red-300">
+                  {videoError}
+                </div>
+              ) : videoSource ? (
+                <VideoPlayer
+                  key={currentLesson?._id}
+                  src={videoSource}
+                  title={currentLesson?.title}
+                  onEnded={() => {
+                    if (!currentLessonCompleted) {
+                      handleToggleLessonComplete();
+                    }
+                  }}
+                />
+              ) : (
+                <div className="flex aspect-video items-center justify-center bg-black text-slate-400">
+                  No video selected
+                </div>
+              )}
 
-                <div className="h-3 overflow-hidden rounded-full bg-slate-800">
-                  <div
-                    className="h-full bg-gradient-to-r from-blue-600 to-purple-600"
-                    style={{ width: `${safeProgress.progressPercentage}%` }}
+              <div className="p-6">
+                <p className="mb-2 text-sm font-black uppercase tracking-[0.18em] text-blue-300">
+                  {currentLesson?.sectionTitle}
+                </p>
+
+                <h2 className="mb-3 text-2xl font-black leading-tight md:text-3xl">
+                  {currentLesson?.title}
+                </h2>
+
+                <p className="text-slate-400">
+                  Watch this lesson and continue through the course curriculum.
+                </p>
+
+                <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                  <TabButton
+                    active={activePanel === "comments"}
+                    icon={MessageCircle}
+                    label="Discussion"
+                    onClick={() => setActivePanel("comments")}
                   />
+
+                  <TabButton
+                    active={activePanel === "resources"}
+                    icon={Paperclip}
+                    label="Resources"
+                    badge={currentLessonResourceCount}
+                    onClick={() => setActivePanel("resources")}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={handleToggleLessonComplete}
+                    disabled={updatingCompletion}
+                    className={`inline-flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-black transition ${
+                      currentLessonCompleted
+                        ? "border-green-400/30 bg-green-500/15 text-green-200 hover:bg-green-500/25"
+                        : "border-green-400/20 bg-green-500/10 text-green-100 hover:bg-green-500/20"
+                    } disabled:cursor-not-allowed disabled:opacity-80`}
+                  >
+                    {updatingCompletion ? (
+                      <Loader2 size={17} className="animate-spin" />
+                    ) : (
+                      <CheckCircle size={17} />
+                    )}
+
+                    {updatingCompletion
+                      ? "Updating..."
+                      : currentLessonCompleted
+                        ? "Completed"
+                        : "Mark Lesson"}
+                  </button>
                 </div>
 
-                <p className="mt-2 text-sm text-slate-400">
-                  {safeProgress.completedLessons} of {safeProgress.totalLessons}{" "}
-                  lessons completed
-                </p>
-              </div>
+                {lessonCompleteMessage && (
+                  <div className="mt-4 rounded-2xl border border-green-500/20 bg-green-500/10 p-4 text-sm font-bold text-green-200">
+                    {lessonCompleteMessage}
+                  </div>
+                )}
 
-              <button
-                onClick={handleMarkLessonComplete}
-                disabled={
-                  markingComplete ||
-                  completedLessonIds.has(String(currentLesson?._id))
-                }
-                className="mt-6 rounded-2xl bg-green-600 px-6 py-3 font-bold text-white hover:bg-green-700 disabled:opacity-60"
-              >
-                {completedLessonIds.has(String(currentLesson?._id))
-                  ? "Completed"
-                  : markingComplete
-                    ? "Saving..."
-                    : "Mark as Complete"}
-              </button>
+                {lessonCompleteError && (
+                  <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm font-bold text-red-200">
+                    {lessonCompleteError}
+                  </div>
+                )}
 
-              {safeProgress.progressPercentage === 100 && (
-                <div className="mt-6 rounded-2xl border border-yellow-500/20 bg-yellow-500/10 p-5">
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-yellow-500/10 text-yellow-300">
-                      <Award size={24} />
-                    </div>
+                {certificateError && (
+                  <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm font-bold text-red-200">
+                    {certificateError}
+                  </div>
+                )}
 
-                    <div>
-                      <h3 className="text-xl font-black text-yellow-300">
-                        Course Completed 🎉
-                      </h3>
+                {isCourseCompleted && (
+                  <div className="mt-5 rounded-3xl border border-yellow-400/20 bg-yellow-500/10 p-5">
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-yellow-500/15 text-yellow-300">
+                          <Award size={25} />
+                        </div>
 
-                      <p className="mt-2 text-slate-300">
-                        You completed all lessons. You can now generate your
-                        certificate.
-                      </p>
+                        <div>
+                          <h3 className="text-xl font-black text-yellow-200">
+                            Course Completed
+                          </h3>
 
-                      {certificateError && (
-                        <p className="mt-3 text-sm text-red-300">
-                          {certificateError}
-                        </p>
-                      )}
+                          <p className="mt-1 text-sm text-slate-300">
+                            You completed all lessons. You can now generate or
+                            download your certificate.
+                          </p>
+                        </div>
+                      </div>
 
-                      {certificate ? (
+                      {certificate?.certificateId ? (
                         <button
                           type="button"
                           onClick={() =>
@@ -762,16 +1079,23 @@ ${noteContent.trim()}
                               `/certificates/${certificate.certificateId}`,
                             )
                           }
-                          className="mt-4 inline-flex rounded-2xl bg-green-600 px-6 py-3 font-bold text-white hover:bg-green-700"
+                          className="inline-flex items-center gap-2 rounded-2xl bg-green-600 px-5 py-3 text-sm font-black text-white hover:bg-green-700"
                         >
-                          View Certificate
+                          <Download size={17} />
+                          View / Download Certificate
                         </button>
                       ) : (
                         <button
+                          type="button"
                           onClick={handleGenerateCertificate}
                           disabled={certificateLoading}
-                          className="mt-4 rounded-2xl bg-yellow-500 px-6 py-3 font-black text-slate-950 hover:bg-yellow-600 disabled:opacity-60"
+                          className="inline-flex items-center gap-2 rounded-2xl bg-yellow-500 px-5 py-3 text-sm font-black text-slate-950 hover:bg-yellow-600 disabled:opacity-60"
                         >
+                          {certificateLoading ? (
+                            <Loader2 size={17} className="animate-spin" />
+                          ) : (
+                            <Award size={17} />
+                          )}
                           {certificateLoading
                             ? "Generating..."
                             : "Generate Certificate"}
@@ -779,8 +1103,23 @@ ${noteContent.trim()}
                       )}
                     </div>
                   </div>
-                </div>
-              )}
+                )}
+
+                {activePanel === "comments" &&
+                  course?._id &&
+                  currentLesson?._id && (
+                    <div className="mt-5">
+                      <LessonComments
+                        courseId={course._id}
+                        lessonId={currentLesson._id}
+                      />
+                    </div>
+                  )}
+
+                {activePanel === "resources" && (
+                  <LessonResources lesson={currentLesson} />
+                )}
+              </div>
             </div>
           </div>
 

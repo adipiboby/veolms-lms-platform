@@ -11,14 +11,14 @@ router.get(
   "/course/:courseId",
   protect,
   authorizeRoles("student"),
-  getCourseProgress
+  getCourseProgress,
 );
 
 router.post(
   "/lesson",
   protect,
   authorizeRoles("student"),
-  updateLessonProgress
+  updateLessonProgress,
 );
 
 export default router;

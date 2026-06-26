@@ -16,6 +16,7 @@ import reviewRoutes from "./routes/review.routes.js";
 import noteRoutes from "./routes/note.routes.js";
 import adminAnalyticsRoutes from "./routes/adminAnalytics.routes.js";
 import adminStudentsRoutes from "./routes/adminStudents.routes.js";
+import lessonCommentRoutes from "./routes/lessonComment.routes.js";
 const app = express();
 
 /**
@@ -103,6 +104,7 @@ app.use("/api/payments", paymentRoutes);
 app.use("/api/progress", progressRoutes);
 app.use("/api/certificates", certificateRoutes);
 app.use("/api/reviews", reviewRoutes);
+app.use("/api/lesson-comments", lessonCommentRoutes);
 app.use("/api/notes", noteRoutes);
 app.use((req, res) => {
   res.status(404).json({

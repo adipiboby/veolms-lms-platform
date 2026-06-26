@@ -1,385 +1,893 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import {
+  ArrowRight,
+  Award,
+  BarChart3,
+  BookOpen,
+  CheckCircle,
+  Clock,
+  FileText,
+  Layers,
+  Loader2,
+  Lock,
+  PlayCircle,
+  ShieldCheck,
+  Sparkles,
+  Star,
+  TrendingUp,
+  Users,
+  Video,
+} from "lucide-react";
 
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 
-const getLessons = (course) => {
-  if (!course?.sections || !Array.isArray(course.sections)) return [];
+const formatCurrency = (amount = 0) => {
+  const value = Number(amount || 0);
 
-  return course.sections.flatMap((section) => {
-    if (!Array.isArray(section.lessons)) return [];
-    return section.lessons;
-  });
+  if (value === 0) return "Free";
+
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(value);
+};
+
+const getCourseImage = (course) => {
+  return (
+    course?.thumbnail ||
+    course?.thumbnailUrl ||
+    course?.image ||
+    course?.coverImage ||
+    "https://images.unsplash.com/photo-1633356122544-f134324a6cee?q=80&w=1200&auto=format&fit=crop"
+  );
+};
+
+const getCourseLessonsCount = (course) => {
+  if (!Array.isArray(course?.sections))
+    return Number(course?.lessonsCount || 0);
+
+  return course.sections.reduce((total, section) => {
+    return (
+      total + (Array.isArray(section.lessons) ? section.lessons.length : 0)
+    );
+  }, 0);
+};
+
+const getCourseRating = (course) => {
+  return Number(
+    course?.averageRating ||
+      course?.rating ||
+      course?.ratingsAverage ||
+      course?.avgRating ||
+      0,
+  );
+};
+
+const getCourseEnrollments = (course) => {
+  return Number(
+    course?.totalEnrollments ||
+      course?.enrollments ||
+      course?.enrollmentsCount ||
+      course?.studentsCount ||
+      0,
+  );
 };
 
 const parseDurationToMinutes = (duration) => {
   if (!duration) return 0;
 
-  if (typeof duration === "number") return duration;
+  const text = String(duration).toLowerCase().trim();
 
-  const text = String(duration).trim().toLowerCase();
+  if (text.includes(":")) {
+    const [minutes = "0", seconds = "0"] = text.split(":");
+    return Number(minutes || 0) + Math.ceil(Number(seconds || 0) / 60);
+  }
 
-  const hourMatch = text.match(/(\d+)\s*h/);
-  const minuteMatch = text.match(/(\d+)\s*m/);
-
-  if (hourMatch || minuteMatch) {
-    const hours = hourMatch ? Number(hourMatch[1]) : 0;
-    const minutes = minuteMatch ? Number(minuteMatch[1]) : 0;
+  if (text.includes("h")) {
+    const hours = Number(text.match(/(\d+)\s*h/)?.[1] || 0);
+    const minutes = Number(text.match(/(\d+)\s*m/)?.[1] || 0);
     return hours * 60 + minutes;
   }
 
-  const parts = text.split(":").map(Number);
-
-  if (parts.length === 3 && parts.every(Number.isFinite)) {
-    const [hours, minutes, seconds] = parts;
-    return hours * 60 + minutes + Math.round(seconds / 60);
+  if (text.includes("m")) {
+    return Number(text.match(/(\d+)\s*m/)?.[1] || 0);
   }
 
-  if (parts.length === 2 && parts.every(Number.isFinite)) {
-    const [minutes, seconds] = parts;
-    return minutes + Math.round(seconds / 60);
-  }
-
-  const numberOnly = Number(text.replace(/[^\d.]/g, ""));
-  return Number.isFinite(numberOnly) ? numberOnly : 0;
+  return Number(text.replace(/\D/g, "") || 0);
 };
 
-const getCourseDurationMinutes = (course) => {
-  return getLessons(course).reduce((total, lesson) => {
-    return total + parseDurationToMinutes(lesson.duration);
+const getCourseTotalMinutes = (course) => {
+  if (!Array.isArray(course?.sections))
+    return Number(course?.totalMinutes || 0);
+
+  return course.sections.reduce((courseTotal, section) => {
+    const lessons = Array.isArray(section.lessons) ? section.lessons : [];
+
+    return (
+      courseTotal +
+      lessons.reduce((lessonTotal, lesson) => {
+        return lessonTotal + parseDurationToMinutes(lesson?.duration);
+      }, 0)
+    );
   }, 0);
 };
 
-const formatDuration = (minutes) => {
-  const safeMinutes = Math.max(0, Math.round(Number(minutes) || 0));
+const formatLearningTime = (minutes = 0) => {
+  const value = Number(minutes || 0);
 
-  if (safeMinutes === 0) return "0m";
+  if (value <= 0) return "0m";
 
-  const hours = Math.floor(safeMinutes / 60);
-  const remainingMinutes = safeMinutes % 60;
+  if (value < 60) return `${value}m`;
 
-  if (hours === 0) return `${remainingMinutes}m`;
-  if (remainingMinutes === 0) return `${hours}h`;
+  const hours = Math.floor(value / 60);
+  const mins = value % 60;
 
-  return `${hours}h ${remainingMinutes}m`;
+  return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
 };
 
-const getProgressPercent = (progress, totalLessons) => {
-  const directProgress =
-    progress?.progressPercentage ??
-    progress?.percentage ??
-    progress?.progress?.progressPercentage ??
-    progress?.courseProgress?.progressPercentage;
+const getEnrollmentProgress = (enrollment) => {
+  const course = enrollment?.course;
+  const progress = enrollment?.progress || {};
 
-  if (Number.isFinite(Number(directProgress))) {
-    return Math.min(100, Math.max(0, Math.round(Number(directProgress))));
-  }
+  const totalLessons =
+    Number(progress?.totalLessons || enrollment?.totalLessons || 0) ||
+    getCourseLessonsCount(course);
 
-  const completedLessons =
-    Number(progress?.completedLessons) ||
-    Number(progress?.progress?.completedLessons) ||
-    Number(progress?.courseProgress?.completedLessons) ||
-    0;
-
-  const actualTotalLessons =
-    Number(progress?.totalLessons) ||
-    Number(progress?.progress?.totalLessons) ||
-    Number(progress?.courseProgress?.totalLessons) ||
-    totalLessons ||
-    0;
-
-  if (!actualTotalLessons) return 0;
-
-  return Math.min(
-    100,
-    Math.max(0, Math.round((completedLessons / actualTotalLessons) * 100))
+  const completedLessons = Number(
+    progress?.completedLessons || enrollment?.completedLessons || 0,
   );
+
+  const progressPercentage =
+    totalLessons === 0
+      ? 0
+      : Math.round((completedLessons / totalLessons) * 100);
+
+  return {
+    totalLessons,
+    completedLessons,
+    progressPercentage: Math.min(
+      100,
+      Math.max(0, Number(progress?.progressPercentage ?? progressPercentage)),
+    ),
+  };
 };
 
-const getCompletedLessons = (progress) => {
+const StatBox = ({ value, label }) => {
   return (
-    Number(progress?.completedLessons) ||
-    Number(progress?.progress?.completedLessons) ||
-    Number(progress?.courseProgress?.completedLessons) ||
-    0
+    <div className="rounded-[1.4rem] border border-white/10 bg-white/[0.05] p-5 shadow-2xl shadow-black/20">
+      <h3 className="text-3xl font-black text-white md:text-4xl">{value}</h3>
+      <p className="mt-2 text-sm text-slate-400">{label}</p>
+    </div>
   );
 };
 
-const findResumeLesson = (course, progress) => {
-  const lessons = getLessons(course);
+const FeatureCard = ({ icon: Icon, title, description, tone = "blue" }) => {
+  const toneClasses = {
+    blue: "bg-blue-500/10 text-blue-300 border-blue-400/20",
+    green: "bg-green-500/10 text-green-300 border-green-400/20",
+    purple: "bg-purple-500/10 text-purple-300 border-purple-400/20",
+    yellow: "bg-yellow-500/10 text-yellow-300 border-yellow-400/20",
+    cyan: "bg-cyan-500/10 text-cyan-300 border-cyan-400/20",
+    rose: "bg-rose-500/10 text-rose-300 border-rose-400/20",
+  };
 
-  if (!lessons.length) return null;
+  return (
+    <article className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-6 shadow-2xl shadow-black/20 transition duration-300 hover:-translate-y-1 hover:border-blue-400/40 hover:bg-white/[0.07]">
+      <div
+        className={`flex h-14 w-14 items-center justify-center rounded-2xl border ${
+          toneClasses[tone] || toneClasses.blue
+        }`}
+      >
+        <Icon size={27} />
+      </div>
 
-  const currentLessonId =
-    progress?.currentLessonId ||
-    progress?.progress?.currentLessonId ||
-    progress?.courseProgress?.currentLessonId ||
-    progress?.lastWatchedLessonId;
+      <h3 className="mt-5 text-xl font-black text-white">{title}</h3>
 
-  if (currentLessonId) {
-    const foundLesson = lessons.find(
-      (lesson) => String(lesson._id || lesson.id) === String(currentLessonId)
-    );
+      <p className="mt-3 leading-7 text-slate-400">{description}</p>
+    </article>
+  );
+};
 
-    if (foundLesson) return foundLesson;
-  }
+const CourseCard = ({ course }) => {
+  const lessonsCount = getCourseLessonsCount(course);
+  const rating = getCourseRating(course);
+  const enrollments = getCourseEnrollments(course);
 
-  return lessons[0];
+  return (
+    <article className="group flex min-w-0 flex-col overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.04] shadow-2xl shadow-black/20 transition duration-300 hover:-translate-y-1 hover:border-blue-400/40 hover:bg-white/[0.07]">
+      <div className="relative aspect-video overflow-hidden bg-slate-900">
+        <img
+          src={getCourseImage(course)}
+          alt={course?.title || "Course thumbnail"}
+          className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+        />
+
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent" />
+
+        <div className="absolute left-4 top-4 rounded-full border border-white/10 bg-slate-950/75 px-3 py-1 text-xs font-black text-white backdrop-blur">
+          Preview
+        </div>
+
+        <div className="absolute bottom-4 left-4 flex h-12 w-12 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur">
+          <PlayCircle size={25} />
+        </div>
+
+        <div className="absolute bottom-4 right-4 rounded-2xl border border-white/10 bg-slate-950/75 px-4 py-2 text-sm font-black text-white backdrop-blur">
+          {formatCurrency(course?.price)}
+        </div>
+      </div>
+
+      <div className="flex flex-1 flex-col p-5">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="inline-flex min-w-0 items-center gap-2 rounded-full border border-yellow-400/20 bg-yellow-400/10 px-3 py-1 text-sm text-yellow-200">
+            <Star
+              size={15}
+              className="shrink-0 fill-yellow-300 text-yellow-300"
+            />
+            <span className="font-black">
+              {rating > 0 ? rating.toFixed(1) : "New"}
+            </span>
+          </div>
+
+          <div className="inline-flex shrink-0 items-center gap-2 text-sm text-slate-400">
+            <Users size={15} />
+            {enrollments}
+          </div>
+        </div>
+
+        <h3 className="line-clamp-2 break-words text-xl font-black leading-tight text-white">
+          {course?.title}
+        </h3>
+
+        <p className="mt-3 line-clamp-3 break-words text-sm leading-6 text-slate-400">
+          {course?.shortDescription ||
+            course?.description ||
+            "Learn through secure video lessons with progress tracking and certificates."}
+        </p>
+
+        <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
+          <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3 text-slate-300">
+            <BookOpen size={16} className="shrink-0 text-blue-300" />
+            <span className="truncate">{lessonsCount} lessons</span>
+          </div>
+
+          <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3 text-slate-300">
+            <Clock size={16} className="shrink-0 text-green-300" />
+            <span className="truncate">Lifetime</span>
+          </div>
+        </div>
+
+        <div className="mt-5 flex items-center justify-between gap-3 border-t border-white/10 pt-5">
+          <div className="min-w-0">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+              Instructor
+            </p>
+
+            <p className="truncate font-bold text-slate-200">
+              {course?.instructor ||
+                course?.instructorName ||
+                course?.createdBy?.name ||
+                "VeoLMS Instructor"}
+            </p>
+          </div>
+
+          <Link
+            to={`/courses/${course?.slug || course?._id}`}
+            className="inline-flex shrink-0 items-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white hover:bg-blue-700"
+          >
+            View
+            <ArrowRight size={16} />
+          </Link>
+        </div>
+      </div>
+    </article>
+  );
+};
+
+const StepCard = ({ number, title, description, icon: Icon }) => {
+  return (
+    <article className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-6 shadow-2xl shadow-black/20">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-300">
+          <Icon size={27} />
+        </div>
+
+        <span className="text-5xl font-black text-white/10">{number}</span>
+      </div>
+
+      <h3 className="mt-6 text-xl font-black text-white">{title}</h3>
+
+      <p className="mt-3 leading-7 text-slate-400">{description}</p>
+    </article>
+  );
+};
+
+const DashboardPreview = ({
+  course,
+  stats,
+  progress,
+  isRealStudent,
+  progressError,
+}) => {
+  const hasCourse = Boolean(course?._id || course?.slug || course?.title);
+
+  const previewTitle = hasCourse
+    ? course?.title
+    : isRealStudent
+      ? "No enrolled courses yet"
+      : "Course progress appears here";
+
+  const progressPercentage = isRealStudent
+    ? Number(progress?.progressPercentage || 0)
+    : 0;
+
+  const completedLessons = Number(progress?.completedLessons || 0);
+  const totalLessons =
+    Number(progress?.totalLessons || 0) ||
+    getCourseLessonsCount(course) ||
+    stats.lessonsCount ||
+    0;
+
+  const totalMinutes = getCourseTotalMinutes(course) || stats.totalMinutes || 0;
+
+  return (
+    <div className="rounded-[2rem] border border-white/10 bg-white/[0.05] shadow-2xl shadow-blue-950/30 backdrop-blur-xl">
+      <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
+        <div className="flex items-center gap-2">
+          <span className="h-3.5 w-3.5 rounded-full bg-red-500" />
+          <span className="h-3.5 w-3.5 rounded-full bg-yellow-400" />
+          <span className="h-3.5 w-3.5 rounded-full bg-green-400" />
+        </div>
+
+        <p className="text-sm text-slate-400 md:text-base">
+          {isRealStudent
+            ? "Your Learning Progress"
+            : "Student Dashboard Preview"}
+        </p>
+      </div>
+
+      <div className="p-5 md:p-7">
+        <div className="rounded-[1.5rem] bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 p-5 md:p-7">
+          <p className="text-sm font-medium text-white/90 md:text-base">
+            {isRealStudent
+              ? hasCourse
+                ? "Continue Learning"
+                : "Start Learning"
+              : "Platform Preview"}
+          </p>
+
+          <h3 className="mt-4 line-clamp-2 text-2xl font-black text-white">
+            {previewTitle}
+          </h3>
+
+          <div className="mt-7 h-3 overflow-hidden rounded-full bg-white/20">
+            <div
+              className="h-full rounded-full bg-white/70 transition-all duration-500"
+              style={{ width: `${progressPercentage}%` }}
+            />
+          </div>
+
+          <div className="mt-5 flex items-center justify-between gap-4 text-sm text-white/90 md:text-base">
+            {isRealStudent ? (
+              <>
+                <span>{progressPercentage}% completed</span>
+                <span>
+                  {completedLessons}/{totalLessons} lessons
+                </span>
+              </>
+            ) : (
+              <>
+                <span>Progress updates after enrollment</span>
+                <span>{totalLessons} lessons</span>
+              </>
+            )}
+          </div>
+        </div>
+
+        {progressError && isRealStudent && (
+          <div className="mt-5 rounded-2xl border border-yellow-400/20 bg-yellow-400/10 p-4 text-sm text-yellow-100">
+            Unable to load your latest progress right now.
+          </div>
+        )}
+
+        <div className="mt-5 grid grid-cols-3 gap-4">
+          <div className="rounded-2xl bg-slate-950/75 p-4">
+            <BookOpen size={22} className="text-cyan-300" />
+            <h4 className="mt-5 text-2xl font-black text-white">
+              {stats.coursesCount}
+            </h4>
+            <p className="text-sm text-slate-400">
+              {isRealStudent ? "My Courses" : "Courses"}
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-slate-950/75 p-4">
+            <Video size={22} className="text-purple-300" />
+            <h4 className="mt-5 text-2xl font-black text-white">
+              {stats.lessonsCount}
+            </h4>
+            <p className="text-sm text-slate-400">Lessons</p>
+          </div>
+
+          <div className="rounded-2xl bg-slate-950/75 p-4">
+            <Clock size={22} className="text-yellow-300" />
+            <h4 className="mt-5 text-2xl font-black text-white">
+              {formatLearningTime(totalMinutes || stats.totalMinutes)}
+            </h4>
+            <p className="text-sm text-slate-400">Time</p>
+          </div>
+        </div>
+
+        <div className="mt-5 rounded-2xl bg-slate-950/75 p-5">
+          <div className="flex items-center gap-4">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-white">
+              <PlayCircle size={31} />
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <h4 className="line-clamp-1 font-black text-white">
+                {hasCourse
+                  ? `Resume: ${previewTitle}`
+                  : "Explore a course to start learning"}
+              </h4>
+
+              <p className="mt-1 text-sm text-slate-400">
+                {isRealStudent
+                  ? `${completedLessons}/${totalLessons} lessons completed`
+                  : "Enroll to track real progress"}
+              </p>
+            </div>
+
+            <Link
+              to={
+                isRealStudent && hasCourse ? "/student/dashboard" : "/courses"
+              }
+              className="hidden rounded-2xl bg-white px-6 py-3 text-sm font-black text-slate-950 hover:bg-slate-200 sm:inline-flex"
+            >
+              {isRealStudent && hasCourse ? "Open" : "View"}
+            </Link>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 const HomePage = () => {
-  const { user } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+
+  const isStudent = isAuthenticated && user?.role === "student";
 
   const [courses, setCourses] = useState([]);
-  const [mainProgress, setMainProgress] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [enrolledCourses, setEnrolledCourses] = useState([]);
 
-  const mainCourse = courses[0] || null;
-  const lessons = getLessons(mainCourse);
-  const resumeLesson = findResumeLesson(mainCourse, mainProgress);
+  const [loadingCourses, setLoadingCourses] = useState(true);
+  const [loadingProgress, setLoadingProgress] = useState(false);
+  const [progressError, setProgressError] = useState("");
 
-  const totalCourses = courses.length;
+  const fetchCourses = async () => {
+    try {
+      setLoadingCourses(true);
 
-  const totalLessons = useMemo(() => {
-    return courses.reduce((total, course) => total + getLessons(course).length, 0);
-  }, [courses]);
+      const response = await api.get("/courses");
 
-  const totalDurationMinutes = useMemo(() => {
-    return courses.reduce((total, course) => {
-      return total + getCourseDurationMinutes(course);
-    }, 0);
-  }, [courses]);
+      const loadedCourses =
+        response.data?.courses || response.data?.data || response.data || [];
 
-  const mainCourseDuration = getCourseDurationMinutes(mainCourse);
-  const progressPercent = getProgressPercent(mainProgress, lessons.length);
-  const completedLessons = getCompletedLessons(mainProgress);
+      setCourses(Array.isArray(loadedCourses) ? loadedCourses : []);
+    } catch (error) {
+      console.warn("HOME_COURSES_FETCH_SKIPPED:", {
+        status: error?.response?.status,
+        message: error?.response?.data?.message,
+      });
 
-  const startLearningPath = user ? "/student/dashboard" : "/login";
+      setCourses([]);
+    } finally {
+      setLoadingCourses(false);
+    }
+  };
 
-  const playPath =
-    user && mainCourse?.slug
-      ? `/learn/${mainCourse.slug}`
-      : user
-        ? "/student/dashboard"
-        : "/login";
+  const fetchStudentProgress = async () => {
+    if (!isStudent) {
+      setEnrolledCourses([]);
+      setProgressError("");
+      return;
+    }
+
+    try {
+      setLoadingProgress(true);
+      setProgressError("");
+
+      const response = await api.get("/enrollments/my");
+
+      const loadedEnrollments =
+        response.data?.courses ||
+        response.data?.enrollments ||
+        response.data?.data ||
+        [];
+
+      setEnrolledCourses(
+        Array.isArray(loadedEnrollments)
+          ? loadedEnrollments.filter((item) => item?.course)
+          : [],
+      );
+    } catch (error) {
+      console.error("HOME_STUDENT_PROGRESS_ERROR:", {
+        status: error?.response?.status,
+        message: error?.response?.data?.message,
+      });
+
+      setEnrolledCourses([]);
+      setProgressError("Unable to load student progress.");
+    } finally {
+      setLoadingProgress(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchHomeData = async () => {
-      try {
-        setLoading(true);
+    fetchCourses();
+  }, []);
 
-        const coursesRes = await api.get("/courses");
+  useEffect(() => {
+    fetchStudentProgress();
+  }, [isStudent]);
 
-        const courseList = Array.isArray(coursesRes.data?.courses)
-          ? coursesRes.data.courses
-          : [];
+  const featuredCourses = useMemo(() => {
+    return [...courses]
+      .sort((a, b) => getCourseEnrollments(b) - getCourseEnrollments(a))
+      .slice(0, 3);
+  }, [courses]);
 
-        setCourses(courseList);
+  const publicStats = useMemo(() => {
+    const coursesCount = courses.length || 0;
 
-        const firstCourse = courseList[0];
+    const lessonsCount = courses.reduce(
+      (total, course) => total + getCourseLessonsCount(course),
+      0,
+    );
 
-        if (user && firstCourse?._id) {
-          try {
-            const progressRes = await api.get(
-              `/progress/course/${firstCourse._id}`
-            );
+    const totalMinutes = courses.reduce(
+      (total, course) => total + getCourseTotalMinutes(course),
+      0,
+    );
 
-            setMainProgress(
-              progressRes.data?.progress ||
-                progressRes.data?.courseProgress ||
-                progressRes.data
-            );
-          } catch {
-            setMainProgress(null);
-          }
-        } else {
-          setMainProgress(null);
-        }
-      } catch (error) {
-        console.error("HOME_DATA_FETCH_ERROR:", error);
-        setCourses([]);
-        setMainProgress(null);
-      } finally {
-        setLoading(false);
-      }
+    return {
+      coursesCount,
+      lessonsCount,
+      totalMinutes,
     };
+  }, [courses]);
 
-    fetchHomeData();
-  }, [user]);
+  const studentStats = useMemo(() => {
+    const coursesCount = enrolledCourses.length;
+
+    const lessonsCount = enrolledCourses.reduce((total, item) => {
+      return total + getEnrollmentProgress(item).totalLessons;
+    }, 0);
+
+    const totalMinutes = enrolledCourses.reduce((total, item) => {
+      return total + getCourseTotalMinutes(item?.course);
+    }, 0);
+
+    return {
+      coursesCount,
+      lessonsCount,
+      totalMinutes,
+    };
+  }, [enrolledCourses]);
+
+  const currentEnrollment = enrolledCourses[0];
+
+  const previewCourse = isStudent
+    ? currentEnrollment?.course
+    : featuredCourses[0] || courses[0];
+
+  const previewProgress = isStudent
+    ? getEnrollmentProgress(currentEnrollment)
+    : {
+        totalLessons: getCourseLessonsCount(previewCourse),
+        completedLessons: 0,
+        progressPercentage: 0,
+      };
+
+  const heroStats = isStudent ? studentStats : publicStats;
+
+  const startLearningPath =
+    isStudent && enrolledCourses.length > 0 ? "/student/dashboard" : "/courses";
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-[#050816] text-white">
-      <section className="relative overflow-hidden">
-        <div className="absolute left-1/2 top-0 h-[420px] w-[420px] -translate-x-1/2 rounded-full bg-blue-600/20 blur-[120px]" />
-        <div className="absolute right-0 top-40 h-[360px] w-[360px] rounded-full bg-purple-700/20 blur-[120px]" />
+    <main className="min-h-screen overflow-x-hidden bg-slate-950 text-white">
+      <section className="relative overflow-hidden border-b border-white/10">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.20),transparent_34%),radial-gradient(circle_at_top_right,rgba(147,51,234,0.18),transparent_34%),linear-gradient(180deg,rgba(15,23,42,0),rgba(2,6,23,1))]" />
 
-        <div className="relative mx-auto grid max-w-7xl grid-cols-1 items-center gap-12 px-5 py-16 sm:px-6 lg:grid-cols-2 lg:px-8 lg:py-24">
+        <div className="relative mx-auto grid max-w-7xl gap-10 px-4 py-12 md:py-16 lg:grid-cols-[minmax(0,1fr)_minmax(420px,0.9fr)] lg:items-center">
           <div className="min-w-0">
-            <div className="mb-8 inline-flex max-w-full items-center gap-3 rounded-full border border-slate-700 bg-white/5 px-5 py-3 text-sm font-semibold text-blue-100 shadow-lg shadow-blue-950/20">
-              <span className="text-xl">✧</span>
-              <span className="truncate">
-                Production-like LMS for modern learners
-              </span>
+            <div className="mb-8 inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/[0.06] px-5 py-3 text-sm font-black text-blue-100 shadow-2xl shadow-black/20 backdrop-blur-xl">
+              <Sparkles size={18} className="text-blue-300" />
+              {isStudent
+                ? "Your personal learning overview"
+                : "Production-like LMS for modern learners"}
             </div>
 
-            <h1 className="max-w-3xl text-4xl font-black leading-tight tracking-tight sm:text-6xl lg:text-7xl">
+            <h1 className="max-w-4xl break-words text-5xl font-black leading-[1.05] md:text-7xl">
               Learn skills.
-              <br />
-              <span className="bg-gradient-to-r from-blue-400 via-cyan-300 to-purple-400 bg-clip-text text-transparent">
+              <span className="block bg-gradient-to-r from-blue-400 via-cyan-300 to-purple-400 bg-clip-text text-transparent">
                 Track progress.
               </span>
-              <br />
               Grow faster.
             </h1>
 
-            <p className="mt-7 max-w-2xl text-base leading-8 text-slate-300 sm:text-lg">
-              Discover structured web development courses, preview lessons,
-              enroll securely, and continue learning from where you stopped.
+            <p className="mt-7 max-w-3xl text-lg leading-8 text-slate-300 md:text-xl md:leading-9">
+              {isStudent
+                ? "Your homepage shows your real enrolled courses, completed lessons, and learning progress from your student dashboard."
+                : "Discover structured web development courses, preview lessons, enroll securely, take lesson notes, complete progress, and earn certificates from one professional learning platform."}
             </p>
 
-            <div className="mt-9 flex flex-wrap gap-4">
+            <div className="mt-8 flex flex-wrap gap-4">
               <Link
                 to="/courses"
-                className="inline-flex items-center gap-3 rounded-2xl bg-gradient-to-r from-blue-600 to-purple-600 px-7 py-4 text-base font-bold text-white shadow-xl shadow-blue-950/30 transition hover:-translate-y-1 hover:shadow-purple-900/30"
+                className="inline-flex items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-blue-600 to-fuchsia-600 px-7 py-4 font-black text-white shadow-2xl shadow-blue-950/40 hover:opacity-95"
               >
                 Explore Courses
-                <span className="text-xl">→</span>
+                <ArrowRight size={18} />
               </Link>
 
               <Link
                 to={startLearningPath}
-                className="inline-flex items-center rounded-2xl border border-slate-700 bg-white/10 px-7 py-4 text-base font-bold text-white transition hover:-translate-y-1 hover:bg-white/15"
+                className="inline-flex items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/10 px-7 py-4 font-black text-white hover:bg-white/15"
               >
-                Start Learning
+                {isStudent && enrolledCourses.length > 0
+                  ? "Open Dashboard"
+                  : "Start Learning"}
               </Link>
             </div>
 
-            <div className="mt-12 grid grid-cols-3 gap-3 sm:gap-4">
-              <div className="min-w-0 rounded-2xl border border-slate-800 bg-white/5 p-4 sm:p-5">
-                <p className="truncate text-2xl font-black sm:text-3xl">
-                  {loading ? "..." : totalCourses}
-                </p>
-                <p className="mt-2 text-xs text-slate-400 sm:text-sm">
-                  Courses
-                </p>
-              </div>
+            <div className="mt-10 grid gap-4 sm:grid-cols-3">
+              <StatBox
+                value={heroStats.coursesCount}
+                label={isStudent ? "My Courses" : "Courses"}
+              />
 
-              <div className="min-w-0 rounded-2xl border border-slate-800 bg-white/5 p-4 sm:p-5">
-                <p className="truncate text-2xl font-black sm:text-3xl">
-                  {loading ? "..." : totalLessons}
-                </p>
-                <p className="mt-2 text-xs text-slate-400 sm:text-sm">
-                  Lessons
-                </p>
-              </div>
+              <StatBox value={heroStats.lessonsCount} label="Lessons" />
 
-              <div className="min-w-0 rounded-2xl border border-slate-800 bg-white/5 p-4 sm:p-5">
-                <p className="truncate text-2xl font-black sm:text-3xl">
-                  {loading ? "..." : formatDuration(totalDurationMinutes)}
-                </p>
-                <p className="mt-2 text-xs text-slate-400 sm:text-sm">
-                  Time
-                </p>
-              </div>
+              <StatBox
+                value={formatLearningTime(heroStats.totalMinutes)}
+                label="Learning Time"
+              />
             </div>
           </div>
 
           <div className="min-w-0">
-            <div className="mx-auto max-w-xl rounded-[2rem] border border-slate-700 bg-slate-900/80 shadow-2xl shadow-purple-950/30 backdrop-blur-xl">
-              <div className="flex items-center justify-between gap-4 border-b border-slate-700 px-5 py-4">
-                <div className="flex shrink-0 gap-2">
-                  <span className="h-3 w-3 rounded-full bg-red-500" />
-                  <span className="h-3 w-3 rounded-full bg-yellow-400" />
-                  <span className="h-3 w-3 rounded-full bg-emerald-400" />
-                </div>
-
-                <p className="truncate text-sm text-slate-400">
-                  Student Dashboard Preview
-                </p>
+            {loadingProgress && isStudent ? (
+              <div className="flex min-h-[540px] flex-col items-center justify-center rounded-[2rem] border border-white/10 bg-white/[0.05]">
+                <Loader2 size={40} className="animate-spin text-blue-400" />
+                <p className="mt-4 text-slate-400">Loading your progress...</p>
               </div>
+            ) : (
+              <DashboardPreview
+                course={previewCourse}
+                stats={heroStats}
+                progress={previewProgress}
+                isRealStudent={isStudent}
+                progressError={progressError}
+              />
+            )}
+          </div>
+        </div>
+      </section>
 
-              <div className="space-y-5 p-5 sm:p-6">
-                <div className="rounded-2xl bg-gradient-to-r from-blue-600 to-purple-600 p-5 sm:p-6">
-                  <p className="text-sm text-blue-100">Continue Learning</p>
+      <section className="mx-auto max-w-7xl px-4 py-12">
+        <div className="mb-8 flex flex-wrap items-end justify-between gap-5">
+          <div>
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-blue-400/20 bg-blue-500/10 px-4 py-2 text-sm font-black text-blue-200">
+              <ShieldCheck size={16} />
+              Why VeoLMS
+            </div>
 
-                  <h2 className="mt-3 max-h-16 overflow-hidden text-xl font-black leading-8 sm:text-2xl">
-                    {mainCourse?.title || "No course available"}
-                  </h2>
+            <h2 className="text-3xl font-black md:text-4xl">
+              Built like a real learning product
+            </h2>
 
-                  <div className="mt-6 h-3 overflow-hidden rounded-full bg-white/20">
-                    <div
-                      className="h-full rounded-full bg-white transition-all duration-500"
-                      style={{ width: `${progressPercent}%` }}
-                    />
-                  </div>
+            <p className="mt-3 max-w-3xl text-slate-400">
+              VeoLMS is designed with protected videos, progress tracking,
+              notes, reviews, certificates, and admin analytics.
+            </p>
+          </div>
+        </div>
 
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm text-blue-100">
-                    <span>{progressPercent}% completed</span>
-                    <span>
-                      {completedLessons}/{lessons.length} lessons
-                    </span>
-                  </div>
-                </div>
+        <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
+          <FeatureCard
+            icon={Lock}
+            title="Protected Videos"
+            description="Course videos are served as private assets instead of exposing public video files."
+            tone="green"
+          />
 
-                <div className="grid grid-cols-3 gap-3 sm:gap-4">
-                  <div className="min-w-0 rounded-2xl bg-slate-950 p-4 sm:p-5">
-                    <p className="text-xl">📘</p>
-                    <p className="mt-4 truncate text-lg font-black sm:text-xl">
-                      {totalCourses}
-                    </p>
-                    <p className="text-xs text-slate-400 sm:text-sm">Courses</p>
-                  </div>
+          <FeatureCard
+            icon={TrendingUp}
+            title="Progress Tracking"
+            description="Students can continue learning from where they stopped and track completion lesson by lesson."
+            tone="blue"
+          />
 
-                  <div className="min-w-0 rounded-2xl bg-slate-950 p-4 sm:p-5">
-                    <p className="text-xl">🎬</p>
-                    <p className="mt-4 truncate text-lg font-black sm:text-xl">
-                      {totalLessons}
-                    </p>
-                    <p className="text-xs text-slate-400 sm:text-sm">Lessons</p>
-                  </div>
+          <FeatureCard
+            icon={FileText}
+            title="Lesson Notes"
+            description="Students can save notes while learning and keep understanding organized for revision."
+            tone="cyan"
+          />
 
-                  <div className="min-w-0 rounded-2xl bg-slate-950 p-4 sm:p-5">
-                    <p className="text-xl">⏱️</p>
-                    <p className="mt-4 truncate text-lg font-black sm:text-xl">
-                      {formatDuration(totalDurationMinutes)}
-                    </p>
-                    <p className="text-xs text-slate-400 sm:text-sm">Time</p>
-                  </div>
-                </div>
+          <FeatureCard
+            icon={Award}
+            title="Certificates"
+            description="After completing courses, students can receive certificates that prove learning progress."
+            tone="yellow"
+          />
 
-                <div className="flex min-w-0 items-center justify-between gap-4 rounded-2xl bg-slate-950 p-4 sm:p-5">
-                  <div className="flex min-w-0 items-center gap-4">
-                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-xl sm:h-16 sm:w-16">
-                      ▶
-                    </div>
+          <FeatureCard
+            icon={Star}
+            title="Reviews & Ratings"
+            description="Students can share feedback and help future learners understand course quality."
+            tone="purple"
+          />
 
-                    <div className="min-w-0">
-                      <h3 className="truncate font-bold">
-                        {resumeLesson?.title
-                          ? `Resume: ${resumeLesson.title}`
-                          : "Start learning"}
-                      </h3>
+          <FeatureCard
+            icon={BarChart3}
+            title="Admin Analytics"
+            description="Admins can track courses, students, enrollments, revenue, reviews, and video storage."
+            tone="rose"
+          />
+        </div>
+      </section>
 
-                      <p className="mt-1 truncate text-sm text-slate-400">
-                        {mainCourse?.title || "Choose a course"}
-                      </p>
+      <section className="mx-auto max-w-7xl px-4 py-12">
+        <div className="mb-8 flex flex-wrap items-end justify-between gap-5">
+          <div>
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-purple-400/20 bg-purple-500/10 px-4 py-2 text-sm font-black text-purple-200">
+              <BookOpen size={16} />
+              Featured Courses
+            </div>
 
-                      <p className="mt-1 truncate text-xs text-slate-500">
-                        {lessons.length} lessons •{" "}
-                        {formatDuration(mainCourseDuration)}
-                      </p>
-                    </div>
-                  </div>
+            <h2 className="text-3xl font-black md:text-4xl">
+              Start with available courses
+            </h2>
 
-                  <Link
-                    to={playPath}
-                    className="shrink-0 rounded-xl bg-white px-4 py-3 text-sm font-black text-slate-950 transition hover:bg-blue-100 sm:px-5"
-                  >
-                    Play
-                  </Link>
-                </div>
-              </div>
+            <p className="mt-3 max-w-3xl text-slate-400">
+              Preview courses, check lessons, enroll securely, and continue from
+              your student dashboard.
+            </p>
+          </div>
+
+          <Link
+            to="/courses"
+            className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 font-black text-slate-200 hover:bg-white/10"
+          >
+            View All Courses
+            <ArrowRight size={17} />
+          </Link>
+        </div>
+
+        {loadingCourses ? (
+          <div className="flex min-h-[260px] flex-col items-center justify-center rounded-[2rem] border border-white/10 bg-white/[0.04]">
+            <Loader2 size={40} className="animate-spin text-blue-400" />
+
+            <p className="mt-4 font-semibold text-slate-400">
+              Loading featured courses...
+            </p>
+          </div>
+        ) : featuredCourses.length === 0 ? (
+          <div className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-8 text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-blue-500/10 text-blue-300">
+              <BookOpen size={31} />
+            </div>
+
+            <h3 className="mt-5 text-2xl font-black text-white">
+              Courses will appear here
+            </h3>
+
+            <p className="mt-2 text-slate-400">
+              Once admin publishes courses, students can explore them from this
+              section.
+            </p>
+
+            <Link
+              to="/courses"
+              className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-6 py-3 font-black text-white hover:bg-blue-700"
+            >
+              Open Courses
+              <ArrowRight size={17} />
+            </Link>
+          </div>
+        ) : (
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+            {featuredCourses.map((course) => (
+              <CourseCard
+                key={course?._id || course?.slug || course?.title}
+                course={course}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="mx-auto max-w-7xl px-4 py-12">
+        <div className="rounded-[2.2rem] border border-white/10 bg-white/[0.04] p-6 shadow-2xl shadow-black/20 md:p-8">
+          <div className="mb-8">
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-green-400/20 bg-green-500/10 px-4 py-2 text-sm font-black text-green-200">
+              <Layers size={16} />
+              Simple Learning Flow
+            </div>
+
+            <h2 className="text-3xl font-black md:text-4xl">
+              How learning works
+            </h2>
+
+            <p className="mt-3 max-w-3xl text-slate-400">
+              The journey is simple for students and professional for admins.
+            </p>
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-3">
+            <StepCard
+              number="01"
+              icon={BookOpen}
+              title="Choose a course"
+              description="Browse available courses, check lessons, and preview course details before enrolling."
+            />
+
+            <StepCard
+              number="02"
+              icon={ShieldCheck}
+              title="Enroll securely"
+              description="Enroll through a protected payment flow and get access to private course videos."
+            />
+
+            <StepCard
+              number="03"
+              icon={Award}
+              title="Complete and grow"
+              description="Watch lessons, save notes, track progress, submit reviews, and earn certificates."
+            />
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-4 pb-14 pt-8">
+        <div className="relative overflow-hidden rounded-[2.3rem] border border-white/10 bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 p-8 shadow-2xl shadow-blue-950/40 md:p-10">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.24),transparent_30%)]" />
+
+          <div className="relative grid gap-8 md:grid-cols-[1fr_auto] md:items-center">
+            <div>
+              <h2 className="text-3xl font-black text-white md:text-4xl">
+                Ready to start learning?
+              </h2>
+
+              <p className="mt-3 max-w-3xl text-white/85">
+                Explore courses, enroll securely, and continue your learning
+                journey from the student dashboard.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-4">
+              <Link
+                to="/courses"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-6 py-4 font-black text-slate-950 hover:bg-slate-200"
+              >
+                Explore Courses
+                <ArrowRight size={18} />
+              </Link>
+
+              <Link
+                to={startLearningPath}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-6 py-4 font-black text-white hover:bg-white/15"
+              >
+                {isStudent && enrolledCourses.length > 0
+                  ? "Dashboard"
+                  : "Start Learning"}
+              </Link>
             </div>
           </div>
         </div>
