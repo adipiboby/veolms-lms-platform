@@ -1,21 +1,94 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
+  AlertCircle,
+  ArrowLeft,
   Award,
   BookOpen,
   CheckCircle,
   Clock,
-  IndianRupee,
+  FileText,
+  Layers,
   Loader2,
+  Lock,
   PlayCircle,
+  Search,
   ShieldCheck,
+  Sparkles,
   Star,
   Users,
+  Video,
+  X,
 } from "lucide-react";
 
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import CourseReviews from "../components/reviews/CourseReviews";
+
+const formatCurrency = (amount = 0) => {
+  const value = Number(amount || 0);
+
+  if (value === 0) return "Free";
+
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(value);
+};
+
+const getCourseImage = (course) => {
+  return (
+    course?.thumbnail ||
+    course?.thumbnailUrl ||
+    course?.image ||
+    course?.coverImage ||
+    "https://images.unsplash.com/photo-1633356122544-f134324a6cee?q=80&w=1200&auto=format&fit=crop"
+  );
+};
+
+const getCourseRating = (course) => {
+  return Number(
+    course?.averageRating ||
+      course?.rating ||
+      course?.ratingsAverage ||
+      course?.avgRating ||
+      0,
+  );
+};
+
+const getCourseReviewsCount = (course) => {
+  return Number(
+    course?.totalReviews ||
+      course?.reviewsCount ||
+      course?.reviewCount ||
+      course?.ratingsQuantity ||
+      0,
+  );
+};
+
+const getCourseEnrollments = (course) => {
+  return Number(
+    course?.totalEnrollments ||
+      course?.enrollments ||
+      course?.enrollmentsCount ||
+      course?.studentsCount ||
+      0,
+  );
+};
+
+const getCourseLessons = (course) => {
+  if (!Array.isArray(course?.sections)) return [];
+
+  return course.sections.flatMap((section) =>
+    Array.isArray(section.lessons)
+      ? section.lessons.map((lesson) => ({
+          ...lesson,
+          sectionTitle: section.title,
+        }))
+      : [],
+  );
+};
 
 const loadRazorpayScript = () => {
   return new Promise((resolve) => {
@@ -26,7 +99,6 @@ const loadRazorpayScript = () => {
 
     const script = document.createElement("script");
     script.src = "https://checkout.razorpay.com/v1/checkout.js";
-
     script.onload = () => resolve(true);
     script.onerror = () => resolve(false);
 
@@ -34,650 +106,755 @@ const loadRazorpayScript = () => {
   });
 };
 
-const getArrayFromResponse = (data, possibleKeys = []) => {
-  if (Array.isArray(data)) return data;
+const getFriendlyPaymentError = (error) => {
+  const status = error?.response?.status;
 
-  for (const key of possibleKeys) {
-    if (Array.isArray(data?.[key])) return data[key];
+  console.error("PAYMENT_ERROR_DETAILS:", {
+    status,
+    backendMessage: error?.response?.data?.message,
+    error,
+  });
+
+  if (status === 404) {
+    return "Payment service is currently unavailable. Please try again later.";
   }
 
-  if (Array.isArray(data?.data)) return data.data;
-  if (Array.isArray(data?.data?.enrollments)) return data.data.enrollments;
-  if (Array.isArray(data?.data?.courses)) return data.data.courses;
+  if (status === 401) {
+    return "Please login first to buy this course.";
+  }
 
-  return [];
+  if (status === 403) {
+    return "You do not have permission to buy this course.";
+  }
+
+  if (status >= 500) {
+    return "Payment server is facing an issue. Please try again after some time.";
+  }
+
+  return "Unable to start payment. Please try again.";
 };
 
-const getCourseFromEnrollment = (enrollment) => {
+const getFriendlyPageError = (error) => {
+  const status = error?.response?.status;
+
+  console.error("COURSE_DETAILS_ERROR:", {
+    status,
+    backendMessage: error?.response?.data?.message,
+    error,
+  });
+
+  if (status === 404) {
+    return "Course not found or no longer available.";
+  }
+
+  if (status >= 500) {
+    return "Server is facing an issue while loading this course.";
+  }
+
+  return "Failed to load course details.";
+};
+
+const tryApiPost = async (endpoints, body) => {
+  let lastError = null;
+
+  for (const endpoint of endpoints) {
+    try {
+      return await api.post(endpoint, body);
+    } catch (error) {
+      lastError = error;
+
+      if (error?.response?.status !== 404) {
+        throw error;
+      }
+    }
+  }
+
+  throw lastError;
+};
+
+const tryApiGet = async (endpoints) => {
+  let lastError = null;
+
+  for (const endpoint of endpoints) {
+    try {
+      return await api.get(endpoint);
+    } catch (error) {
+      lastError = error;
+
+      if (error?.response?.status !== 404) {
+        throw error;
+      }
+    }
+  }
+
+  throw lastError;
+};
+
+const InfoItem = ({ icon: Icon, text, tone = "blue" }) => {
+  const toneClasses = {
+    blue: "text-blue-300",
+    green: "text-green-300",
+    yellow: "text-yellow-300",
+    purple: "text-purple-300",
+  };
+
   return (
-    enrollment?.course ||
-    enrollment?.courseId ||
-    enrollment?.courseDetails ||
-    enrollment?.enrolledCourse ||
-    null
+    <div className="flex items-start gap-3 text-slate-300">
+      <Icon
+        size={21}
+        className={`mt-0.5 shrink-0 ${toneClasses[tone] || toneClasses.blue}`}
+      />
+
+      <span className="leading-6">{text}</span>
+    </div>
   );
 };
 
-const getCourseIdFromEnrollment = (enrollment) => {
-  const course = getCourseFromEnrollment(enrollment);
-
-  if (course && typeof course === "object") {
-    return String(course._id || course.id || "");
-  }
-
-  return String(enrollment?.courseId || enrollment?.course || "");
-};
-
-const getYouTubeEmbedUrl = (url) => {
-  if (!url) return "";
-
-  try {
-    const parsedUrl = new URL(url);
-
-    if (parsedUrl.hostname.includes("youtube.com")) {
-      const videoId = parsedUrl.searchParams.get("v");
-      return videoId ? `https://www.youtube.com/embed/${videoId}` : "";
-    }
-
-    if (parsedUrl.hostname.includes("youtu.be")) {
-      const videoId = parsedUrl.pathname.replace("/", "");
-      return videoId ? `https://www.youtube.com/embed/${videoId}` : "";
-    }
-
-    return url;
-  } catch {
-    return url;
-  }
-};
-
-const getLessons = (course) => {
-  if (!Array.isArray(course?.sections)) return [];
-
-  return course.sections.flatMap((section) => {
-    if (!Array.isArray(section.lessons)) return [];
-
-    return section.lessons.map((lesson) => ({
-      ...lesson,
-      sectionTitle: section.title,
-    }));
-  });
-};
-
-const formatPrice = (price) => {
-  const numericPrice = Number(price || 0);
-
-  if (numericPrice <= 0) return "Free";
-
-  return `₹${numericPrice.toLocaleString("en-IN")}`;
-};
-
-const getCourseDataFromResponse = (data) => {
+const PurchaseCard = ({
+  price,
+  isEnrolled,
+  paymentLoading,
+  paymentError,
+  onBuyNow,
+  onContinue,
+}) => {
   return (
-    data?.course ||
-    data?.data?.course ||
-    data?.data ||
-    data?.item ||
-    data ||
-    null
+    <div className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-black/30 backdrop-blur-xl">
+      <p className="text-sm font-black uppercase tracking-[0.24em] text-blue-300">
+        Course Price
+      </p>
+
+      <h2 className="mt-4 break-words text-5xl font-black text-white">
+        {formatCurrency(price)}
+      </h2>
+
+      <p className="mt-2 text-sm text-slate-400">
+        One-time payment. Lifetime course access.
+      </p>
+
+      {paymentError && (
+        <div className="mt-5 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm leading-6 text-red-100">
+          {paymentError}
+        </div>
+      )}
+
+      {isEnrolled ? (
+        <button
+          type="button"
+          onClick={onContinue}
+          className="mt-6 w-full rounded-2xl bg-green-600 px-6 py-4 text-center font-black text-white hover:bg-green-700"
+        >
+          Continue Learning
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={onBuyNow}
+          disabled={paymentLoading}
+          className="mt-6 w-full rounded-2xl bg-blue-600 px-6 py-4 text-center font-black text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {paymentLoading ? "Please wait..." : "Buy Now"}
+        </button>
+      )}
+
+      <div className="mt-7 space-y-5">
+        <InfoItem
+          icon={ShieldCheck}
+          text="Secure payment and protected videos"
+          tone="green"
+        />
+
+        <InfoItem
+          icon={Award}
+          text="Certificate after completion"
+          tone="yellow"
+        />
+
+        <InfoItem
+          icon={Star}
+          text="Lifetime access after enrollment"
+          tone="blue"
+        />
+
+        <InfoItem icon={Lock} text="Private video playback" tone="purple" />
+      </div>
+    </div>
   );
 };
 
 const CourseDetailsPage = () => {
-  const params = useParams();
+  const { slug } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
-
-  const courseParam = params.slug || params.id || params.courseId;
+  const { isAuthenticated, user } = useAuth();
 
   const [course, setCourse] = useState(null);
   const [isEnrolled, setIsEnrolled] = useState(false);
 
   const [loading, setLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [actionError, setActionError] = useState("");
+  const [pageError, setPageError] = useState("");
 
-  const lessons = useMemo(() => getLessons(course), [course]);
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [paymentError, setPaymentError] = useState("");
 
-  const totalLessons = lessons.length;
+  const [lessonSearch, setLessonSearch] = useState("");
 
-  const totalSections = Array.isArray(course?.sections)
-    ? course.sections.length
-    : 0;
+  const lessons = useMemo(() => getCourseLessons(course), [course]);
 
+  const shouldShowLessonSearch = lessons.length > 10;
+
+  const filteredSections = useMemo(() => {
+    if (!Array.isArray(course?.sections)) return [];
+
+    const query = lessonSearch.trim().toLowerCase();
+
+    if (!shouldShowLessonSearch || !query) {
+      return course.sections;
+    }
+
+    return course.sections
+      .map((section) => {
+        const filteredLessons = Array.isArray(section.lessons)
+          ? section.lessons.filter((lesson) => {
+              return (
+                lesson.title?.toLowerCase().includes(query) ||
+                lesson.duration?.toLowerCase().includes(query) ||
+                section.title?.toLowerCase().includes(query)
+              );
+            })
+          : [];
+
+        return {
+          ...section,
+          lessons: filteredLessons,
+        };
+      })
+      .filter((section) => section.lessons.length > 0);
+  }, [course?.sections, lessonSearch, shouldShowLessonSearch]);
+
+  const rating = getCourseRating(course);
+  const reviewsCount = getCourseReviewsCount(course);
+  const enrollments = getCourseEnrollments(course);
   const price = Number(course?.price || 0);
-  const isFreeCourse = price <= 0;
 
-  const trailerEmbedUrl = getYouTubeEmbedUrl(course?.trailerVideoUrl);
-
-  const fetchCourse = async () => {
+  const fetchCourseDetails = async () => {
     try {
       setLoading(true);
-      setError("");
+      setPageError("");
+      setPaymentError("");
 
-      let courseRes = null;
+      const courseRes = await tryApiGet([
+        `/courses/${slug}`,
+        `/courses/slug/${slug}`,
+      ]);
 
-      const possibleEndpoints = [
-        `/courses/${courseParam}`,
-        `/courses/slug/${courseParam}`,
-        `/courses/public/${courseParam}`,
-      ];
-
-      for (const endpoint of possibleEndpoints) {
-        try {
-          courseRes = await api.get(endpoint);
-          break;
-        } catch {
-          courseRes = null;
-        }
-      }
-
-      if (!courseRes) {
-        throw new Error("Course not found");
-      }
-
-      const loadedCourse = getCourseDataFromResponse(courseRes.data);
-
-      if (!loadedCourse?._id) {
-        throw new Error("Invalid course response");
-      }
+      const loadedCourse =
+        courseRes.data?.course || courseRes.data?.data || courseRes.data;
 
       setCourse(loadedCourse);
 
-      if (
-        loadedCourse.isEnrolled ||
-        loadedCourse.enrolled ||
-        loadedCourse.userEnrolled
-      ) {
-        setIsEnrolled(true);
+      const courseId = loadedCourse?._id;
+
+      if (courseId && isAuthenticated) {
+        try {
+          const enrollmentRes = await tryApiGet([
+            `/enrollments/status/${courseId}`,
+            `/enrollments/check/${courseId}`,
+            `/enrollments/is-enrolled/${courseId}`,
+          ]);
+
+          const enrolledValue =
+            enrollmentRes.data?.isEnrolled ||
+            enrollmentRes.data?.enrolled ||
+            loadedCourse?.isEnrolled;
+
+          setIsEnrolled(Boolean(enrolledValue));
+        } catch (error) {
+          console.warn("Enrollment check skipped:", error?.response?.data);
+          setIsEnrolled(Boolean(loadedCourse?.isEnrolled));
+        }
       } else {
-        await checkEnrollmentStatus(loadedCourse._id);
+        setIsEnrolled(Boolean(loadedCourse?.isEnrolled));
       }
     } catch (error) {
-      console.error("COURSE_DETAILS_FETCH_ERROR:", error);
-
-      setError(
-        error.response?.data?.message ||
-          error.message ||
-          "Failed to load course details",
-      );
+      setPageError(getFriendlyPageError(error));
     } finally {
       setLoading(false);
     }
   };
 
-  const checkEnrollmentStatus = async (courseId) => {
-    if (!courseId || !user) {
-      setIsEnrolled(false);
+  useEffect(() => {
+    fetchCourseDetails();
+  }, [slug, isAuthenticated]);
+
+  const handleFreeEnrollment = async () => {
+    await tryApiPost(
+      [
+        "/enrollments/create",
+        "/enrollments/enroll",
+        "/enrollments",
+        "/payments/free-enroll",
+      ],
+      {
+        courseId: course._id,
+      },
+    );
+
+    setIsEnrolled(true);
+    navigate(`/learn/${course.slug}`);
+  };
+
+  const handleContinue = () => {
+    navigate(`/learn/${course?.slug}`);
+  };
+
+  const handleBuyNow = async () => {
+    if (!course?._id) return;
+
+    if (!isAuthenticated) {
+      navigate("/login");
+      return;
+    }
+
+    if (user?.role === "admin") {
+      setPaymentError(
+        "Admin users cannot purchase courses. Please use a student account.",
+      );
+      return;
+    }
+
+    if (isEnrolled) {
+      handleContinue();
       return;
     }
 
     try {
-      const statusEndpoints = [
-        `/enrollments/check/${courseId}`,
-        `/enrollments/status/${courseId}`,
-        `/enrollments/course/${courseId}/status`,
-      ];
+      setPaymentLoading(true);
+      setPaymentError("");
 
-      for (const endpoint of statusEndpoints) {
-        try {
-          const res = await api.get(endpoint);
-
-          const enrolled =
-            res.data?.isEnrolled ||
-            res.data?.enrolled ||
-            res.data?.success === true;
-
-          if (enrolled) {
-            setIsEnrolled(true);
-            return;
-          }
-        } catch {
-          // Try next endpoint
-        }
+      if (price === 0) {
+        await handleFreeEnrollment();
+        return;
       }
 
-      const enrollmentEndpoints = [
-        "/enrollments/my",
-        "/enrollments/my-courses",
-        "/enrollments/student",
-      ];
+      const scriptLoaded = await loadRazorpayScript();
 
-      for (const endpoint of enrollmentEndpoints) {
-        try {
-          const res = await api.get(endpoint);
-
-          const enrollmentList = getArrayFromResponse(res.data, [
-            "enrollments",
-            "myCourses",
-            "courses",
-            "items",
-          ]);
-
-          const found = enrollmentList.some((enrollment) => {
-            const enrolledCourseId = getCourseIdFromEnrollment(enrollment);
-            return String(enrolledCourseId) === String(courseId);
-          });
-
-          if (found) {
-            setIsEnrolled(true);
-            return;
-          }
-        } catch {
-          // Try next endpoint
-        }
+      if (!scriptLoaded) {
+        setPaymentError(
+          "Payment checkout failed to load. Please check your internet and try again.",
+        );
+        return;
       }
 
-      setIsEnrolled(false);
-    } catch {
-      setIsEnrolled(false);
-    }
-  };
-
-  useEffect(() => {
-    if (courseParam) {
-      fetchCourse();
-    }
-  }, [courseParam, user?._id, user?.id]);
-
-  const enrollFreeCourse = async () => {
-    if (!course?._id) return;
-
-    const possibleEndpoints = [
-      "/enrollments",
-      "/enrollments/enroll",
-      "/enrollments/create",
-    ];
-
-    let lastError = null;
-
-    for (const endpoint of possibleEndpoints) {
-      try {
-        await api.post(endpoint, {
+      const orderRes = await tryApiPost(
+        [
+          "/payments/create-order",
+          "/payments/create",
+          "/payments/order",
+          "/payments/razorpay/create-order",
+        ],
+        {
           courseId: course._id,
-        });
-
-        setIsEnrolled(true);
-        navigate(`/learn/${course.slug}`);
-        return;
-      } catch (error) {
-        lastError = error;
-      }
-    }
-
-    throw lastError || new Error("Failed to enroll course");
-  };
-
-  const createPaymentOrder = async () => {
-    const possibleEndpoints = [
-      "/payments/create-order",
-      "/payments/order",
-      "/payments/create",
-    ];
-
-    let lastError = null;
-
-    for (const endpoint of possibleEndpoints) {
-      try {
-        const res = await api.post(endpoint, {
-          courseId: course._id,
-        });
-
-        return res.data;
-      } catch (error) {
-        lastError = error;
-      }
-    }
-
-    throw lastError || new Error("Failed to create payment order");
-  };
-
-  const verifyPayment = async (paymentResponse, orderData) => {
-    const possibleEndpoints = ["/payments/verify", "/payments/verify-payment"];
-
-    const payload = {
-      courseId: course._id,
-      razorpay_order_id: paymentResponse.razorpay_order_id,
-      razorpay_payment_id: paymentResponse.razorpay_payment_id,
-      razorpay_signature: paymentResponse.razorpay_signature,
-      orderId:
-        orderData?.order?.id ||
-        orderData?.orderId ||
-        orderData?.razorpayOrderId ||
-        paymentResponse.razorpay_order_id,
-    };
-
-    let lastError = null;
-
-    for (const endpoint of possibleEndpoints) {
-      try {
-        const res = await api.post(endpoint, payload);
-        return res.data;
-      } catch (error) {
-        lastError = error;
-      }
-    }
-
-    throw lastError || new Error("Payment verification failed");
-  };
-
-  const handlePaidCoursePayment = async () => {
-    const scriptLoaded = await loadRazorpayScript();
-
-    if (!scriptLoaded) {
-      throw new Error("Razorpay SDK failed to load");
-    }
-
-    const orderData = await createPaymentOrder();
-
-    const razorpayOrder =
-      orderData.order || orderData.razorpayOrder || orderData;
-
-    const key =
-      orderData.key ||
-      orderData.keyId ||
-      orderData.razorpayKeyId ||
-      import.meta.env.VITE_RAZORPAY_KEY_ID;
-
-    if (!key) {
-      throw new Error("Razorpay key is missing");
-    }
-
-    const options = {
-      key,
-      amount: razorpayOrder.amount || price * 100,
-      currency: razorpayOrder.currency || "INR",
-      name: "VeoLMS",
-      description: course.title,
-      order_id: razorpayOrder.id || orderData.orderId,
-      prefill: {
-        name: user?.name || "",
-        email: user?.email || "",
-      },
-      theme: {
-        color: "#2563eb",
-      },
-      handler: async (paymentResponse) => {
-        try {
-          await verifyPayment(paymentResponse, orderData);
-
-          setIsEnrolled(true);
-          navigate(`/learn/${course.slug}`);
-        } catch (error) {
-          console.error("PAYMENT_VERIFY_ERROR:", error);
-
-          setActionError(
-            error.response?.data?.message ||
-              error.message ||
-              "Payment verification failed",
-          );
-        }
-      },
-    };
-
-    const razorpay = new window.Razorpay(options);
-    razorpay.open();
-  };
-
-  const handlePrimaryAction = async () => {
-    try {
-      setActionLoading(true);
-      setActionError("");
-
-      if (!user) {
-        navigate("/login");
-        return;
-      }
-
-      if (isEnrolled) {
-        navigate(`/learn/${course.slug}`);
-        return;
-      }
-
-      if (isFreeCourse) {
-        await enrollFreeCourse();
-        return;
-      }
-
-      await handlePaidCoursePayment();
-    } catch (error) {
-      console.error("COURSE_ACTION_ERROR:", error);
-
-      setActionError(
-        error.response?.data?.message ||
-          error.message ||
-          "Something went wrong",
+        },
       );
+
+      const orderData = orderRes.data || {};
+      const order = orderData.order || orderData.data?.order || orderData;
+
+      const razorpayOrderId =
+        order.id ||
+        order.orderId ||
+        order.razorpayOrderId ||
+        orderData.orderId ||
+        orderData.razorpayOrderId;
+
+      const razorpayKey =
+        orderData.key ||
+        orderData.keyId ||
+        orderData.razorpayKeyId ||
+        import.meta.env.VITE_RAZORPAY_KEY_ID;
+
+      const amount = order.amount || orderData.amount || price * 100;
+      const currency = order.currency || orderData.currency || "INR";
+
+      if (!razorpayOrderId || !razorpayKey) {
+        console.error("INVALID_RAZORPAY_ORDER_RESPONSE:", orderData);
+
+        setPaymentError(
+          "Payment service is not configured properly. Please try again later.",
+        );
+
+        return;
+      }
+
+      const options = {
+        key: razorpayKey,
+        amount,
+        currency,
+        name: "VeoLMS",
+        description: course.title,
+        order_id: razorpayOrderId,
+        prefill: {
+          name: user?.name || "",
+          email: user?.email || "",
+        },
+        notes: {
+          courseId: course._id,
+          courseTitle: course.title,
+        },
+        theme: {
+          color: "#2563eb",
+        },
+        handler: async (response) => {
+          try {
+            setPaymentLoading(true);
+            setPaymentError("");
+
+            await tryApiPost(
+              [
+                "/payments/verify",
+                "/payments/verify-payment",
+                "/payments/razorpay/verify",
+              ],
+              {
+                courseId: course._id,
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+              },
+            );
+
+            setIsEnrolled(true);
+            navigate(`/learn/${course.slug}`);
+          } catch (error) {
+            setPaymentError(getFriendlyPaymentError(error));
+          } finally {
+            setPaymentLoading(false);
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setPaymentLoading(false);
+          },
+        },
+      };
+
+      const razorpay = new window.Razorpay(options);
+      razorpay.open();
+    } catch (error) {
+      setPaymentError(getFriendlyPaymentError(error));
     } finally {
-      setActionLoading(false);
+      setPaymentLoading(false);
     }
   };
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-slate-950 px-4 pt-28 text-white">
-        <div className="mx-auto flex max-w-7xl items-center gap-3 text-slate-400">
-          <Loader2 className="animate-spin text-blue-400" size={24} />
-          Loading course details...
+      <main className="min-h-screen overflow-x-hidden bg-slate-950 p-6 text-white">
+        <div className="flex min-h-[70vh] flex-col items-center justify-center">
+          <Loader2 className="animate-spin text-blue-400" size={44} />
+
+          <p className="mt-4 font-semibold text-slate-400">
+            Loading course details...
+          </p>
         </div>
       </main>
     );
   }
 
-  if (error) {
+  if (pageError) {
     return (
-      <main className="min-h-screen bg-slate-950 px-4 pt-28 text-white">
-        <div className="mx-auto max-w-3xl rounded-3xl border border-red-500/30 bg-red-500/10 p-8">
-          <h1 className="mb-3 text-3xl font-black text-red-300">
-            Course Not Found
-          </h1>
-
-          <p className="mb-6 text-slate-300">{error}</p>
-
+      <main className="min-h-screen overflow-x-hidden bg-slate-950 p-6 text-white">
+        <section className="mx-auto max-w-4xl">
           <Link
             to="/courses"
-            className="inline-flex rounded-2xl bg-blue-600 px-6 py-3 font-bold text-white hover:bg-blue-700"
+            className="mb-6 inline-flex items-center gap-2 text-slate-300 hover:text-white"
           >
-            Browse Courses
+            <ArrowLeft size={18} />
+            Back to courses
           </Link>
-        </div>
+
+          <div className="rounded-3xl border border-red-500/30 bg-red-500/10 p-8">
+            <div className="flex items-center gap-3 text-red-300">
+              <AlertCircle size={28} />
+              <h1 className="text-2xl font-black">Course Error</h1>
+            </div>
+
+            <p className="mt-4 text-slate-300">{pageError}</p>
+
+            <button
+              type="button"
+              onClick={fetchCourseDetails}
+              className="mt-6 rounded-2xl bg-blue-600 px-6 py-3 font-bold text-white hover:bg-blue-700"
+            >
+              Try Again
+            </button>
+          </div>
+        </section>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 pt-24 text-white">
-      <section className="mx-auto max-w-7xl px-4 py-8 md:px-6">
-        <div className="mb-6">
+    <main className="min-h-screen overflow-x-hidden bg-slate-950 pb-36 text-white lg:pb-0">
+      <section className="relative overflow-hidden border-b border-white/10">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.18),transparent_32%),radial-gradient(circle_at_top_right,rgba(147,51,234,0.16),transparent_30%),linear-gradient(180deg,rgba(15,23,42,0),rgba(2,6,23,1))]" />
+
+        <div className="relative mx-auto max-w-7xl px-4 py-6 md:py-10">
           <Link
             to="/courses"
-            className="font-semibold text-blue-400 hover:text-blue-300"
+            className="mb-5 inline-flex items-center gap-2 text-sm font-bold text-slate-300 hover:text-white"
           >
-            ← Back to Courses
+            <ArrowLeft size={18} />
+            Back to courses
           </Link>
-        </div>
 
-        <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
-          <div className="space-y-8">
-            <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/5">
-              <div className="aspect-video bg-black">
-                {trailerEmbedUrl ? (
-                  <iframe
-                    src={trailerEmbedUrl}
-                    title={course?.title}
-                    className="h-full w-full"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                  />
-                ) : course?.thumbnail ? (
+          <div className="min-w-0">
+            <div className="mb-4 flex flex-wrap gap-3">
+              {course?.category && (
+                <span className="max-w-full truncate rounded-full border border-blue-400/30 bg-blue-500/15 px-4 py-2 text-sm font-black text-blue-200">
+                  {course.category}
+                </span>
+              )}
+
+              {course?.level && (
+                <span className="max-w-full truncate rounded-full border border-purple-400/30 bg-purple-500/15 px-4 py-2 text-sm font-black text-purple-200">
+                  {course.level}
+                </span>
+              )}
+
+              <span className="inline-flex max-w-full items-center gap-2 rounded-full border border-green-400/30 bg-green-500/15 px-4 py-2 text-sm font-black text-green-200">
+                <ShieldCheck size={16} className="shrink-0" />
+                <span className="truncate">Secure Videos</span>
+              </span>
+            </div>
+
+            <h1 className="max-w-5xl break-words text-3xl font-black leading-tight md:text-5xl">
+              {course?.title}
+            </h1>
+
+            <p className="mt-5 max-w-4xl break-words text-base leading-7 text-slate-300 md:text-lg md:leading-8">
+              {course?.shortDescription ||
+                course?.description ||
+                "Learn practical skills with structured lessons, secure videos, progress tracking, notes, reviews, and certificates."}
+            </p>
+
+            <div className="mt-6 grid gap-3 sm:grid-cols-3 lg:max-w-4xl">
+              <div className="flex min-w-0 items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                <Star
+                  size={18}
+                  className="shrink-0 fill-yellow-300 text-yellow-300"
+                />
+
+                <span className="font-black">
+                  {rating > 0 ? rating.toFixed(1) : "New"}
+                </span>
+
+                <span className="truncate text-slate-400">
+                  ({reviewsCount} reviews)
+                </span>
+              </div>
+
+              <div className="flex min-w-0 items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                <Users size={18} className="shrink-0 text-blue-300" />
+
+                <span className="font-black">{enrollments}</span>
+
+                <span className="truncate text-slate-400">students</span>
+              </div>
+
+              <div className="flex min-w-0 items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                <BookOpen size={18} className="shrink-0 text-green-300" />
+
+                <span className="font-black">{lessons.length}</span>
+
+                <span className="truncate text-slate-400">lessons</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-8 grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start">
+            <div className="min-w-0 overflow-hidden rounded-[1.7rem] border border-white/10 bg-black/30">
+              {course?.trailer || course?.trailerUrl || course?.previewUrl ? (
+                <video
+                  controls
+                  className="aspect-video w-full bg-black object-cover"
+                  poster={getCourseImage(course)}
+                  src={course.trailer || course.trailerUrl || course.previewUrl}
+                />
+              ) : (
+                <div className="relative aspect-video overflow-hidden">
                   <img
-                    src={course.thumbnail}
-                    alt={course.title}
+                    src={getCourseImage(course)}
+                    alt={course?.title}
                     className="h-full w-full object-cover"
                   />
-                ) : (
-                  <div className="flex h-full items-center justify-center text-slate-400">
-                    No preview available
-                  </div>
-                )}
-              </div>
 
-              <div className="p-6 md:p-8">
-                <div className="mb-4 flex flex-wrap items-center gap-3">
-                  <span className="rounded-full border border-blue-500/30 bg-blue-500/10 px-4 py-1 text-sm font-bold text-blue-300">
-                    {course?.category || "Course"}
-                  </span>
-
-                  <span className="rounded-full border border-purple-500/30 bg-purple-500/10 px-4 py-1 text-sm font-bold text-purple-300">
-                    {course?.level || "Beginner"}
-                  </span>
-
-                  {isEnrolled && (
-                    <span className="rounded-full border border-green-500/30 bg-green-500/10 px-4 py-1 text-sm font-bold text-green-300">
-                      Enrolled
-                    </span>
-                  )}
-                </div>
-
-                <h1 className="text-3xl font-black leading-tight md:text-5xl">
-                  {course?.title}
-                </h1>
-
-                <p className="mt-4 text-lg leading-8 text-slate-300">
-                  {course?.shortDescription ||
-                    course?.description ||
-                    "Learn this course step by step."}
-                </p>
-
-                <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-                    <BookOpen className="mb-3 text-blue-300" size={22} />
-                    <p className="text-2xl font-black">{totalSections}</p>
-                    <p className="text-sm text-slate-400">Sections</p>
-                  </div>
-
-                  <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-                    <PlayCircle className="mb-3 text-purple-300" size={22} />
-                    <p className="text-2xl font-black">{totalLessons}</p>
-                    <p className="text-sm text-slate-400">Lessons</p>
-                  </div>
-
-                  <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-                    <Clock className="mb-3 text-cyan-300" size={22} />
-                    <p className="text-2xl font-black">
-                      {course?.duration || "Self"}
-                    </p>
-                    <p className="text-sm text-slate-400">Paced</p>
-                  </div>
-
-                  <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-                    <Users className="mb-3 text-green-300" size={22} />
-                    <p className="text-2xl font-black">
-                      {course?.studentsCount || course?.enrolledCount || 0}
-                    </p>
-                    <p className="text-sm text-slate-400">Students</p>
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur md:h-20 md:w-20">
+                      <PlayCircle size={38} />
+                    </div>
                   </div>
                 </div>
+              )}
+            </div>
+
+            <aside className="hidden lg:block">
+              <PurchaseCard
+                price={price}
+                isEnrolled={isEnrolled}
+                paymentLoading={paymentLoading}
+                paymentError={paymentError}
+                onBuyNow={handleBuyNow}
+                onContinue={handleContinue}
+              />
+            </aside>
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-4 py-8 md:py-10">
+        {paymentError && (
+          <div className="mb-6 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm leading-6 text-red-100 lg:hidden">
+            {paymentError}
+          </div>
+        )}
+
+        <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="min-w-0 space-y-8">
+            <div className="rounded-[1.7rem] border border-white/10 bg-white/[0.04] p-5 md:p-7">
+              <div className="mb-5 flex items-center gap-3">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-300">
+                  <Sparkles size={24} />
+                </div>
+
+                <h2 className="text-2xl font-black md:text-3xl">
+                  What you will learn
+                </h2>
               </div>
-            </div>
-
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-6 md:p-8">
-              <h2 className="mb-4 text-2xl font-black">About This Course</h2>
-
-              <p className="whitespace-pre-line leading-8 text-slate-300">
-                {course?.description ||
-                  course?.shortDescription ||
-                  "Course description will be updated soon."}
-              </p>
-            </div>
-
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-6 md:p-8">
-              <h2 className="mb-6 text-2xl font-black">What You Will Get</h2>
 
               <div className="grid gap-4 md:grid-cols-2">
-                <div className="flex gap-3 rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-                  <CheckCircle className="shrink-0 text-green-300" size={22} />
-                  <p className="text-slate-300">
-                    Step-by-step structured learning.
-                  </p>
-                </div>
+                {[
+                  "Understand concepts with practical lessons",
+                  "Watch secure course videos after enrollment",
+                  "Track your progress lesson by lesson",
+                  "Take notes while learning each lesson",
+                  "Review the course after learning",
+                  "Get certificate after completion",
+                ].map((item) => (
+                  <div
+                    key={item}
+                    className="flex items-start gap-3 rounded-2xl border border-white/10 bg-slate-950/60 p-4"
+                  >
+                    <CheckCircle
+                      size={20}
+                      className="mt-0.5 shrink-0 text-green-300"
+                    />
 
-                <div className="flex gap-3 rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-                  <CheckCircle className="shrink-0 text-green-300" size={22} />
-                  <p className="text-slate-300">
-                    Secure video lessons and progress tracking.
-                  </p>
-                </div>
-
-                <div className="flex gap-3 rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-                  <CheckCircle className="shrink-0 text-green-300" size={22} />
-                  <p className="text-slate-300">
-                    Completion certificate after finishing the course.
-                  </p>
-                </div>
-
-                <div className="flex gap-3 rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-                  <CheckCircle className="shrink-0 text-green-300" size={22} />
-                  <p className="text-slate-300">
-                    Lifetime access after enrollment.
-                  </p>
-                </div>
+                    <p className="break-words text-slate-300">{item}</p>
+                  </div>
+                ))}
               </div>
             </div>
 
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-6 md:p-8">
-              <div className="mb-6 flex items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-2xl font-black">Course Curriculum</h2>
-                  <p className="mt-2 text-slate-400">
-                    {totalSections} sections • {totalLessons} lessons
+            <div className="rounded-[1.7rem] border border-white/10 bg-white/[0.04] p-5 md:p-7">
+              <div className="mb-6 flex items-center gap-3">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-purple-500/10 text-purple-300">
+                  <Layers size={24} />
+                </div>
+
+                <div className="min-w-0">
+                  <h2 className="text-2xl font-black md:text-3xl">
+                    Course Curriculum
+                  </h2>
+
+                  <p className="mt-1 text-slate-400">
+                    {lessons.length} lessons included
                   </p>
                 </div>
               </div>
 
-              {course?.sections?.length ? (
+              {shouldShowLessonSearch && (
+                <div className="mb-6">
+                  <div className="relative">
+                    <Search
+                      size={18}
+                      className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                    />
+
+                    <input
+                      type="text"
+                      value={lessonSearch}
+                      onChange={(event) => setLessonSearch(event.target.value)}
+                      placeholder="Search lessons..."
+                      className="w-full rounded-2xl border border-white/10 bg-slate-950 px-11 py-4 text-white outline-none placeholder:text-slate-500 focus:border-blue-500"
+                    />
+
+                    {lessonSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setLessonSearch("")}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full p-1 text-slate-400 hover:bg-white/10 hover:text-white"
+                      >
+                        <X size={17} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {!Array.isArray(course?.sections) ||
+              course.sections.length === 0 ? (
+                <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-5 text-slate-400">
+                  Curriculum will be updated soon.
+                </div>
+              ) : filteredSections.length === 0 ? (
+                <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-5 text-slate-400">
+                  No lessons found for your search.
+                </div>
+              ) : (
                 <div className="space-y-4">
-                  {course.sections.map((section, sectionIndex) => (
+                  {filteredSections.map((section) => (
                     <div
-                      key={section._id || sectionIndex}
-                      className="overflow-hidden rounded-2xl border border-white/10 bg-slate-950/70"
+                      key={section._id || section.title}
+                      className="overflow-hidden rounded-2xl border border-white/10 bg-slate-950/60"
                     >
-                      <div className="border-b border-white/10 bg-slate-900/80 px-5 py-4">
-                        <h3 className="font-black">
-                          {section.title || `Section ${sectionIndex + 1}`}
+                      <div className="border-b border-white/10 px-5 py-4">
+                        <h3 className="break-words text-lg font-black text-white">
+                          {section.title}
                         </h3>
                       </div>
 
                       <div className="divide-y divide-white/10">
-                        {section.lessons?.map((lesson, lessonIndex) => (
+                        {section.lessons?.map((lesson, index) => (
                           <div
-                            key={lesson._id || lessonIndex}
+                            key={lesson._id || lesson.title}
                             className="flex items-center justify-between gap-4 px-5 py-4"
                           >
-                            <div className="flex items-center gap-3">
+                            <div className="flex min-w-0 items-center gap-3">
                               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-500/10 text-blue-300">
-                                <PlayCircle size={18} />
+                                <Video size={17} />
                               </div>
 
-                              <div>
-                                <p className="font-bold text-white">
-                                  {lesson.title || `Lesson ${lessonIndex + 1}`}
+                              <div className="min-w-0">
+                                <p className="truncate font-bold text-white">
+                                  {index + 1}. {lesson.title}
                                 </p>
 
-                                <p className="mt-1 text-sm text-slate-500">
+                                <p className="mt-1 text-xs text-slate-500">
                                   {lesson.duration || "Video lesson"}
                                 </p>
                               </div>
                             </div>
 
                             {lesson.isPreview ? (
-                              <span className="rounded-full bg-green-500/10 px-3 py-1 text-xs font-bold text-green-300">
+                              <span className="shrink-0 rounded-full border border-green-500/20 bg-green-500/10 px-3 py-1 text-xs font-black text-green-300">
                                 Preview
                               </span>
                             ) : (
-                              <span className="rounded-full bg-slate-800 px-3 py-1 text-xs font-bold text-slate-400">
-                                Locked
-                              </span>
+                              <Lock
+                                size={17}
+                                className="shrink-0 text-slate-500"
+                              />
                             )}
                           </div>
                         ))}
@@ -685,74 +862,102 @@ const CourseDetailsPage = () => {
                     </div>
                   ))}
                 </div>
-              ) : (
-                <div className="rounded-2xl border border-dashed border-white/10 bg-slate-950/70 p-6 text-slate-400">
-                  Curriculum will be updated soon.
-                </div>
               )}
             </div>
-          </div>
 
-          <aside className="lg:sticky lg:top-28 lg:self-start">
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl shadow-black/30">
-              <div className="mb-6">
-                <p className="text-sm font-bold uppercase tracking-[0.25em] text-slate-400">
-                  Course Price
-                </p>
-
-                <div className="mt-3 flex items-center gap-2">
-                  {!isFreeCourse && <IndianRupee size={30} />}
-                  <p className="text-4xl font-black">
-                    {formatPrice(course?.price)}
-                  </p>
+            <div className="rounded-[1.7rem] border border-white/10 bg-white/[0.04] p-5 md:p-7">
+              <div className="mb-4 flex items-center gap-3">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-cyan-500/10 text-cyan-300">
+                  <FileText size={24} />
                 </div>
+
+                <h2 className="text-2xl font-black md:text-3xl">
+                  Course Description
+                </h2>
               </div>
 
-              {actionError && (
-                <div className="mb-5 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">
-                  {actionError}
-                </div>
-              )}
+              <p className="whitespace-pre-line break-words leading-8 text-slate-300">
+                {course?.description ||
+                  course?.shortDescription ||
+                  "This course is designed to help students learn practical skills through structured video lessons and hands-on learning."}
+              </p>
+            </div>
 
-              <button
-                type="button"
-                onClick={handlePrimaryAction}
-                disabled={actionLoading}
-                className="flex w-full items-center justify-center gap-3 rounded-2xl bg-blue-600 px-6 py-4 font-black text-white transition hover:bg-blue-700 disabled:opacity-60"
-              >
-                {actionLoading && (
-                  <Loader2 className="animate-spin" size={20} />
-                )}
+            {course?._id && <CourseReviews courseId={course._id} />}
+          </div>
 
-                {isEnrolled
-                  ? "Continue Learning"
-                  : isFreeCourse
-                    ? "Enroll Free"
-                    : "Buy Now"}
-              </button>
+          <aside className="hidden lg:block">
+            <div className="rounded-[1.7rem] border border-white/10 bg-white/[0.04] p-6">
+              <h3 className="text-2xl font-black">Course Benefits</h3>
 
-              <div className="mt-6 space-y-4">
-                <div className="flex items-center gap-3 text-slate-300">
-                  <ShieldCheck className="text-green-300" size={20} />
-                  <span>Secure payment and protected videos</span>
-                </div>
+              <div className="mt-5 space-y-5">
+                <InfoItem
+                  icon={ShieldCheck}
+                  text="Secure payment and protected videos"
+                  tone="green"
+                />
 
-                <div className="flex items-center gap-3 text-slate-300">
-                  <Award className="text-yellow-300" size={20} />
-                  <span>Certificate after completion</span>
-                </div>
+                <InfoItem
+                  icon={Award}
+                  text="Certificate after completion"
+                  tone="yellow"
+                />
 
-                <div className="flex items-center gap-3 text-slate-300">
-                  <Star className="text-blue-300" size={20} />
-                  <span>Lifetime access after enrollment</span>
-                </div>
+                <InfoItem
+                  icon={Star}
+                  text="Lifetime access after enrollment"
+                  tone="blue"
+                />
+
+                <InfoItem
+                  icon={Clock}
+                  text="Learn anytime at your own speed"
+                  tone="purple"
+                />
               </div>
             </div>
           </aside>
         </div>
-
-        {course?._id && <CourseReviews courseId={course._id} />}
       </section>
+
+      <div className="fixed bottom-0 left-0 right-0 z-[80] border-t border-white/10 bg-slate-950/95 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-2xl shadow-black backdrop-blur-xl lg:hidden">
+        {paymentError && (
+          <div className="mx-auto mb-3 max-w-7xl rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm leading-6 text-red-100">
+            {paymentError}
+          </div>
+        )}
+
+        <div className="mx-auto flex max-w-7xl items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">
+              Price
+            </p>
+
+            <p className="truncate text-2xl font-black text-white">
+              {formatCurrency(price)}
+            </p>
+          </div>
+
+          {isEnrolled ? (
+            <button
+              type="button"
+              onClick={handleContinue}
+              className="shrink-0 rounded-2xl bg-green-600 px-6 py-4 text-sm font-black text-white hover:bg-green-700"
+            >
+              Continue
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleBuyNow}
+              disabled={paymentLoading}
+              className="shrink-0 rounded-2xl bg-blue-600 px-7 py-4 text-sm font-black text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {paymentLoading ? "Wait..." : "Buy Now"}
+            </button>
+          )}
+        </div>
+      </div>
     </main>
   );
 };
