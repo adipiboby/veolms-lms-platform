@@ -1,229 +1,571 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { BookOpen, Clock, PlayCircle, TrendingUp } from "lucide-react";
+
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
-import StudentCertificatesPanel from "../components/student/StudentCertificatesPanel";
+
+const getArrayFromResponse = (data, possibleKeys = []) => {
+  if (Array.isArray(data)) return data;
+
+  for (const key of possibleKeys) {
+    if (Array.isArray(data?.[key])) return data[key];
+  }
+
+  if (Array.isArray(data?.data)) return data.data;
+  if (Array.isArray(data?.data?.enrollments)) return data.data.enrollments;
+  if (Array.isArray(data?.data?.courses)) return data.data.courses;
+  if (Array.isArray(data?.enrolledCourses)) return data.enrolledCourses;
+
+  return [];
+};
+
+const getCourseFromEnrollment = (enrollment) => {
+  return (
+    enrollment?.course ||
+    enrollment?.courseId ||
+    enrollment?.courseDetails ||
+    enrollment?.enrolledCourse ||
+    enrollment
+  );
+};
+
+const getCourseId = (enrollment) => {
+  const course = getCourseFromEnrollment(enrollment);
+
+  if (course && typeof course === "object") {
+    return course._id || course.id || "";
+  }
+
+  return enrollment?.courseId || enrollment?.course || "";
+};
+
+const getLessons = (course) => {
+  if (!course?.sections || !Array.isArray(course.sections)) return [];
+
+  return course.sections.flatMap((section) => {
+    if (!Array.isArray(section.lessons)) return [];
+    return section.lessons;
+  });
+};
+
+const getTotalLessons = (enrollment, course, progress) => {
+  const fromProgress =
+    Number(progress?.totalLessons) ||
+    Number(progress?.progress?.totalLessons) ||
+    Number(progress?.courseProgress?.totalLessons);
+
+  const fromEnrollment =
+    Number(enrollment?.totalLessons) ||
+    Number(enrollment?.progress?.totalLessons) ||
+    Number(enrollment?.courseProgress?.totalLessons);
+
+  const fromCourse = getLessons(course).length;
+
+  return fromProgress || fromEnrollment || fromCourse || 0;
+};
+
+const getCompletedLessons = (enrollment, progress, totalLessons) => {
+  const fromProgress =
+    Number(progress?.completedLessons) ||
+    Number(progress?.progress?.completedLessons) ||
+    Number(progress?.courseProgress?.completedLessons);
+
+  const fromEnrollment =
+    Number(enrollment?.completedLessons) ||
+    Number(enrollment?.progress?.completedLessons) ||
+    Number(enrollment?.courseProgress?.completedLessons);
+
+  const completed = fromProgress || fromEnrollment || 0;
+
+  return Math.min(completed, totalLessons);
+};
+
+const getProgressPercentage = ({ enrollment, course, progress }) => {
+  const totalLessons = getTotalLessons(enrollment, course, progress);
+  const completedLessons = getCompletedLessons(
+    enrollment,
+    progress,
+    totalLessons,
+  );
+
+  const directProgress =
+    progress?.progressPercentage ??
+    progress?.percentage ??
+    progress?.progress?.progressPercentage ??
+    progress?.courseProgress?.progressPercentage ??
+    enrollment?.progressPercentage ??
+    enrollment?.progress?.progressPercentage ??
+    enrollment?.courseProgress?.progressPercentage;
+
+  if (Number.isFinite(Number(directProgress))) {
+    return Math.min(100, Math.max(0, Math.round(Number(directProgress))));
+  }
+
+  if (!totalLessons) return 0;
+
+  return Math.min(
+    100,
+    Math.max(0, Math.round((completedLessons / totalLessons) * 100)),
+  );
+};
+
+const parseDurationToMinutes = (duration) => {
+  if (!duration) return 0;
+
+  if (typeof duration === "number") {
+    return Number.isFinite(duration) ? duration : 0;
+  }
+
+  const text = String(duration).trim().toLowerCase();
+
+  const hourMatch = text.match(/(\d+)\s*h/);
+  const minuteMatch = text.match(/(\d+)\s*m/);
+
+  if (hourMatch || minuteMatch) {
+    const hours = hourMatch ? Number(hourMatch[1]) : 0;
+    const minutes = minuteMatch ? Number(minuteMatch[1]) : 0;
+    return hours * 60 + minutes;
+  }
+
+  const parts = text.split(":").map(Number);
+
+  if (parts.length === 3 && parts.every(Number.isFinite)) {
+    const [hours, minutes, seconds] = parts;
+    return hours * 60 + minutes + Math.round(seconds / 60);
+  }
+
+  if (parts.length === 2 && parts.every(Number.isFinite)) {
+    const [minutes, seconds] = parts;
+    return minutes + Math.round(seconds / 60);
+  }
+
+  const onlyNumber = Number(text.replace(/[^\d.]/g, ""));
+  return Number.isFinite(onlyNumber) ? onlyNumber : 0;
+};
+
+const getCourseDurationMinutes = (course) => {
+  return getLessons(course).reduce((total, lesson) => {
+    return total + parseDurationToMinutes(lesson.duration);
+  }, 0);
+};
+
+const formatDuration = (minutes) => {
+  const safeMinutes = Math.max(0, Math.round(Number(minutes) || 0));
+
+  if (safeMinutes === 0) return "0m";
+
+  const hours = Math.floor(safeMinutes / 60);
+  const remainingMinutes = safeMinutes % 60;
+
+  if (hours === 0) return `${remainingMinutes}m`;
+  if (remainingMinutes === 0) return `${hours}h`;
+
+  return `${hours}h ${remainingMinutes}m`;
+};
+
+const findResumeLesson = (course, progress) => {
+  const lessons = getLessons(course);
+
+  if (!lessons.length) return null;
+
+  const currentLessonId =
+    progress?.currentLessonId ||
+    progress?.progress?.currentLessonId ||
+    progress?.courseProgress?.currentLessonId ||
+    progress?.lastWatchedLessonId;
+
+  if (currentLessonId) {
+    const foundLesson = lessons.find(
+      (lesson) => String(lesson._id || lesson.id) === String(currentLessonId),
+    );
+
+    if (foundLesson) return foundLesson;
+  }
+
+  return lessons[0];
+};
+
 const StudentDashboardPage = () => {
   const { user } = useAuth();
 
-  const [enrolledCourses, setEnrolledCourses] = useState([]);
+  const [enrollments, setEnrollments] = useState([]);
+  const [progressMap, setProgressMap] = useState({});
+  const [certificates, setCertificates] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
 
-  const fetchMyCourses = async () => {
+  const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      setError("");
 
-      const res = await api.get("/enrollments/my-courses");
+      const enrollmentRes = await api.get("/enrollments/my");
 
-      setEnrolledCourses(
-        Array.isArray(res.data?.courses) ? res.data.courses : [],
+      const enrollmentList = getArrayFromResponse(enrollmentRes.data, [
+        "enrollments",
+        "myCourses",
+        "courses",
+        "items",
+      ]);
+
+      setEnrollments(enrollmentList);
+
+      const progressResults = await Promise.all(
+        enrollmentList.map(async (enrollment) => {
+          try {
+            const courseId = getCourseId(enrollment);
+
+            if (!courseId) return null;
+
+            const progressRes = await api.get(`/progress/course/${courseId}`);
+
+            return {
+              courseId: String(courseId),
+              progress:
+                progressRes.data?.progress ||
+                progressRes.data?.courseProgress ||
+                progressRes.data,
+            };
+          } catch {
+            return null;
+          }
+        }),
       );
+
+      const nextProgressMap = {};
+
+      progressResults.forEach((item) => {
+        if (item?.courseId) {
+          nextProgressMap[item.courseId] = item.progress;
+        }
+      });
+
+      setProgressMap(nextProgressMap);
+
+      try {
+        const certificateRes = await api.get("/certificates/my");
+
+        const certificateList = getArrayFromResponse(certificateRes.data, [
+          "certificates",
+          "items",
+        ]);
+
+        setCertificates(certificateList);
+      } catch {
+        setCertificates([]);
+      }
     } catch (error) {
-      console.error("Failed to fetch my courses", error);
-      setError(error.response?.data?.message || "Failed to fetch your courses");
+      console.error("STUDENT_DASHBOARD_FETCH_ERROR:", error);
+      setEnrollments([]);
+      setProgressMap({});
+      setCertificates([]);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchMyCourses();
+    fetchDashboardData();
   }, []);
 
-  const totalCourses = enrolledCourses.length;
+  const dashboardStats = useMemo(() => {
+    let totalLessons = 0;
+    let completedLessons = 0;
 
-  const totalLessons = enrolledCourses.reduce((total, item) => {
-    return total + (item.progress?.totalLessons || 0);
-  }, 0);
+    enrollments.forEach((enrollment) => {
+      const course = getCourseFromEnrollment(enrollment);
+      const courseId = getCourseId(enrollment);
+      const progress = progressMap[String(courseId)];
 
-  const averageProgress =
-    totalCourses === 0
-      ? 0
-      : Math.round(
-          enrolledCourses.reduce((total, item) => {
-            return total + (item.progress?.progressPercentage || 0);
-          }, 0) / totalCourses,
-        );
+      const courseTotalLessons = getTotalLessons(enrollment, course, progress);
+      const courseCompletedLessons = getCompletedLessons(
+        enrollment,
+        progress,
+        courseTotalLessons,
+      );
+
+      totalLessons += courseTotalLessons;
+      completedLessons += courseCompletedLessons;
+    });
+
+    const overallProgress = totalLessons
+      ? Math.min(100, Math.round((completedLessons / totalLessons) * 100))
+      : 0;
+
+    return {
+      totalCourses: enrollments.length,
+      totalLessons,
+      completedLessons,
+      overallProgress,
+      certificatesCount: certificates.length,
+    };
+  }, [enrollments, progressMap, certificates]);
+
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-[#050816] px-6 py-10 text-white">
+        <div className="mx-auto max-w-7xl">
+          <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-8">
+            <p className="text-slate-300">Loading student dashboard...</p>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white pt-28 pb-16">
-      <section className="max-w-7xl mx-auto px-4 md:px-6">
-        <div className="mb-10">
-          <p className="text-blue-400 font-bold mb-3">Student Dashboard</p>
-
-          <h1 className="text-4xl md:text-5xl font-black">
-            Welcome back, {user?.name}
-          </h1>
-
-          <p className="text-slate-400 mt-3">
-            Continue your enrolled courses and track your learning journey.
-          </p>
-        </div>
-
-        <div className="grid md:grid-cols-3 gap-6 mb-10">
-          <div className="rounded-3xl bg-white/5 border border-white/10 p-6">
-            <div className="h-12 w-12 rounded-2xl bg-blue-500/10 text-blue-300 flex items-center justify-center mb-5">
-              <BookOpen />
-            </div>
-
-            <p className="text-slate-400">My Courses</p>
-            <h2 className="text-4xl font-black mt-2">{totalCourses}</h2>
-          </div>
-
-          <div className="rounded-3xl bg-white/5 border border-white/10 p-6">
-            <div className="h-12 w-12 rounded-2xl bg-purple-500/10 text-purple-300 flex items-center justify-center mb-5">
-              <PlayCircle />
-            </div>
-
-            <p className="text-slate-400">Total Lessons</p>
-            <h2 className="text-4xl font-black mt-2">{totalLessons}</h2>
-          </div>
-
-          <div className="rounded-3xl bg-white/5 border border-white/10 p-6">
-            <div className="h-12 w-12 rounded-2xl bg-green-500/10 text-green-300 flex items-center justify-center mb-5">
-              <TrendingUp />
-            </div>
-
-            <p className="text-slate-400">Average Progress</p>
-            <h2 className="text-4xl font-black mt-2">{averageProgress}%</h2>
-          </div>
-        </div>
-
-        <div className="rounded-3xl bg-white/5 border border-white/10 p-6">
-          <div className="flex items-center justify-between gap-4 mb-6">
+    <main className="min-h-screen overflow-x-hidden bg-[#050816] px-5 py-10 text-white sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl space-y-10">
+        <section className="rounded-[2rem] border border-slate-800 bg-gradient-to-br from-slate-900 to-slate-950 p-6 shadow-2xl shadow-blue-950/20 sm:p-8">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h2 className="text-2xl font-black">My Learning</h2>
+              <p className="text-sm font-semibold uppercase tracking-[0.25em] text-blue-300">
+                Student Dashboard
+              </p>
 
-              <p className="text-slate-400 text-sm mt-1">
-                Courses you purchased successfully
+              <h1 className="mt-3 text-3xl font-black sm:text-4xl">
+                Welcome back{user?.name ? `, ${user.name}` : ""} 👋
+              </h1>
+
+              <p className="mt-3 max-w-2xl text-slate-400">
+                Continue your enrolled courses, track your lesson progress, and
+                download certificates after completion.
               </p>
             </div>
 
-            <button
-              onClick={fetchMyCourses}
-              className="px-4 py-2 rounded-xl bg-white/10 text-white font-semibold hover:bg-white/15"
+            <Link
+              to="/courses"
+              className="inline-flex w-fit items-center justify-center rounded-2xl bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-3 font-bold text-white transition hover:-translate-y-1"
             >
-              Refresh
-            </button>
+              Browse Courses →
+            </Link>
           </div>
 
-          {error && (
-            <div className="mb-6 rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-red-300">
-              {error}
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-2xl border border-slate-800 bg-white/5 p-5">
+              <p className="text-3xl font-black">
+                {dashboardStats.totalCourses}
+              </p>
+              <p className="mt-2 text-sm text-slate-400">Enrolled Courses</p>
             </div>
-          )}
 
-          {loading ? (
-            <p className="text-slate-400">Loading your courses...</p>
-          ) : enrolledCourses.length === 0 ? (
-            <div className="text-center py-14">
-              <div className="h-16 w-16 mx-auto rounded-3xl bg-blue-500/10 text-blue-300 flex items-center justify-center mb-5">
-                <BookOpen size={30} />
-              </div>
+            <div className="rounded-2xl border border-slate-800 bg-white/5 p-5">
+              <p className="text-3xl font-black">
+                {dashboardStats.completedLessons}/{dashboardStats.totalLessons}
+              </p>
+              <p className="mt-2 text-sm text-slate-400">Lessons Completed</p>
+            </div>
 
-              <h3 className="text-2xl font-black mb-3">
-                No enrolled courses yet
-              </h3>
+            <div className="rounded-2xl border border-slate-800 bg-white/5 p-5">
+              <p className="text-3xl font-black">
+                {dashboardStats.overallProgress}%
+              </p>
+              <p className="mt-2 text-sm text-slate-400">Overall Progress</p>
+            </div>
 
-              <p className="text-slate-400 mb-6">
-                Buy a course to start learning.
+            <div className="rounded-2xl border border-slate-800 bg-white/5 p-5">
+              <p className="text-3xl font-black">
+                {dashboardStats.certificatesCount}
+              </p>
+              <p className="mt-2 text-sm text-slate-400">Certificates</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-[2rem] border border-slate-800 bg-slate-900/70 p-6 sm:p-8">
+          <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-2xl font-black">My Courses</h2>
+              <p className="mt-2 text-slate-400">
+                Continue learning from where you stopped.
+              </p>
+            </div>
+          </div>
+
+          {enrollments.length === 0 ? (
+            <div className="rounded-3xl border border-dashed border-slate-700 bg-slate-950/70 p-10 text-center">
+              <h3 className="text-xl font-black">No enrolled courses yet</h3>
+              <p className="mt-3 text-slate-400">
+                Explore courses and enroll to start learning.
               </p>
 
               <Link
                 to="/courses"
-                className="inline-flex px-6 py-3 rounded-2xl bg-blue-600 text-white font-bold hover:bg-blue-700"
+                className="mt-6 inline-flex rounded-2xl bg-blue-600 px-6 py-3 font-bold text-white hover:bg-blue-500"
               >
-                Browse Courses
+                Explore Courses
               </Link>
             </div>
           ) : (
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {enrolledCourses.map((item) => {
-                const course = item.course;
-                const progress = item.progress || {
-                  totalLessons: 0,
-                  completedLessons: 0,
-                  progressPercentage: 0,
-                };
+            <div className="grid gap-6 lg:grid-cols-2">
+              {enrollments.map((enrollment) => {
+                const course = getCourseFromEnrollment(enrollment);
+                const courseId = getCourseId(enrollment);
+                const progress = progressMap[String(courseId)];
+
+                const totalLessons = getTotalLessons(
+                  enrollment,
+                  course,
+                  progress,
+                );
+
+                const completedLessons = getCompletedLessons(
+                  enrollment,
+                  progress,
+                  totalLessons,
+                );
+
+                const progressPercentage = getProgressPercentage({
+                  enrollment,
+                  course,
+                  progress,
+                });
+
+                const lessons = getLessons(course);
+                const durationMinutes = getCourseDurationMinutes(course);
+                const resumeLesson = findResumeLesson(course, progress);
+
+                const continuePath = course?.slug
+                  ? `/learn/${course.slug}`
+                  : "/student/dashboard";
 
                 return (
-                  <div
-                    key={item.enrollmentId}
-                    className="rounded-3xl bg-slate-950 border border-white/10 overflow-hidden hover:border-blue-500/40"
+                  <article
+                    key={String(courseId || enrollment._id)}
+                    className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-950 shadow-xl shadow-slate-950/40"
                   >
-                    <img
-                      src={course.thumbnail}
-                      alt={course.title}
-                      className="h-44 w-full object-cover"
-                    />
+                    <div className="h-48 overflow-hidden bg-slate-900">
+                      {course?.thumbnail ? (
+                        <img
+                          src={course.thumbnail}
+                          alt={course.title}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-slate-500">
+                          No thumbnail
+                        </div>
+                      )}
+                    </div>
 
-                    <div className="p-5">
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="px-3 py-1 rounded-full bg-blue-500/10 text-blue-300 text-xs font-bold border border-blue-500/20">
-                          {course.category}
+                    <div className="space-y-5 p-6">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="rounded-full border border-blue-500/40 bg-blue-500/10 px-4 py-1 text-sm font-bold text-blue-200">
+                          {course?.category || "Course"}
                         </span>
 
-                        <span className="text-xs text-slate-400">
-                          {course.level}
+                        <span className="text-sm text-slate-400">
+                          {course?.level || "Beginner"}
                         </span>
                       </div>
 
-                      <h3 className="text-xl font-black mb-2 line-clamp-2">
-                        {course.title}
-                      </h3>
+                      <div>
+                        <h3 className="text-2xl font-black">
+                          {course?.title || "Untitled Course"}
+                        </h3>
 
-                      <p className="text-slate-400 text-sm line-clamp-2 mb-4">
-                        {course.shortDescription}
-                      </p>
-
-                      <div className="flex items-center gap-2 text-slate-400 text-sm mb-4">
-                        <Clock size={16} />
-                        {progress.totalLessons} lessons
+                        <p className="mt-2 text-slate-400">
+                          {course?.shortDescription ||
+                            "Continue learning this course."}
+                        </p>
                       </div>
 
-                      <div className="mb-5">
-                        <div className="flex items-center justify-between mb-2">
-                          <p className="text-sm text-slate-400">Progress</p>
+                      <div className="flex flex-wrap items-center gap-4 text-sm text-slate-400">
+                        <span>🎬 {totalLessons} lessons</span>
+                        <span>⏱️ {formatDuration(durationMinutes)}</span>
+                      </div>
 
-                          <p className="text-sm font-bold text-blue-300">
-                            {progress.progressPercentage}%
-                          </p>
+                      <div>
+                        <div className="mb-3 flex items-center justify-between text-sm">
+                          <span className="text-slate-300">Progress</span>
+                          <span className="font-black text-cyan-300">
+                            {progressPercentage}%
+                          </span>
                         </div>
 
-                        <div className="h-3 rounded-full bg-slate-800 overflow-hidden">
+                        <div className="h-3 overflow-hidden rounded-full bg-slate-800">
                           <div
-                            className="h-full bg-gradient-to-r from-blue-600 to-purple-600"
-                            style={{
-                              width: `${progress.progressPercentage}%`,
-                            }}
+                            className="h-full rounded-full bg-gradient-to-r from-blue-600 to-purple-600 transition-all duration-500"
+                            style={{ width: `${progressPercentage}%` }}
                           />
                         </div>
 
-                        <p className="text-xs text-slate-500 mt-2">
-                          {progress.completedLessons} of {progress.totalLessons}{" "}
-                          lessons completed
+                        <p className="mt-3 text-sm text-slate-400">
+                          {completedLessons} of {totalLessons} lessons completed
+                        </p>
+                      </div>
+
+                      <div className="rounded-2xl border border-slate-800 bg-white/5 p-4">
+                        <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                          Resume Lesson
+                        </p>
+
+                        <p className="mt-2 truncate font-bold text-slate-200">
+                          {resumeLesson?.title || "Start from first lesson"}
                         </p>
                       </div>
 
                       <Link
-                        to={`/learn/${course.slug}`}
-                        className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-blue-600 to-purple-600 text-white font-black"
+                        to={continuePath}
+                        className="flex w-full items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-blue-600 to-purple-600 px-5 py-4 font-black text-white transition hover:-translate-y-1"
                       >
                         Continue Learning
-                        <PlayCircle size={18} />
+                        <span>▷</span>
                       </Link>
                     </div>
-                  </div>
+                  </article>
                 );
               })}
             </div>
           )}
-        </div>
-        <StudentCertificatesPanel />
-      </section>
+        </section>
+
+        <section className="rounded-[2rem] border border-slate-800 bg-slate-900/70 p-6 sm:p-8">
+          <div className="mb-6 flex items-center gap-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-yellow-400/10 text-2xl">
+              🏅
+            </div>
+
+            <div>
+              <h2 className="text-2xl font-black">My Certificates</h2>
+              <p className="mt-1 text-slate-400">
+                View and download your completed course certificates.
+              </p>
+            </div>
+          </div>
+
+          {certificates.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-950/60 p-6 text-slate-400">
+              No certificates generated yet. Complete a course to unlock your
+              certificate.
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              {certificates.map((certificate) => (
+                <div
+                  key={certificate._id || certificate.certificateId}
+                  className="rounded-2xl border border-slate-800 bg-slate-950 p-5"
+                >
+                  <h3 className="font-black">
+                    {certificate.courseTitle ||
+                      certificate.course?.title ||
+                      "Course Certificate"}
+                  </h3>
+
+                  <p className="mt-2 text-sm text-slate-400">
+                    Certificate ID: {certificate.certificateId}
+                  </p>
+
+                  <Link
+                    to={`/certificate/verify/${certificate.certificateId}`}
+                    className="mt-4 inline-flex rounded-xl bg-yellow-400 px-4 py-2 text-sm font-black text-slate-950"
+                  >
+                    View Certificate
+                  </Link>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
     </main>
   );
 };

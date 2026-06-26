@@ -4,7 +4,7 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "dev": "nodemon src/server.js",
+    "dev": "nodemon --ignore uploads --ignore uploads/** src/server.js",
     "start": "node src/server.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "seed": "node src/data/seedCourses.js",
@@ -16,7 +16,9 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@aws-sdk/client-mediaconvert": "^3.1075.0",
     "@aws-sdk/client-s3": "^3.1075.0",
+    "@aws-sdk/cloudfront-signer": "^3.1074.0",
     "@aws-sdk/lib-storage": "^3.1075.0",
     "@aws-sdk/s3-request-presigner": "^3.1075.0",
     "bcryptjs": "^3.0.3",

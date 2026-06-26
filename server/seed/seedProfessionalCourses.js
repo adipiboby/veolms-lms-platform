@@ -13,11 +13,11 @@ const courses = [
     title: "Full Stack MERN Development Masterclass",
     slug: "full-stack-mern-development-masterclass",
     category: "Web Development",
-    instructorName: "VeoLMS Instructor",
+    instructorName: "procodrr",
     price: 999,
     level: "Intermediate",
     thumbnail:
-      "https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=1200&auto=format&fit=crop",
+      "https://i.ytimg.com/vi/_rTCzxg6VmM/hqdefault.jpg?sqp=-oaymwEmCKgBEF5IWvKriqkDGQgBFQAAiEIYAdgBAeIBCggYEAIYBjgBQAE=&rs=AOn4CLDqT-fj7cbs6iHuk8Wn5fI4qPopsQ",
     trailerVideoUrl: DEMO_VIDEO_KEY,
     shortDescription:
       "Build production-ready full-stack applications using MongoDB, Express, React, and Node.js.",
@@ -74,7 +74,7 @@ const courses = [
     title: "AWS Cloud Deployment for Developers",
     slug: "aws-cloud-deployment-for-developers",
     category: "Cloud Computing",
-    instructorName: "VeoLMS Instructor",
+    instructorName: "procodrr",
     price: 1299,
     level: "Intermediate",
     thumbnail:
@@ -135,11 +135,11 @@ const courses = [
     title: "React Frontend Engineering Pro",
     slug: "react-frontend-engineering-pro",
     category: "Frontend Development",
-    instructorName: "VeoLMS Instructor",
+    instructorName: "procodrr",
     price: 899,
     level: "Beginner",
     thumbnail:
-      "https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=1200&auto=format&fit=crop",
+      "https://i.ytimg.com/vi/_rTCzxg6VmM/hqdefault.jpg?sqp=-oaymwEmCKgBEF5IWvKriqkDGQgBFQAAiEIYAdgBAeIBCggYEAIYBjgBQAE=&rs=AOn4CLDqT-fj7cbs6iHuk8Wn5fI4qPopsQ",
     trailerVideoUrl: DEMO_VIDEO_KEY,
     shortDescription:
       "Master React components, routing, forms, API integration, protected routes, and dashboard UI.",
@@ -153,14 +153,14 @@ const courses = [
         order: 1,
         lessons: [
           {
-            title: "React Component Architecture",
+            title: "The Complete React Course",
             videoUrl: DEMO_VIDEO_KEY,
-            duration: "21:00",
+            duration: "08:24",
             order: 1,
             isPreview: true,
           },
           {
-            title: "React Router and Page Navigation",
+            title: "what is jsx |Transform jsx with Babel",
             videoUrl: DEMO_VIDEO_KEY,
             duration: "20:00",
             order: 2,

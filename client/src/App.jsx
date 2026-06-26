@@ -36,7 +36,9 @@ const App = () => {
         <Route path="/courses/:slug" element={<CourseDetailsPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
-
+        <Route path="/courses" element={<CoursesPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/student/dashboard" element={<StudentDashboardPage />} />
         {/* Student routes */}
         <Route
           path="/student/dashboard"

@@ -1,103 +1,79 @@
-import { User } from "../models/user.model.js";
 import { Course } from "../models/course.model.js";
 import { Enrollment } from "../models/enrollment.model.js";
-import { Payment } from "../models/payment.model.js";
+import { User } from "../models/user.model.js";
+import { VideoAsset } from "../models/videoAsset.model.js";
 
 export const getAdminOverview = async (req, res) => {
   try {
-    const totalStudents = await User.countDocuments({ role: "student" });
-    const totalCourses = await Course.countDocuments();
-    const totalEnrollments = await Enrollment.countDocuments();
-    const paidPayments = await Payment.find({ status: "paid" });
+    const [
+      totalCourses,
+      totalStudents,
+      totalAdmins,
+      totalEnrollments,
+      totalVideos,
+      processingVideos,
+      readyVideos,
+      failedVideos,
+      recentCourses,
+      recentStudents,
+    ] = await Promise.all([
+      Course.countDocuments(),
+      User.countDocuments({ role: "student" }),
+      User.countDocuments({ role: "admin" }),
+      Enrollment.countDocuments(),
+      VideoAsset.countDocuments(),
+      VideoAsset.countDocuments({ hlsStatus: "processing" }),
+      VideoAsset.countDocuments({ hlsStatus: "ready" }),
+      VideoAsset.countDocuments({ hlsStatus: "failed" }),
 
-    const totalRevenue = paidPayments.reduce((total, payment) => {
-      return total + payment.amount;
-    }, 0);
+      Course.find()
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .select("title slug price level category createdAt"),
 
-    res.status(200).json({
+      User.find({ role: "student" })
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .select("name email role createdAt"),
+    ]);
+
+    return res.status(200).json({
       success: true,
+
       overview: {
-        totalStudents,
         totalCourses,
+        totalStudents,
+        totalAdmins,
         totalEnrollments,
-        totalPaidPayments: paidPayments.length,
-        totalRevenue: totalRevenue / 100,
+        totalVideos,
+        processingVideos,
+        readyVideos,
+        failedVideos,
+        totalRevenue: 0,
       },
+
+      // extra aliases, useful if frontend expects stats
+      stats: {
+        totalCourses,
+        totalStudents,
+        totalAdmins,
+        totalEnrollments,
+        totalVideos,
+        processingVideos,
+        readyVideos,
+        failedVideos,
+        totalRevenue: 0,
+      },
+
+      recentCourses,
+      recentStudents,
     });
   } catch (error) {
-    res.status(500).json({
+    console.error("ADMIN_OVERVIEW_ERROR:", error);
+
+    return res.status(500).json({
       success: false,
-      message: "Failed to fetch admin overview",
-      error: error.message,
-    });
-  }
-};
-
-export const getAdminStudents = async (req, res) => {
-  try {
-    const students = await User.find({ role: "student" })
-      .select("name email role createdAt")
-      .sort({ createdAt: -1 });
-
-    const enrollments = await Enrollment.find({
-      userId: { $in: students.map((student) => student._id) },
-    }).select("userId");
-
-    const enrollmentCountByStudent = enrollments.reduce((acc, enrollment) => {
-      const userId = enrollment.userId.toString();
-      acc[userId] = (acc[userId] || 0) + 1;
-      return acc;
-    }, {});
-
-    const formattedStudents = students.map((student) => ({
-      _id: student._id,
-      name: student.name,
-      email: student.email,
-      role: student.role,
-      joinedAt: student.createdAt,
-      enrolledCourses: enrollmentCountByStudent[student._id.toString()] || 0,
-    }));
-
-    res.status(200).json({
-      success: true,
-      count: formattedStudents.length,
-      students: formattedStudents,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch students",
-      error: error.message,
-    });
-  }
-};
-
-export const getAdminEnrollments = async (req, res) => {
-  try {
-    const enrollments = await Enrollment.find()
-      .populate({
-        path: "userId",
-        select: "name email",
-      })
-      .populate({
-        path: "courseId",
-        select: "title slug price category",
-      })
-      .populate({
-        path: "paymentId",
-        select: "amount currency status razorpayPaymentId createdAt",
-      })
-      .sort({ createdAt: -1 });
-
-    res.status(200).json({
-      success: true,
-      count: enrollments.length,
-      enrollments,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch enrollments",
+      message: "Failed to load admin overview",
       error: error.message,
     });
   }
