@@ -41,6 +41,9 @@ const allowedVideoTypes = [
 const getBucketName = () => process.env.AWS_S3_BUCKET_NAME;
 const getRegion = () => process.env.AWS_REGION || "us-east-1";
 
+const isAdmin = (user) => user?.role === "admin";
+const isStudent = (user) => user?.role === "student";
+
 const findLessonById = (course, lessonId) => {
   for (const section of course.sections || []) {
     const lesson = section.lessons?.id?.(lessonId);
@@ -69,6 +72,149 @@ const validateVideoMeta = ({ fileName, contentType, sizeBytes }) => {
   return "";
 };
 
+const isOwnUploadKey = ({ key, user }) => {
+  return String(key || "").includes(String(user?._id || ""));
+};
+
+const ensureVideoAssetOwner = ({ video, user }) => {
+  if (!video || !user?._id) return false;
+
+  return video.adminId?.toString() === user._id.toString();
+};
+
+const repairOldVideoAssetOwner = async ({ videoAsset, course, user }) => {
+  if (!videoAsset || !course || !isAdmin(user)) return;
+
+  const courseOwnerId = course.createdBy?.toString();
+  const currentAdminId = user._id?.toString();
+
+  if (!courseOwnerId || courseOwnerId !== currentAdminId) return;
+
+  if (!videoAsset.adminId || videoAsset.adminId.toString() !== courseOwnerId) {
+    videoAsset.adminId = course.createdBy;
+    await videoAsset.save();
+  }
+};
+
+const canManageCourseForVideo = async ({ req, courseId }) => {
+  if (!courseId) {
+    return {
+      allowed: true,
+      course: null,
+    };
+  }
+
+  const course = await Course.findById(courseId);
+
+  if (!course) {
+    return {
+      allowed: false,
+      statusCode: 404,
+      message: "Course not found",
+      course: null,
+    };
+  }
+
+  if (isAdmin(req.user)) {
+    if (!course.createdBy) {
+      course.createdBy = req.user._id;
+      await course.save();
+    }
+
+    const isOwner = course.createdBy.toString() === req.user._id.toString();
+
+    if (!isOwner) {
+      return {
+        allowed: false,
+        statusCode: 403,
+        message: "You can attach videos only to courses created by you",
+        course,
+      };
+    }
+
+    return {
+      allowed: true,
+      course,
+    };
+  }
+
+  return {
+    allowed: false,
+    statusCode: 403,
+    message: "Only admin can manage course videos",
+    course,
+  };
+};
+
+const canAccessCourseVideo = async ({ req, courseId }) => {
+  const course = await Course.findById(courseId);
+
+  if (!course) {
+    return {
+      allowed: false,
+      statusCode: 404,
+      message: "Course not found",
+      course: null,
+    };
+  }
+
+  /*
+    ADMIN ACCESS:
+    - Admin does not need payment/enrollment.
+    - Admin can access only his own course.
+    - If old course has no createdBy, auto-assign it to current admin.
+  */
+  if (isAdmin(req.user)) {
+    if (!course.createdBy) {
+      course.createdBy = req.user._id;
+      await course.save();
+    }
+
+    const isOwner = course.createdBy.toString() === req.user._id.toString();
+
+    if (!isOwner) {
+      return {
+        allowed: false,
+        statusCode: 403,
+        message: "You can access only videos from courses created by you",
+        course,
+      };
+    }
+
+    return {
+      allowed: true,
+      course,
+      accessType: "adminOwner",
+    };
+  }
+
+  /*
+    STUDENT ACCESS:
+    Student must be enrolled.
+  */
+  if (isStudent(req.user)) {
+    const enrollment = await Enrollment.findOne({
+      userId: req.user._id,
+      courseId: course._id,
+    });
+
+    if (enrollment) {
+      return {
+        allowed: true,
+        course,
+        accessType: "student",
+      };
+    }
+  }
+
+  return {
+    allowed: false,
+    statusCode: 403,
+    message: "You are not enrolled in this course",
+    course,
+  };
+};
+
 const startHlsProcessingForVideoAsset = async ({
   video,
   courseSlug = "course",
@@ -88,6 +234,7 @@ const startHlsProcessingForVideoAsset = async ({
   video.hlsOutputPrefix = hlsOutputPrefix;
   video.hlsManifestKey = hlsManifestKey;
   video.processingError = "";
+
   await video.save();
 
   try {
@@ -106,6 +253,7 @@ const startHlsProcessingForVideoAsset = async ({
     video.status = "processing";
     video.hlsStatus = "processing";
     video.processingError = "";
+
     await video.save();
 
     return video;
@@ -113,6 +261,7 @@ const startHlsProcessingForVideoAsset = async ({
     video.status = "failed";
     video.hlsStatus = "failed";
     video.processingError = error.message;
+
     await video.save();
 
     throw error;
@@ -130,27 +279,19 @@ export const getSignedLessonVideoUrl = async (req, res) => {
       });
     }
 
-    const enrollment = await Enrollment.findOne({
-      userId: req.user._id,
+    const access = await canAccessCourseVideo({
+      req,
       courseId,
     });
 
-    if (!enrollment) {
-      return res.status(403).json({
+    if (!access.allowed) {
+      return res.status(access.statusCode || 403).json({
         success: false,
-        message: "You are not enrolled in this course",
+        message: access.message || "You are not allowed to access this video",
       });
     }
 
-    const course = await Course.findById(courseId);
-
-    if (!course) {
-      return res.status(404).json({
-        success: false,
-        message: "Course not found",
-      });
-    }
-
+    const course = access.course;
     const lesson = findLessonById(course, lessonId);
 
     if (!lesson) {
@@ -167,11 +308,22 @@ export const getSignedLessonVideoUrl = async (req, res) => {
       });
     }
 
+    const videoAsset = await VideoAsset.findOne({
+      key: lesson.videoUrl,
+    });
+
+    await repairOldVideoAssetOwner({
+      videoAsset,
+      course,
+      user: req.user,
+    });
+
     const videoUrl = await createSignedVideoUrl(lesson.videoUrl);
 
     return res.status(200).json({
       success: true,
       videoUrl,
+      accessType: access.accessType,
       expiresIn: Number(process.env.S3_SIGNED_URL_EXPIRES_IN || 600),
     });
   } catch (error) {
@@ -196,27 +348,20 @@ export const getHlsLessonAccess = async (req, res) => {
       });
     }
 
-    const enrollment = await Enrollment.findOne({
-      userId: req.user._id,
+    const access = await canAccessCourseVideo({
+      req,
       courseId,
     });
 
-    if (!enrollment) {
-      return res.status(403).json({
+    if (!access.allowed) {
+      return res.status(access.statusCode || 403).json({
         success: false,
-        message: "You are not enrolled in this course",
+        message:
+          access.message || "You are not allowed to access this HLS video",
       });
     }
 
-    const course = await Course.findById(courseId);
-
-    if (!course) {
-      return res.status(404).json({
-        success: false,
-        message: "Course not found",
-      });
-    }
-
+    const course = access.course;
     const lesson = findLessonById(course, lessonId);
 
     if (!lesson) {
@@ -226,7 +371,9 @@ export const getHlsLessonAccess = async (req, res) => {
       });
     }
 
-    let hlsManifestKey = lesson.hlsManifestKey || lesson.videoHlsManifestKey || "";
+    let hlsManifestKey =
+      lesson.hlsManifestKey || lesson.videoHlsManifestKey || "";
+
     let hlsOutputPrefix = lesson.hlsOutputPrefix || "";
 
     if (!hlsManifestKey && lesson.videoUrl) {
@@ -240,6 +387,12 @@ export const getHlsLessonAccess = async (req, res) => {
           message: "Video asset not found for this lesson",
         });
       }
+
+      await repairOldVideoAssetOwner({
+        videoAsset,
+        course,
+        user: req.user,
+      });
 
       if (videoAsset.hlsStatus === "failed") {
         return res.status(409).json({
@@ -296,6 +449,7 @@ export const getHlsLessonAccess = async (req, res) => {
       success: true,
       message: "HLS access granted",
       manifestUrl,
+      accessType: access.accessType,
       expiresAt: signedCookieData.expiresAt,
     });
   } catch (error) {
@@ -375,7 +529,46 @@ export const confirmAdminVideoUpload = async (req, res) => {
       });
     }
 
+    const validationMessage = validateVideoMeta({
+      fileName: originalName,
+      contentType: mimeType,
+      sizeBytes,
+    });
+
+    if (validationMessage) {
+      return res.status(400).json({
+        success: false,
+        message: validationMessage,
+      });
+    }
+
+    if (!isOwnUploadKey({ key, user: req.user })) {
+      return res.status(403).json({
+        success: false,
+        message: "You can confirm only videos uploaded by you",
+      });
+    }
+
+    const courseAccess = await canManageCourseForVideo({
+      req,
+      courseId,
+    });
+
+    if (!courseAccess.allowed) {
+      return res.status(courseAccess.statusCode || 403).json({
+        success: false,
+        message: courseAccess.message,
+      });
+    }
+
     let video = await VideoAsset.findOne({ key });
+
+    if (video && !ensureVideoAssetOwner({ video, user: req.user })) {
+      return res.status(403).json({
+        success: false,
+        message: "You can confirm only videos uploaded by you",
+      });
+    }
 
     if (!video) {
       video = await VideoAsset.create({
@@ -481,6 +674,13 @@ export const getAdminMultipartPartUrl = async (req, res) => {
       });
     }
 
+    if (!isOwnUploadKey({ key, user: req.user })) {
+      return res.status(403).json({
+        success: false,
+        message: "You can upload parts only for your own video",
+      });
+    }
+
     const uploadUrl = await createPresignedPartUploadUrl({
       key,
       uploadId,
@@ -532,6 +732,38 @@ export const completeAdminMultipartUpload = async (req, res) => {
       });
     }
 
+    const validationMessage = validateVideoMeta({
+      fileName: originalName,
+      contentType: mimeType,
+      sizeBytes,
+    });
+
+    if (validationMessage) {
+      return res.status(400).json({
+        success: false,
+        message: validationMessage,
+      });
+    }
+
+    if (!isOwnUploadKey({ key, user: req.user })) {
+      return res.status(403).json({
+        success: false,
+        message: "You can complete only your own video upload",
+      });
+    }
+
+    const courseAccess = await canManageCourseForVideo({
+      req,
+      courseId,
+    });
+
+    if (!courseAccess.allowed) {
+      return res.status(courseAccess.statusCode || 403).json({
+        success: false,
+        message: courseAccess.message,
+      });
+    }
+
     const normalizedParts = parts
       .map((part) => ({
         PartNumber: Number(part.PartNumber),
@@ -547,13 +779,20 @@ export const completeAdminMultipartUpload = async (req, res) => {
       });
     }
 
+    let video = await VideoAsset.findOne({ key });
+
+    if (video && !ensureVideoAssetOwner({ video, user: req.user })) {
+      return res.status(403).json({
+        success: false,
+        message: "You can complete only videos uploaded by you",
+      });
+    }
+
     await completeMultipartUpload({
       key,
       uploadId,
       parts: normalizedParts,
     });
-
-    let video = await VideoAsset.findOne({ key });
 
     if (!video) {
       video = await VideoAsset.create({
@@ -574,8 +813,6 @@ export const completeAdminMultipartUpload = async (req, res) => {
     let hlsStarted = false;
     let hlsError = "";
 
-    // Try MediaConvert only if AWS account supports it.
-    // If it fails, upload should still be successful.
     if (video.hlsStatus !== "processing" && video.hlsStatus !== "ready") {
       try {
         video = await startHlsProcessingForVideoAsset({
@@ -592,6 +829,7 @@ export const completeAdminMultipartUpload = async (req, res) => {
         video.status = "uploaded";
         video.hlsStatus = "failed";
         video.processingError = error.message;
+
         await video.save();
 
         console.warn("HLS processing skipped/failed:", error.message);
@@ -629,6 +867,13 @@ export const abortAdminMultipartUpload = async (req, res) => {
       });
     }
 
+    if (!isOwnUploadKey({ key, user: req.user })) {
+      return res.status(403).json({
+        success: false,
+        message: "You can abort only your own video upload",
+      });
+    }
+
     await abortMultipartUpload({
       key,
       uploadId,
@@ -657,6 +902,19 @@ export const uploadAdminVideo = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Video file is required",
+      });
+    }
+
+    const validationMessage = validateVideoMeta({
+      fileName: req.file.originalname,
+      contentType: req.file.mimetype,
+      sizeBytes: req.file.size,
+    });
+
+    if (validationMessage) {
+      return res.status(400).json({
+        success: false,
+        message: validationMessage,
       });
     }
 
@@ -715,7 +973,12 @@ export const uploadAdminVideo = async (req, res) => {
 export const startAdminHlsProcessing = async (req, res) => {
   try {
     const { videoId } = req.params;
-    const { courseSlug = "course", courseId = "", lessonId = "" } = req.body || {};
+
+    const {
+      courseSlug = "course",
+      courseId = "",
+      lessonId = "",
+    } = req.body || {};
 
     if (!videoId) {
       return res.status(400).json({
@@ -730,6 +993,25 @@ export const startAdminHlsProcessing = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: "Video asset not found",
+      });
+    }
+
+    if (!ensureVideoAssetOwner({ video, user: req.user })) {
+      return res.status(403).json({
+        success: false,
+        message: "You can process only videos uploaded by you",
+      });
+    }
+
+    const courseAccess = await canManageCourseForVideo({
+      req,
+      courseId,
+    });
+
+    if (!courseAccess.allowed) {
+      return res.status(courseAccess.statusCode || 403).json({
+        success: false,
+        message: courseAccess.message,
       });
     }
 
@@ -797,6 +1079,13 @@ export const getAdminMediaConvertJobStatus = async (req, res) => {
       });
     }
 
+    if (!ensureVideoAssetOwner({ video, user: req.user })) {
+      return res.status(403).json({
+        success: false,
+        message: "You can check only videos uploaded by you",
+      });
+    }
+
     if (!video.mediaConvertJobId) {
       return res.status(400).json({
         success: false,
@@ -844,6 +1133,7 @@ export const getAdminMediaConvertJobStatus = async (req, res) => {
 export const getAdminStorageOverview = async (req, res) => {
   try {
     const videos = await VideoAsset.find({
+      adminId: req.user._id,
       status: {
         $in: ["uploaded", "processing", "ready", "failed"],
       },
@@ -854,6 +1144,7 @@ export const getAdminStorageOverview = async (req, res) => {
     const stats = await VideoAsset.aggregate([
       {
         $match: {
+          adminId: req.user._id,
           status: {
             $in: ["uploaded", "processing", "ready"],
           },
@@ -879,10 +1170,10 @@ export const getAdminStorageOverview = async (req, res) => {
         totalVideos: overview.totalVideos,
         totalStorageBytes: overview.totalStorageBytes,
         totalStorageMB: Number(
-          (overview.totalStorageBytes / 1024 / 1024).toFixed(2)
+          (overview.totalStorageBytes / 1024 / 1024).toFixed(2),
         ),
         totalStorageGB: Number(
-          (overview.totalStorageBytes / 1024 / 1024 / 1024).toFixed(3)
+          (overview.totalStorageBytes / 1024 / 1024 / 1024).toFixed(3),
         ),
       },
       recentVideos: videos,

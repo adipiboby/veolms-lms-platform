@@ -1,11 +1,14 @@
 import express from "express";
+
 import {
   createLessonComment,
   deleteLessonComment,
+  deleteLessonCommentReply,
   getLessonComments,
+  replyToLessonComment,
   togglePinLessonComment,
-  updateLessonComment,
 } from "../controllers/lessonComment.controller.js";
+
 import { protect, authorizeRoles } from "../middlewares/auth.middleware.js";
 
 const router = express.Router();
@@ -24,22 +27,29 @@ router.post(
   createLessonComment,
 );
 
-router.patch(
-  "/:commentId",
+router.post(
+  "/:commentId/replies",
   protect,
   authorizeRoles("student", "admin"),
-  updateLessonComment,
+  replyToLessonComment,
+);
+
+router.delete(
+  "/:commentId/replies/:replyId",
+  protect,
+  authorizeRoles("student", "admin"),
+  deleteLessonCommentReply,
 );
 
 router.patch(
-  "/:commentId/pin",
+  "/:id/pin",
   protect,
   authorizeRoles("admin"),
   togglePinLessonComment,
 );
 
 router.delete(
-  "/:commentId",
+  "/:id",
   protect,
   authorizeRoles("student", "admin"),
   deleteLessonComment,

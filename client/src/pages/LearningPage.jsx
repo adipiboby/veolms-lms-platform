@@ -189,18 +189,6 @@ const getResourceSize = (resource) => {
   return `${(size / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 };
 
-const getResourceUrl = (resource) => {
-  return (
-    resource?.signedUrl ||
-    resource?.cloudFrontUrl ||
-    resource?.cloudfrontUrl ||
-    resource?.downloadUrl ||
-    resource?.url ||
-    resource?.fileUrl ||
-    ""
-  );
-};
-
 const getProgressFromResponse = (response) => {
   return (
     response?.data?.progress || response?.data?.data || response?.data || {}
@@ -371,6 +359,7 @@ const LessonResources = ({ courseId, lesson }) => {
     </section>
   );
 };
+
 const LearningPage = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
@@ -379,6 +368,7 @@ const LearningPage = () => {
   const [activePanel, setActivePanel] = useState("comments");
 
   const [course, setCourse] = useState(null);
+  const [accessType, setAccessType] = useState("student");
   const [currentLesson, setCurrentLesson] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -412,6 +402,9 @@ const LearningPage = () => {
   const [noteError, setNoteError] = useState("");
   const [notesOpen, setNotesOpen] = useState(false);
   const [noteEditMode, setNoteEditMode] = useState(false);
+
+  const isStudentLearning = accessType === "student";
+  const isAdminLearning = accessType === "adminOwner";
 
   const lessons = useMemo(() => {
     if (!Array.isArray(course?.sections)) return [];
@@ -458,17 +451,13 @@ const LearningPage = () => {
 
     window.dispatchEvent(
       new CustomEvent("veolms-learning-course-change", {
-        detail: {
-          title,
-        },
+        detail: { title },
       }),
     );
 
     window.dispatchEvent(
       new CustomEvent("veolms-learning-course-title", {
-        detail: {
-          title,
-        },
+        detail: { title },
       }),
     );
   };
@@ -478,22 +467,20 @@ const LearningPage = () => {
 
     window.dispatchEvent(
       new CustomEvent("veolms-learning-course-change", {
-        detail: {
-          title: "",
-        },
+        detail: { title: "" },
       }),
     );
 
     window.dispatchEvent(
       new CustomEvent("veolms-learning-course-title", {
-        detail: {
-          title: "",
-        },
+        detail: { title: "" },
       }),
     );
   };
 
   const focusNoteTypingArea = () => {
+    if (!isStudentLearning) return;
+
     setNoteEditMode(true);
 
     setTimeout(() => {
@@ -514,6 +501,8 @@ const LearningPage = () => {
   };
 
   const toggleNotesPanel = () => {
+    if (!isStudentLearning) return;
+
     const nextOpenState = !notesOpen;
 
     setNotesOpen(nextOpenState);
@@ -524,6 +513,8 @@ const LearningPage = () => {
   };
 
   const addTextToNote = (text, block = false) => {
+    if (!isStudentLearning) return;
+
     setNoteContent((previousNote) => {
       const prefix = previousNote.trim() ? (block ? "\n\n" : " ") : "";
       return `${previousNote}${prefix}${text}`;
@@ -551,7 +542,7 @@ const LearningPage = () => {
   };
 
   const handleDownloadNote = () => {
-    if (!hasCurrentLessonNote) return;
+    if (!isStudentLearning || !hasCurrentLessonNote) return;
 
     const lessonTitle = currentLesson?.title || "Lesson Note";
     const courseTitle = course?.title || "Course";
@@ -583,7 +574,7 @@ ${noteContent.trim()}
   };
 
   const fetchCertificateForCourse = async (courseId) => {
-    if (!courseId) return;
+    if (!courseId || !isStudentLearning) return;
 
     try {
       const res = await api.get(`/certificates/course/${courseId}`);
@@ -598,7 +589,7 @@ ${noteContent.trim()}
   };
 
   const fetchCourseNotes = async (courseId) => {
-    if (!courseId) return;
+    if (!courseId || !isStudentLearning) return;
 
     try {
       const res = await api.get(`/notes/course/${courseId}`);
@@ -650,7 +641,7 @@ ${noteContent.trim()}
   };
 
   const loadLessonNote = async (lesson) => {
-    if (!course?._id || !lesson?._id) return;
+    if (!isStudentLearning || !course?._id || !lesson?._id) return;
 
     try {
       setNoteLoading(true);
@@ -701,7 +692,7 @@ ${noteContent.trim()}
   };
 
   const handleGenerateCertificate = async () => {
-    if (!course?._id) return;
+    if (!isStudentLearning || !course?._id) return;
 
     try {
       setCertificateLoading(true);
@@ -738,19 +729,11 @@ ${noteContent.trim()}
         const res = await api.get(`/enrollments/learn/${slug}`);
 
         const loadedCourse = res.data.course;
+        const loadedAccessType = res.data.accessType || "student";
 
         setCourse(loadedCourse);
+        setAccessType(loadedAccessType);
         updateNavbarCourseTitle(loadedCourse.title);
-
-        const progressRes = await api.get(
-          `/progress/course/${loadedCourse._id}`,
-        );
-
-        const loadedProgress = getProgressFromResponse(progressRes);
-        setProgress(normalizeProgress(loadedProgress));
-
-        await fetchCertificateForCourse(loadedCourse._id);
-        await fetchCourseNotes(loadedCourse._id);
 
         const allLessons =
           loadedCourse.sections
@@ -766,11 +749,74 @@ ${noteContent.trim()}
             })
             ?.sort((a, b) => Number(a.order || 0) - Number(b.order || 0)) || [];
 
+        let loadedProgress = normalizeProgress({
+          totalLessons: allLessons.length,
+          completedLessons: 0,
+          progressPercentage: 0,
+          lessonProgress: [],
+          currentLessonId: null,
+        });
+
+        if (loadedAccessType === "student") {
+          const progressRes = await api.get(
+            `/progress/course/${loadedCourse._id}`,
+          );
+
+          loadedProgress = normalizeProgress(
+            getProgressFromResponse(progressRes),
+          );
+
+          const certResPromise = api
+            .get(`/certificates/course/${loadedCourse._id}`)
+            .then((certRes) => setCertificate(certRes.data.certificate || null))
+            .catch((error) => {
+              if (error.response?.status !== 404) {
+                console.error("Certificate fetch failed:", error);
+              }
+
+              setCertificate(null);
+            });
+
+          const notesResPromise = api
+            .get(`/notes/course/${loadedCourse._id}`)
+            .then((notesRes) => {
+              const notes = Array.isArray(notesRes.data.notes)
+                ? notesRes.data.notes
+                : [];
+
+              const noteMap = {};
+
+              notes.forEach((note) => {
+                if (note.lessonId) {
+                  noteMap[String(note.lessonId)] = note.content || "";
+                }
+              });
+
+              setNotesByLessonId(noteMap);
+            })
+            .catch((error) => {
+              console.error("FETCH_COURSE_NOTES_ERROR:", error);
+              setNotesByLessonId({});
+            });
+
+          await Promise.allSettled([certResPromise, notesResPromise]);
+        } else {
+          setCertificate(null);
+          setNotesByLessonId({});
+          setNoteContent("");
+          setNotesOpen(false);
+          setNoteEditMode(false);
+        }
+
+        setProgress(loadedProgress);
+
         const resumeLesson =
-          allLessons.find(
-            (lesson) =>
-              String(lesson._id) === String(loadedProgress.currentLessonId),
-          ) || allLessons[0];
+          loadedAccessType === "student"
+            ? allLessons.find(
+                (lesson) =>
+                  String(lesson._id) === String(loadedProgress.currentLessonId),
+              ) || allLessons[0]
+            : allLessons[0];
 
         setCurrentLesson(resumeLesson || null);
       } catch (error) {
@@ -790,9 +836,18 @@ ${noteContent.trim()}
   useEffect(() => {
     if (course && currentLesson) {
       loadSecureVideo(currentLesson);
-      loadLessonNote(currentLesson);
+
+      if (isStudentLearning) {
+        loadLessonNote(currentLesson);
+      } else {
+        setNoteContent("");
+        setNoteMessage("");
+        setNoteError("");
+        setNotesOpen(false);
+        setNoteEditMode(false);
+      }
     }
-  }, [course?._id, currentLesson?._id]);
+  }, [course?._id, currentLesson?._id, isStudentLearning]);
 
   useEffect(() => {
     return () => {
@@ -801,7 +856,7 @@ ${noteContent.trim()}
   }, []);
 
   const refreshProgress = async () => {
-    if (!course?._id) return;
+    if (!isStudentLearning || !course?._id) return;
 
     const progressRes = await api.get(`/progress/course/${course._id}`);
     const loadedProgress = getProgressFromResponse(progressRes);
@@ -821,6 +876,10 @@ ${noteContent.trim()}
       setLessonCompleteError("");
       setCertificateError("");
 
+      if (!isStudentLearning) {
+        return;
+      }
+
       await api.post("/progress/lesson", {
         courseId: course._id,
         lessonId: lesson._id,
@@ -834,7 +893,7 @@ ${noteContent.trim()}
   };
 
   const handleToggleLessonComplete = async () => {
-    if (!course?._id || !currentLesson?._id) return;
+    if (!isStudentLearning || !course?._id || !currentLesson?._id) return;
 
     const nextCompletedState = !currentLessonCompleted;
 
@@ -876,7 +935,7 @@ ${noteContent.trim()}
   };
 
   const handleSaveNote = async () => {
-    if (!course?._id || !currentLesson?._id) return;
+    if (!isStudentLearning || !course?._id || !currentLesson?._id) return;
 
     try {
       setNoteSaving(true);
@@ -921,7 +980,7 @@ ${noteContent.trim()}
   };
 
   const handleDeleteNote = async () => {
-    if (!course?._id || !currentLesson?._id) return;
+    if (!isStudentLearning || !course?._id || !currentLesson?._id) return;
 
     const confirmDelete = window.confirm(
       "Are you sure you want to delete this note?",
@@ -985,12 +1044,19 @@ ${noteContent.trim()}
   return (
     <main className="min-h-screen bg-slate-950 text-white">
       <section className="mx-auto max-w-[1600px] px-4 pb-8 pt-4 md:px-6">
+        {isAdminLearning && (
+          <div className="mb-4 rounded-2xl border border-blue-400/20 bg-blue-500/10 px-5 py-4 text-sm font-bold text-blue-200">
+            Admin preview mode: you are viewing your own course learning page.
+          </div>
+        )}
+
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_460px] xl:grid-cols-[minmax(0,1fr)_520px]">
           <div className="space-y-5">
             <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/5">
               {videoLoading ? (
                 <div className="flex aspect-video flex-col items-center justify-center bg-black text-slate-400">
                   <Loader2 className="animate-spin text-blue-400" size={36} />
+
                   <p className="mt-3 font-semibold">
                     Preparing secure video...
                   </p>
@@ -1005,7 +1071,7 @@ ${noteContent.trim()}
                   src={videoSource}
                   title={currentLesson?.title}
                   onEnded={() => {
-                    if (!currentLessonCompleted) {
+                    if (isStudentLearning && !currentLessonCompleted) {
                       handleToggleLessonComplete();
                     }
                   }}
@@ -1026,7 +1092,9 @@ ${noteContent.trim()}
                 </h2>
 
                 <p className="text-slate-400">
-                  Watch this lesson and continue through the course curriculum.
+                  {isAdminLearning
+                    ? "Preview your lesson, check resources, and reply to student comments."
+                    : "Watch this lesson and continue through the course curriculum."}
                 </p>
 
                 <div className="mt-5 grid gap-3 sm:grid-cols-3">
@@ -1045,49 +1113,51 @@ ${noteContent.trim()}
                     onClick={() => setActivePanel("resources")}
                   />
 
-                  <button
-                    type="button"
-                    onClick={handleToggleLessonComplete}
-                    disabled={updatingCompletion}
-                    className={`inline-flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-black transition ${
-                      currentLessonCompleted
-                        ? "border-green-400/30 bg-green-500/15 text-green-200 hover:bg-green-500/25"
-                        : "border-green-400/20 bg-green-500/10 text-green-100 hover:bg-green-500/20"
-                    } disabled:cursor-not-allowed disabled:opacity-80`}
-                  >
-                    {updatingCompletion ? (
-                      <Loader2 size={17} className="animate-spin" />
-                    ) : (
-                      <CheckCircle size={17} />
-                    )}
+                  {isStudentLearning && (
+                    <button
+                      type="button"
+                      onClick={handleToggleLessonComplete}
+                      disabled={updatingCompletion}
+                      className={`inline-flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-black transition ${
+                        currentLessonCompleted
+                          ? "border-green-400/30 bg-green-500/15 text-green-200 hover:bg-green-500/25"
+                          : "border-green-400/20 bg-green-500/10 text-green-100 hover:bg-green-500/20"
+                      } disabled:cursor-not-allowed disabled:opacity-80`}
+                    >
+                      {updatingCompletion ? (
+                        <Loader2 size={17} className="animate-spin" />
+                      ) : (
+                        <CheckCircle size={17} />
+                      )}
 
-                    {updatingCompletion
-                      ? "Updating..."
-                      : currentLessonCompleted
-                        ? "Completed"
-                        : "Mark Lesson"}
-                  </button>
+                      {updatingCompletion
+                        ? "Updating..."
+                        : currentLessonCompleted
+                          ? "Completed"
+                          : "Mark Lesson"}
+                    </button>
+                  )}
                 </div>
 
-                {lessonCompleteMessage && (
+                {isStudentLearning && lessonCompleteMessage && (
                   <div className="mt-4 rounded-2xl border border-green-500/20 bg-green-500/10 p-4 text-sm font-bold text-green-200">
                     {lessonCompleteMessage}
                   </div>
                 )}
 
-                {lessonCompleteError && (
+                {isStudentLearning && lessonCompleteError && (
                   <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm font-bold text-red-200">
                     {lessonCompleteError}
                   </div>
                 )}
 
-                {certificateError && (
+                {isStudentLearning && certificateError && (
                   <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm font-bold text-red-200">
                     {certificateError}
                   </div>
                 )}
 
-                {isCourseCompleted && (
+                {isStudentLearning && isCourseCompleted && (
                   <div className="mt-5 rounded-3xl border border-yellow-400/20 bg-yellow-500/10 p-5">
                     <div className="flex flex-wrap items-center justify-between gap-4">
                       <div className="flex items-start gap-3">
@@ -1181,26 +1251,28 @@ ${noteContent.trim()}
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={toggleNotesPanel}
-                  className={`relative flex h-12 w-12 items-center justify-center rounded-2xl border transition ${
-                    notesOpen
-                      ? "border-blue-400/50 bg-blue-500/15 text-blue-300"
-                      : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
-                  }`}
-                  title="Lesson notes"
-                >
-                  {notesOpen ? <X size={21} /> : <FileText size={21} />}
+                {isStudentLearning && (
+                  <button
+                    type="button"
+                    onClick={toggleNotesPanel}
+                    className={`relative flex h-12 w-12 items-center justify-center rounded-2xl border transition ${
+                      notesOpen
+                        ? "border-blue-400/50 bg-blue-500/15 text-blue-300"
+                        : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
+                    }`}
+                    title="Lesson notes"
+                  >
+                    {notesOpen ? <X size={21} /> : <FileText size={21} />}
 
-                  {hasCurrentLessonNote && !notesOpen && (
-                    <span className="absolute -right-1 -top-1 h-3 w-3 rounded-full bg-blue-400" />
-                  )}
-                </button>
+                    {hasCurrentLessonNote && !notesOpen && (
+                      <span className="absolute -right-1 -top-1 h-3 w-3 rounded-full bg-blue-400" />
+                    )}
+                  </button>
+                )}
               </div>
             </div>
 
-            {notesOpen && (
+            {isStudentLearning && notesOpen && (
               <div className="border-b border-white/10 bg-slate-950/80 p-5">
                 <div className="mb-4 flex items-center justify-between gap-3">
                   <p className="text-xs font-black uppercase tracking-[0.24em] text-blue-300">
@@ -1440,6 +1512,7 @@ React components help split UI into reusable parts.
                       return (
                         <button
                           key={lesson._id}
+                          type="button"
                           onClick={() =>
                             handleLessonClick(lesson, section.title)
                           }
@@ -1452,14 +1525,14 @@ React components help split UI into reusable parts.
                           <div className="flex items-start gap-3">
                             <div
                               className={`mt-1 shrink-0 ${
-                                isCompleted
+                                isStudentLearning && isCompleted
                                   ? "text-green-300"
                                   : isActive
                                     ? "text-blue-300"
                                     : "text-slate-400"
                               }`}
                             >
-                              {isCompleted ? (
+                              {isStudentLearning && isCompleted ? (
                                 <CheckCircle size={18} />
                               ) : (
                                 <PlayCircle size={18} />
@@ -1476,7 +1549,7 @@ React components help split UI into reusable parts.
                               </p>
                             </div>
 
-                            {lessonHasNote && (
+                            {isStudentLearning && lessonHasNote && (
                               <FileText
                                 size={18}
                                 className="mt-1 shrink-0 text-blue-300"

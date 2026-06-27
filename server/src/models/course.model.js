@@ -60,23 +60,40 @@ const lessonSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+
     resources: {
       type: [resourceSchema],
       default: [],
     },
+
     videoUrl: {
       type: String,
       required: true,
       trim: true,
     },
+
+    hlsManifestKey: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    hlsOutputPrefix: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
     duration: {
       type: String,
       default: "10:00",
     },
+
     isPreview: {
       type: Boolean,
       default: false,
     },
+
     order: {
       type: Number,
       required: true,
@@ -92,11 +109,16 @@ const sectionSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+
     order: {
       type: Number,
       required: true,
     },
-    lessons: [lessonSchema],
+
+    lessons: {
+      type: [lessonSchema],
+      default: [],
+    },
   },
   { _id: true },
 );
@@ -108,56 +130,79 @@ const courseSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+
     slug: {
       type: String,
       required: true,
       unique: true,
       lowercase: true,
       trim: true,
+      index: true,
     },
+
     description: {
       type: String,
       required: true,
     },
+
     shortDescription: {
       type: String,
       required: true,
     },
+
     thumbnail: {
       type: String,
       required: true,
     },
+
     instructorName: {
       type: String,
       required: true,
     },
+
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      index: true,
+    },
+
     price: {
       type: Number,
       required: true,
       default: 499,
     },
+
     category: {
       type: String,
       required: true,
+      trim: true,
     },
+
     level: {
       type: String,
       enum: ["Beginner", "Intermediate", "Advanced"],
       default: "Beginner",
     },
+
     trailerVideoUrl: {
       type: String,
       required: true,
     },
+
     isFeatured: {
       type: Boolean,
       default: false,
     },
+
     isPublished: {
       type: Boolean,
       default: true,
     },
-    sections: [sectionSchema],
+
+    sections: {
+      type: [sectionSchema],
+      default: [],
+    },
   },
   { timestamps: true },
 );

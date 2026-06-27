@@ -13,11 +13,11 @@ export const getMyCourses = async (req, res) => {
       .sort({ createdAt: -1 });
 
     const validEnrollments = enrollments.filter(
-      (enrollment) => enrollment.courseId
+      (enrollment) => enrollment.courseId,
     );
 
     const courseIds = validEnrollments.map(
-      (enrollment) => enrollment.courseId._id
+      (enrollment) => enrollment.courseId._id,
     );
 
     const completedProgress = await LessonProgress.find({
@@ -28,7 +28,9 @@ export const getMyCourses = async (req, res) => {
 
     const completedCountByCourse = completedProgress.reduce((acc, item) => {
       const courseId = item.courseId.toString();
+
       acc[courseId] = (acc[courseId] || 0) + 1;
+
       return acc;
     }, {});
 
@@ -60,13 +62,13 @@ export const getMyCourses = async (req, res) => {
       };
     });
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       count: courses.length,
       courses,
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Failed to fetch enrolled courses",
       error: error.message,
@@ -78,10 +80,15 @@ export const getLearningCourseBySlug = async (req, res) => {
   try {
     const { slug } = req.params;
 
-    const course = await Course.findOne({
-      slug,
-      isPublished: true,
-    });
+    const query = { slug };
+
+    // Student should access only published courses.
+    // Admin can preview his own course even if draft.
+    if (req.user.role === "student") {
+      query.isPublished = true;
+    }
+
+    const course = await Course.findOne(query);
 
     if (!course) {
       return res.status(404).json({
@@ -90,6 +97,44 @@ export const getLearningCourseBySlug = async (req, res) => {
       });
     }
 
+    /*
+      ADMIN ACCESS RULE:
+
+      1. If course already has createdBy:
+         admin can access only if createdBy === logged-in admin id.
+
+      2. If course has no createdBy:
+         this is an old course, so we auto-assign it to the logged-in admin.
+         This avoids using mongosh password.
+    */
+    if (req.user.role === "admin") {
+      if (!course.createdBy) {
+        course.createdBy = req.user._id;
+        await course.save();
+      }
+
+      const isAdminOwner =
+        course.createdBy.toString() === req.user._id.toString();
+
+      if (!isAdminOwner) {
+        return res.status(403).json({
+          success: false,
+          message: "You can access only courses created by you",
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        course,
+        enrollment: null,
+        accessType: "adminOwner",
+      });
+    }
+
+    /*
+      STUDENT ACCESS RULE:
+      Student must be enrolled.
+    */
     const enrollment = await Enrollment.findOne({
       userId: req.user._id,
       courseId: course._id,
@@ -102,13 +147,16 @@ export const getLearningCourseBySlug = async (req, res) => {
       });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       course,
       enrollment,
+      accessType: "student",
     });
   } catch (error) {
-    res.status(500).json({
+    console.error("GET_LEARNING_COURSE_ERROR:", error);
+
+    return res.status(500).json({
       success: false,
       message: "Failed to fetch learning course",
       error: error.message,
@@ -125,13 +173,13 @@ export const getEnrollmentStatus = async (req, res) => {
       courseId,
     });
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       isEnrolled: Boolean(enrollment),
       enrollment,
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Failed to check enrollment status",
       error: error.message,

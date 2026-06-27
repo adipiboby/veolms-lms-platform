@@ -212,6 +212,7 @@ const InfoItem = ({ icon: Icon, text, tone = "blue" }) => {
 
 const PurchaseCard = ({
   price,
+  isAdmin,
   isEnrolled,
   paymentLoading,
   paymentError,
@@ -221,24 +222,34 @@ const PurchaseCard = ({
   return (
     <div className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-black/30 backdrop-blur-xl">
       <p className="text-sm font-black uppercase tracking-[0.24em] text-blue-300">
-        Course Price
+        {isAdmin ? "Admin Access" : "Course Price"}
       </p>
 
       <h2 className="mt-4 break-words text-5xl font-black text-white">
-        {formatCurrency(price)}
+        {isAdmin ? "Preview" : formatCurrency(price)}
       </h2>
 
       <p className="mt-2 text-sm text-slate-400">
-        One-time payment. Lifetime course access.
+        {isAdmin
+          ? "Open your course learning page, watch lessons, and reply to student comments."
+          : "One-time payment. Lifetime course access."}
       </p>
 
-      {paymentError && (
+      {paymentError && !isAdmin && (
         <div className="mt-5 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm leading-6 text-red-100">
           {paymentError}
         </div>
       )}
 
-      {isEnrolled ? (
+      {isAdmin ? (
+        <button
+          type="button"
+          onClick={onContinue}
+          className="mt-6 w-full rounded-2xl bg-blue-600 px-6 py-4 text-center font-black text-white hover:bg-blue-700"
+        >
+          Open Learning Page
+        </button>
+      ) : isEnrolled ? (
         <button
           type="button"
           onClick={onContinue}
@@ -258,25 +269,55 @@ const PurchaseCard = ({
       )}
 
       <div className="mt-7 space-y-5">
-        <InfoItem
-          icon={ShieldCheck}
-          text="Secure payment and protected videos"
-          tone="green"
-        />
+        {isAdmin ? (
+          <>
+            <InfoItem
+              icon={ShieldCheck}
+              text="Admin can open the course without payment"
+              tone="green"
+            />
 
-        <InfoItem
-          icon={Award}
-          text="Certificate after completion"
-          tone="yellow"
-        />
+            <InfoItem
+              icon={Video}
+              text="Preview protected course videos"
+              tone="blue"
+            />
 
-        <InfoItem
-          icon={Star}
-          text="Lifetime access after enrollment"
-          tone="blue"
-        />
+            <InfoItem
+              icon={BookOpen}
+              text="Check lessons, curriculum, and resources"
+              tone="purple"
+            />
 
-        <InfoItem icon={Lock} text="Private video playback" tone="purple" />
+            <InfoItem
+              icon={ShieldCheck}
+              text="Reply to student lesson comments"
+              tone="yellow"
+            />
+          </>
+        ) : (
+          <>
+            <InfoItem
+              icon={ShieldCheck}
+              text="Secure payment and protected videos"
+              tone="green"
+            />
+
+            <InfoItem
+              icon={Award}
+              text="Certificate after completion"
+              tone="yellow"
+            />
+
+            <InfoItem
+              icon={Star}
+              text="Lifetime access after enrollment"
+              tone="blue"
+            />
+
+            <InfoItem icon={Lock} text="Private video playback" tone="purple" />
+          </>
+        )}
       </div>
     </div>
   );
@@ -297,6 +338,8 @@ const CourseDetailsPage = () => {
   const [paymentError, setPaymentError] = useState("");
 
   const [lessonSearch, setLessonSearch] = useState("");
+
+  const isAdmin = user?.role === "admin";
 
   const lessons = useMemo(() => getCourseLessons(course), [course]);
 
@@ -354,6 +397,11 @@ const CourseDetailsPage = () => {
 
       const courseId = loadedCourse?._id;
 
+      if (user?.role === "admin") {
+        setIsEnrolled(false);
+        return;
+      }
+
       if (courseId && isAuthenticated) {
         try {
           const enrollmentRes = await tryApiGet([
@@ -384,7 +432,7 @@ const CourseDetailsPage = () => {
 
   useEffect(() => {
     fetchCourseDetails();
-  }, [slug, isAuthenticated]);
+  }, [slug, isAuthenticated, user?.role]);
 
   const handleFreeEnrollment = async () => {
     await tryApiPost(
@@ -404,7 +452,14 @@ const CourseDetailsPage = () => {
   };
 
   const handleContinue = () => {
-    navigate(`/learn/${course?.slug}`);
+    if (!course?.slug) return;
+
+    if (!isAuthenticated) {
+      navigate("/login");
+      return;
+    }
+
+    navigate(`/learn/${course.slug}`);
   };
 
   const handleBuyNow = async () => {
@@ -416,9 +471,7 @@ const CourseDetailsPage = () => {
     }
 
     if (user?.role === "admin") {
-      setPaymentError(
-        "Admin users cannot purchase courses. Please use a student account.",
-      );
+      handleContinue();
       return;
     }
 
@@ -566,11 +619,11 @@ const CourseDetailsPage = () => {
       <main className="min-h-screen overflow-x-hidden bg-slate-950 p-6 text-white">
         <section className="mx-auto max-w-4xl">
           <Link
-            to="/courses"
+            to={isAdmin ? "/admin/courses" : "/courses"}
             className="mb-6 inline-flex items-center gap-2 text-slate-300 hover:text-white"
           >
             <ArrowLeft size={18} />
-            Back to courses
+            {isAdmin ? "Back to admin courses" : "Back to courses"}
           </Link>
 
           <div className="rounded-3xl border border-red-500/30 bg-red-500/10 p-8">
@@ -601,12 +654,19 @@ const CourseDetailsPage = () => {
 
         <div className="relative mx-auto max-w-7xl px-4 py-6 md:py-10">
           <Link
-            to="/courses"
+            to={isAdmin ? "/admin/courses" : "/courses"}
             className="mb-5 inline-flex items-center gap-2 text-sm font-bold text-slate-300 hover:text-white"
           >
             <ArrowLeft size={18} />
-            Back to courses
+            {isAdmin ? "Back to admin courses" : "Back to courses"}
           </Link>
+
+          {isAdmin && (
+            <div className="mb-5 rounded-2xl border border-blue-400/20 bg-blue-500/10 px-5 py-4 text-sm font-bold leading-6 text-blue-200">
+              Admin mode: you can open the learning page without buying. Backend
+              will allow access only for courses created by your admin account.
+            </div>
+          )}
 
           <div className="min-w-0">
             <div className="mb-4 flex flex-wrap gap-3">
@@ -701,6 +761,7 @@ const CourseDetailsPage = () => {
             <aside className="hidden lg:block">
               <PurchaseCard
                 price={price}
+                isAdmin={isAdmin}
                 isEnrolled={isEnrolled}
                 paymentLoading={paymentLoading}
                 paymentError={paymentError}
@@ -713,7 +774,7 @@ const CourseDetailsPage = () => {
       </section>
 
       <section className="mx-auto max-w-7xl px-4 py-8 md:py-10">
-        {paymentError && (
+        {paymentError && !isAdmin && (
           <div className="mb-6 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm leading-6 text-red-100 lg:hidden">
             {paymentError}
           </div>
@@ -846,9 +907,9 @@ const CourseDetailsPage = () => {
                               </div>
                             </div>
 
-                            {lesson.isPreview ? (
+                            {lesson.isPreview || isAdmin ? (
                               <span className="shrink-0 rounded-full border border-green-500/20 bg-green-500/10 px-3 py-1 text-xs font-black text-green-300">
-                                Preview
+                                {isAdmin ? "Accessible" : "Preview"}
                               </span>
                             ) : (
                               <Lock
@@ -921,7 +982,7 @@ const CourseDetailsPage = () => {
       </section>
 
       <div className="fixed bottom-0 left-0 right-0 z-[80] border-t border-white/10 bg-slate-950/95 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-2xl shadow-black backdrop-blur-xl lg:hidden">
-        {paymentError && (
+        {paymentError && !isAdmin && (
           <div className="mx-auto mb-3 max-w-7xl rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm leading-6 text-red-100">
             {paymentError}
           </div>
@@ -930,15 +991,23 @@ const CourseDetailsPage = () => {
         <div className="mx-auto flex max-w-7xl items-center gap-3">
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">
-              Price
+              {isAdmin ? "Access" : "Price"}
             </p>
 
             <p className="truncate text-2xl font-black text-white">
-              {formatCurrency(price)}
+              {isAdmin ? "Admin Preview" : formatCurrency(price)}
             </p>
           </div>
 
-          {isEnrolled ? (
+          {isAdmin ? (
+            <button
+              type="button"
+              onClick={handleContinue}
+              className="shrink-0 rounded-2xl bg-blue-600 px-6 py-4 text-sm font-black text-white hover:bg-blue-700"
+            >
+              Open Course
+            </button>
+          ) : isEnrolled ? (
             <button
               type="button"
               onClick={handleContinue}
