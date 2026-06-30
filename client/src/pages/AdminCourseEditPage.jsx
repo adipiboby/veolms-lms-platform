@@ -1,13 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   AlertCircle,
   ArrowLeft,
   BookOpen,
   CheckCircle,
+  ChevronDown,
+  ChevronRight,
+  Clock,
   Eye,
   EyeOff,
   FileText,
+  FileVideo,
   Image,
   Layers,
   Loader2,
@@ -19,6 +23,7 @@ import {
 
 import { api } from "../services/api";
 import LessonResourceManager from "../components/admin/LessonResourceManager";
+import VideoUploadField from "../components/admin/VideoUploadField";
 
 const createTempId = () => {
   return `temp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
@@ -26,6 +31,16 @@ const createTempId = () => {
 
 const normalizeArray = (value) => {
   return Array.isArray(value) ? value : [];
+};
+
+const normalizeObjectId = (value) => {
+  if (!value) return null;
+
+  if (typeof value === "object") {
+    return value._id || null;
+  }
+
+  return String(value);
 };
 
 const normalizeCourse = (courseData) => {
@@ -40,10 +55,17 @@ const normalizeCourse = (courseData) => {
         _id: lesson?._id || createTempId(),
         title: lesson?.title || "",
         duration: lesson?.duration || "",
+        durationSeconds: Number(lesson?.durationSeconds || 0),
         order: Number(lesson?.order ?? lessonIndex + 1),
         isPreview: Boolean(lesson?.isPreview),
         videoUrl: lesson?.videoUrl || lesson?.lessonUrl || "",
-        videoKey: lesson?.videoKey || lesson?.fileKey || "",
+        videoKey: lesson?.videoKey || lesson?.fileKey || lesson?.videoUrl || "",
+        videoAssetId: normalizeObjectId(lesson?.videoAssetId),
+        hlsManifestKey: lesson?.hlsManifestKey || "",
+        hlsOutputPrefix: lesson?.hlsOutputPrefix || "",
+        originalVideoName: lesson?.originalVideoName || "",
+        sizeBytes: Number(lesson?.sizeBytes || 0),
+        mimeType: lesson?.mimeType || "",
         description: lesson?.description || "",
         resources: normalizeArray(lesson?.resources),
       })),
@@ -55,14 +77,15 @@ const normalizeCourse = (courseData) => {
     title: courseData?.title || "",
     slug: courseData?.slug || "",
     category: courseData?.category || "",
-    instructor: courseData?.instructor || "",
+    instructorName: courseData?.instructorName || courseData?.instructor || "",
     level: courseData?.level || "Beginner",
     price: Number(courseData?.price || 0),
     thumbnail: courseData?.thumbnail || "",
-    trailer: courseData?.trailer || "",
+    trailerVideoUrl: courseData?.trailerVideoUrl || courseData?.trailer || "",
     shortDescription:
       courseData?.shortDescription || courseData?.short_description || "",
     description: courseData?.description || "",
+    isFeatured: Boolean(courseData?.isFeatured),
     isPublished: Boolean(courseData?.isPublished ?? courseData?.published),
     sections,
   };
@@ -95,19 +118,35 @@ const buildCoursePayload = (course) => {
     title: course.title,
     slug: course.slug,
     category: course.category,
-    instructor: course.instructor,
+    instructorName: course.instructorName,
+    instructor: course.instructorName,
     level: course.level,
     price: Number(course.price || 0),
     thumbnail: course.thumbnail,
-    trailer: course.trailer,
+    trailerVideoUrl: course.trailerVideoUrl,
+    trailer: course.trailerVideoUrl,
     shortDescription: course.shortDescription,
     description: course.description,
+    isFeatured: Boolean(course.isFeatured),
     isPublished: Boolean(course.isPublished),
     sections: normalizeArray(course.sections).map((section, sectionIndex) => ({
       ...section,
+      title: section.title,
       order: Number(section.order || sectionIndex + 1),
       lessons: normalizeArray(section.lessons).map((lesson, lessonIndex) => ({
         ...lesson,
+        title: lesson.title,
+        videoUrl: lesson.videoUrl,
+        videoKey: lesson.videoKey || lesson.videoUrl || "",
+        videoAssetId: normalizeObjectId(lesson.videoAssetId),
+        hlsManifestKey: lesson.hlsManifestKey || "",
+        hlsOutputPrefix: lesson.hlsOutputPrefix || "",
+        duration: lesson.duration || "",
+        durationSeconds: Number(lesson.durationSeconds || 0),
+        originalVideoName: lesson.originalVideoName || "",
+        sizeBytes: Number(lesson.sizeBytes || 0),
+        mimeType: lesson.mimeType || "",
+        description: lesson.description || "",
         order: Number(lesson.order || lessonIndex + 1),
         isPreview: Boolean(lesson.isPreview),
         resources: normalizeArray(lesson.resources),
@@ -129,55 +168,29 @@ const getCourseFromResponse = (response) => {
 };
 
 const tryGetCourse = async (identifier) => {
-  const endpoints = [
-    `/courses/${identifier}`,
-    `/courses/slug/${identifier}`,
-    `/admin/courses/${identifier}`,
-  ];
-
-  let lastError = null;
-
-  for (const endpoint of endpoints) {
-    try {
-      const response = await api.get(endpoint);
-      return response;
-    } catch (error) {
-      lastError = error;
-
-      if (error?.response?.status !== 404) {
-        throw error;
-      }
-    }
-  }
-
-  throw lastError;
+  return api.get(`/courses/admin/${identifier}`);
 };
 
 const tryUpdateCourse = async ({ courseId, payload }) => {
-  const requests = [
-    () => api.put(`/courses/${courseId}`, payload),
-    () => api.patch(`/courses/${courseId}`, payload),
-    () => api.put(`/admin/courses/${courseId}`, payload),
-    () => api.patch(`/admin/courses/${courseId}`, payload),
-  ];
+  try {
+    return await api.put(`/courses/admin/${courseId}`, payload);
+  } catch (putError) {
+    const status = putError?.response?.status;
 
-  let lastError = null;
-
-  for (const request of requests) {
-    try {
-      return await request();
-    } catch (error) {
-      lastError = error;
-
-      const status = error?.response?.status;
-
-      if (![404, 405].includes(status)) {
-        throw error;
-      }
+    if (status === 404 || status === 405) {
+      return await api.patch(`/courses/admin/${courseId}`, payload);
     }
-  }
 
-  throw lastError;
+    throw putError;
+  }
+};
+
+const formatSizeMB = (sizeBytes) => {
+  const size = Number(sizeBytes || 0);
+
+  if (size <= 0) return "";
+
+  return `${(size / 1024 / 1024).toFixed(2)} MB`;
 };
 
 const Field = ({
@@ -188,6 +201,7 @@ const Field = ({
   type = "text",
   textarea = false,
   rows = 4,
+  required = false,
 }) => {
   return (
     <label className="block">
@@ -198,6 +212,7 @@ const Field = ({
           value={value}
           onChange={(event) => onChange(event.target.value)}
           rows={rows}
+          required={required}
           placeholder={placeholder}
           className="mt-2 w-full resize-none rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-blue-400/50"
         />
@@ -206,6 +221,7 @@ const Field = ({
           type={type}
           value={value}
           onChange={(event) => onChange(event.target.value)}
+          required={required}
           placeholder={placeholder}
           className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-blue-400/50"
         />
@@ -222,12 +238,75 @@ const AdminCourseEditPage = () => {
     params.id || params.courseId || params.slug || params.courseSlug;
 
   const [course, setCourse] = useState(null);
-
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [toast, setToast] = useState("");
+  const [highlightedLessonKey, setHighlightedLessonKey] = useState("");
+  const [openLessonKey, setOpenLessonKey] = useState("");
+
+  const lessonRefs = useRef({});
+  const toastTimerRef = useRef(null);
+  const highlightTimerRef = useRef(null);
+
+  const getLessonRefKey = (sectionIndex, lessonIndex) => {
+    return `${sectionIndex}-${lessonIndex}`;
+  };
+
+  const showToast = (text) => {
+    setToast(text);
+
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current);
+    }
+
+    toastTimerRef.current = window.setTimeout(() => {
+      setToast("");
+    }, 3000);
+  };
+
+  const scrollToLesson = (sectionIndex, lessonIndex) => {
+    window.setTimeout(() => {
+      const key = getLessonRefKey(sectionIndex, lessonIndex);
+      const element = lessonRefs.current[key];
+
+      if (!element) return;
+
+      element.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }, 150);
+  };
+
+  const highlightLesson = (sectionIndex, lessonIndex) => {
+    const key = getLessonRefKey(sectionIndex, lessonIndex);
+
+    setHighlightedLessonKey(key);
+
+    if (highlightTimerRef.current) {
+      window.clearTimeout(highlightTimerRef.current);
+    }
+
+    highlightTimerRef.current = window.setTimeout(() => {
+      setHighlightedLessonKey("");
+    }, 2500);
+  };
+
+  const toggleLesson = (sectionIndex, lessonIndex) => {
+    const key = getLessonRefKey(sectionIndex, lessonIndex);
+
+    setOpenLessonKey((currentKey) => {
+      const nextKey = currentKey === key ? "" : key;
+
+      if (nextKey) {
+        scrollToLesson(sectionIndex, lessonIndex);
+      }
+
+      return nextKey;
+    });
+  };
 
   const totalLessons = useMemo(() => {
     return normalizeArray(course?.sections).reduce((total, section) => {
@@ -253,7 +332,7 @@ const AdminCourseEditPage = () => {
 
         return {
           ...section,
-          [field]: value,
+          [field]: field === "order" ? Number(value) : value,
         };
       }),
     }));
@@ -275,7 +354,53 @@ const AdminCourseEditPage = () => {
 
             return {
               ...lesson,
-              [field]: value,
+              [field]:
+                field === "order"
+                  ? Number(value)
+                  : field === "isPreview"
+                    ? Boolean(value)
+                    : value,
+            };
+          }),
+        };
+      }),
+    }));
+
+    setMessage("");
+    setError("");
+  };
+
+  const handleLessonVideoMeta = (sectionIndex, lessonIndex, metadata) => {
+    setCourse((previousCourse) => ({
+      ...previousCourse,
+      sections: previousCourse.sections.map((section, currentSectionIndex) => {
+        if (currentSectionIndex !== sectionIndex) return section;
+
+        return {
+          ...section,
+          lessons: section.lessons.map((lesson, currentLessonIndex) => {
+            if (currentLessonIndex !== lessonIndex) return lesson;
+
+            return {
+              ...lesson,
+              title: lesson.title?.trim()
+                ? lesson.title
+                : metadata.title || lesson.title,
+              duration: metadata.duration || lesson.duration,
+              durationSeconds:
+                metadata.durationSeconds || lesson.durationSeconds || 0,
+              originalVideoName:
+                metadata.originalVideoName || lesson.originalVideoName || "",
+              sizeBytes: metadata.sizeBytes || lesson.sizeBytes || 0,
+              mimeType: metadata.mimeType || lesson.mimeType || "",
+              videoKey: metadata.videoKey || lesson.videoKey || "",
+              videoUrl: metadata.videoUrl || lesson.videoUrl || "",
+              videoAssetId:
+                metadata.videoAssetId || lesson.videoAssetId || null,
+              hlsManifestKey:
+                metadata.hlsManifestKey || lesson.hlsManifestKey || "",
+              hlsOutputPrefix:
+                metadata.hlsOutputPrefix || lesson.hlsOutputPrefix || "",
             };
           }),
         };
@@ -322,6 +447,8 @@ const AdminCourseEditPage = () => {
         },
       ],
     }));
+
+    showToast("Section added successfully.");
   };
 
   const removeSection = (sectionIndex) => {
@@ -333,13 +460,23 @@ const AdminCourseEditPage = () => {
 
     setCourse((previousCourse) => ({
       ...previousCourse,
-      sections: previousCourse.sections.filter(
-        (_, index) => index !== sectionIndex,
-      ),
+      sections: previousCourse.sections
+        .filter((_, index) => index !== sectionIndex)
+        .map((section, index) => ({
+          ...section,
+          order: index + 1,
+        })),
     }));
+
+    showToast("Section removed.");
   };
 
   const addLesson = (sectionIndex) => {
+    const nextLessonIndex = normalizeArray(
+      course?.sections?.[sectionIndex]?.lessons,
+    ).length;
+    const newLessonKey = getLessonRefKey(sectionIndex, nextLessonIndex);
+
     setCourse((previousCourse) => ({
       ...previousCourse,
       sections: previousCourse.sections.map((section, index) => {
@@ -353,10 +490,17 @@ const AdminCourseEditPage = () => {
               _id: createTempId(),
               title: "",
               duration: "",
+              durationSeconds: 0,
               order: normalizeArray(section.lessons).length + 1,
               isPreview: false,
               videoUrl: "",
               videoKey: "",
+              videoAssetId: null,
+              hlsManifestKey: "",
+              hlsOutputPrefix: "",
+              originalVideoName: "",
+              sizeBytes: 0,
+              mimeType: "",
               description: "",
               resources: [],
             },
@@ -364,6 +508,11 @@ const AdminCourseEditPage = () => {
         };
       }),
     }));
+
+    setOpenLessonKey(newLessonKey);
+    showToast(`Lesson ${nextLessonIndex + 1} added successfully.`);
+    scrollToLesson(sectionIndex, nextLessonIndex);
+    highlightLesson(sectionIndex, nextLessonIndex);
   };
 
   const removeLesson = (sectionIndex, lessonIndex) => {
@@ -373,6 +522,8 @@ const AdminCourseEditPage = () => {
 
     if (!confirmDelete) return;
 
+    const removedLessonKey = getLessonRefKey(sectionIndex, lessonIndex);
+
     setCourse((previousCourse) => ({
       ...previousCourse,
       sections: previousCourse.sections.map((section, index) => {
@@ -380,12 +531,23 @@ const AdminCourseEditPage = () => {
 
         return {
           ...section,
-          lessons: section.lessons.filter(
-            (_, currentLessonIndex) => currentLessonIndex !== lessonIndex,
-          ),
+          lessons: section.lessons
+            .filter(
+              (_, currentLessonIndex) => currentLessonIndex !== lessonIndex,
+            )
+            .map((lesson, currentIndex) => ({
+              ...lesson,
+              order: currentIndex + 1,
+            })),
         };
       }),
     }));
+
+    if (openLessonKey === removedLessonKey) {
+      setOpenLessonKey("");
+    }
+
+    showToast("Lesson removed.");
   };
 
   const fetchCourse = async () => {
@@ -405,7 +567,12 @@ const AdminCourseEditPage = () => {
         throw new Error("Course not found.");
       }
 
-      setCourse(normalizeCourse(loadedCourse));
+      const normalizedCourse = normalizeCourse(loadedCourse);
+
+      setCourse(normalizedCourse);
+      // Keep all existing lessons collapsed by default.
+      // Admin will see Lesson 1, Lesson 2, Lesson 3 rows and can click to open details.
+      setOpenLessonKey("");
     } catch (fetchError) {
       console.error("ADMIN_COURSE_EDIT_FETCH_ERROR:", fetchError);
 
@@ -441,6 +608,7 @@ const AdminCourseEditPage = () => {
       }
 
       setMessage("Course updated successfully.");
+      showToast("Course saved successfully.");
     } catch (saveError) {
       console.error("ADMIN_COURSE_EDIT_SAVE_ERROR:", saveError);
 
@@ -452,6 +620,18 @@ const AdminCourseEditPage = () => {
       setSaving(false);
     }
   };
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) {
+        window.clearTimeout(toastTimerRef.current);
+      }
+
+      if (highlightTimerRef.current) {
+        window.clearTimeout(highlightTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     fetchCourse();
@@ -503,6 +683,12 @@ const AdminCourseEditPage = () => {
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-8 text-white">
+      {toast && (
+        <div className="fixed right-5 top-5 z-[999] rounded-2xl border border-green-500/30 bg-green-500/10 px-5 py-4 text-sm font-black text-green-200 shadow-2xl backdrop-blur">
+          {toast}
+        </div>
+      )}
+
       <section className="mx-auto max-w-[1500px]">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -517,7 +703,8 @@ const AdminCourseEditPage = () => {
             <h1 className="text-3xl font-black md:text-4xl">Edit Course</h1>
 
             <p className="mt-2 text-slate-400">
-              Update course details, lessons, videos, and lesson resources.
+              Lessons are shown like Lesson 1, Lesson 2. Click a lesson to edit
+              its full details.
             </p>
           </div>
 
@@ -582,6 +769,7 @@ const AdminCourseEditPage = () => {
                   value={course.title}
                   onChange={(value) => updateCourseField("title", value)}
                   placeholder="Example: Full Stack LMS Course"
+                  required
                 />
 
                 <Field
@@ -589,6 +777,7 @@ const AdminCourseEditPage = () => {
                   value={course.slug}
                   onChange={(value) => updateCourseField("slug", value)}
                   placeholder="example-course-slug"
+                  required
                 />
 
                 <Field
@@ -596,13 +785,17 @@ const AdminCourseEditPage = () => {
                   value={course.category}
                   onChange={(value) => updateCourseField("category", value)}
                   placeholder="Web Development"
+                  required
                 />
 
                 <Field
-                  label="Instructor"
-                  value={course.instructor}
-                  onChange={(value) => updateCourseField("instructor", value)}
+                  label="Instructor Name"
+                  value={course.instructorName}
+                  onChange={(value) =>
+                    updateCourseField("instructorName", value)
+                  }
                   placeholder="Instructor name"
+                  required
                 />
 
                 <label className="block">
@@ -629,6 +822,7 @@ const AdminCourseEditPage = () => {
                   value={course.price}
                   onChange={(value) => updateCourseField("price", value)}
                   placeholder="899"
+                  required
                 />
 
                 <Field
@@ -636,13 +830,17 @@ const AdminCourseEditPage = () => {
                   value={course.thumbnail}
                   onChange={(value) => updateCourseField("thumbnail", value)}
                   placeholder="https://..."
+                  required
                 />
 
                 <Field
-                  label="Trailer URL"
-                  value={course.trailer}
-                  onChange={(value) => updateCourseField("trailer", value)}
+                  label="Trailer Video URL"
+                  value={course.trailerVideoUrl}
+                  onChange={(value) =>
+                    updateCourseField("trailerVideoUrl", value)
+                  }
                   placeholder="https://..."
+                  required
                 />
               </div>
 
@@ -656,6 +854,7 @@ const AdminCourseEditPage = () => {
                   placeholder="Short course summary"
                   textarea
                   rows={3}
+                  required
                 />
 
                 <Field
@@ -665,46 +864,64 @@ const AdminCourseEditPage = () => {
                   placeholder="Detailed course description"
                   textarea
                   rows={6}
+                  required
                 />
               </div>
 
-              <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-slate-950/50 p-4">
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`flex h-11 w-11 items-center justify-center rounded-2xl ${
+              <div className="mt-5 grid gap-4 md:grid-cols-2">
+                <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(course.isFeatured)}
+                    onChange={(event) =>
+                      updateCourseField("isFeatured", event.target.checked)
+                    }
+                    className="h-5 w-5 accent-blue-600"
+                  />
+
+                  <span className="font-bold text-slate-200">
+                    Featured Course
+                  </span>
+                </label>
+
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`flex h-11 w-11 items-center justify-center rounded-2xl ${
+                        course.isPublished
+                          ? "bg-green-500/10 text-green-300"
+                          : "bg-slate-500/10 text-slate-300"
+                      }`}
+                    >
+                      {course.isPublished ? (
+                        <Eye size={22} />
+                      ) : (
+                        <EyeOff size={22} />
+                      )}
+                    </div>
+
+                    <div>
+                      <p className="font-black text-white">Publish Status</p>
+                      <p className="text-sm text-slate-400">
+                        Published courses are visible to students.
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateCourseField("isPublished", !course.isPublished)
+                    }
+                    className={`rounded-2xl px-5 py-3 font-black ${
                       course.isPublished
-                        ? "bg-green-500/10 text-green-300"
-                        : "bg-slate-500/10 text-slate-300"
+                        ? "bg-green-600 text-white hover:bg-green-700"
+                        : "bg-slate-700 text-white hover:bg-slate-600"
                     }`}
                   >
-                    {course.isPublished ? (
-                      <Eye size={22} />
-                    ) : (
-                      <EyeOff size={22} />
-                    )}
-                  </div>
-
-                  <div>
-                    <p className="font-black text-white">Publish Status</p>
-                    <p className="text-sm text-slate-400">
-                      Published courses are visible to students.
-                    </p>
-                  </div>
+                    {course.isPublished ? "Published" : "Draft"}
+                  </button>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    updateCourseField("isPublished", !course.isPublished)
-                  }
-                  className={`rounded-2xl px-5 py-3 font-black ${
-                    course.isPublished
-                      ? "bg-green-600 text-white hover:bg-green-700"
-                      : "bg-slate-700 text-white hover:bg-slate-600"
-                  }`}
-                >
-                  {course.isPublished ? "Published" : "Draft"}
-                </button>
               </div>
             </section>
 
@@ -718,7 +935,7 @@ const AdminCourseEditPage = () => {
                   <div>
                     <h2 className="text-2xl font-black">Course Curriculum</h2>
                     <p className="text-sm text-slate-400">
-                      Manage sections, lessons, videos, and resources.
+                      Click each lesson row to open or close its full details.
                     </p>
                   </div>
                 </div>
@@ -757,6 +974,7 @@ const AdminCourseEditPage = () => {
                               updateSectionField(sectionIndex, "title", value)
                             }
                             placeholder="Example: Getting Started"
+                            required
                           />
                         </div>
 
@@ -769,6 +987,7 @@ const AdminCourseEditPage = () => {
                               updateSectionField(sectionIndex, "order", value)
                             }
                             placeholder="1"
+                            required
                           />
                         </div>
 
@@ -800,8 +1019,13 @@ const AdminCourseEditPage = () => {
                           No lessons in this section.
                         </div>
                       ) : (
-                        <div className="space-y-5">
+                        <div className="space-y-3">
                           {section.lessons.map((lesson, lessonIndex) => {
+                            const lessonKey = getLessonRefKey(
+                              sectionIndex,
+                              lessonIndex,
+                            );
+                            const isOpen = openLessonKey === lessonKey;
                             const hasRealLessonId =
                               lesson?._id &&
                               !String(lesson._id).startsWith("temp_");
@@ -809,186 +1033,332 @@ const AdminCourseEditPage = () => {
                             return (
                               <div
                                 key={lesson._id || lessonIndex}
-                                className="rounded-3xl border border-white/10 bg-white/[0.03] p-5"
+                                ref={(element) => {
+                                  if (element) {
+                                    lessonRefs.current[lessonKey] = element;
+                                  }
+                                }}
+                                className={`scroll-mt-28 overflow-hidden rounded-3xl border transition-all duration-300 ${
+                                  highlightedLessonKey === lessonKey
+                                    ? "border-green-400/60 bg-green-500/10 ring-2 ring-green-400/20"
+                                    : "border-white/10 bg-white/[0.03]"
+                                }`}
                               >
-                                <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-                                  <div className="flex items-center gap-3">
-                                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-300">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    toggleLesson(sectionIndex, lessonIndex)
+                                  }
+                                  className="flex w-full flex-wrap items-center justify-between gap-3 px-5 py-4 text-left hover:bg-white/[0.04]"
+                                >
+                                  <div className="flex min-w-0 items-center gap-3">
+                                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-300">
                                       <Video size={22} />
                                     </div>
 
-                                    <div>
-                                      <h4 className="font-black text-white">
-                                        Lesson {lessonIndex + 1}
-                                      </h4>
+                                    <div className="min-w-0">
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <h4 className="font-black text-white">
+                                          Lesson {lessonIndex + 1}
+                                        </h4>
 
-                                      <p className="text-sm text-slate-500">
-                                        {hasRealLessonId
-                                          ? "Saved lesson"
-                                          : "New lesson. Save course before uploading resources."}
+                                        {lesson.isPreview && (
+                                          <span className="rounded-full border border-blue-400/20 bg-blue-500/10 px-2 py-0.5 text-[11px] font-black text-blue-200">
+                                            Preview
+                                          </span>
+                                        )}
+
+                                        {lesson.videoUrl ? (
+                                          <span className="rounded-full border border-green-400/20 bg-green-500/10 px-2 py-0.5 text-[11px] font-black text-green-200">
+                                            Video Added
+                                          </span>
+                                        ) : (
+                                          <span className="rounded-full border border-yellow-400/20 bg-yellow-500/10 px-2 py-0.5 text-[11px] font-black text-yellow-200">
+                                            No Video
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      <p className="mt-1 truncate text-sm text-slate-400">
+                                        {lesson.title?.trim() ||
+                                          "Click to add lesson details"}
                                       </p>
                                     </div>
                                   </div>
 
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      removeLesson(sectionIndex, lessonIndex)
-                                    }
-                                    className="inline-flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm font-bold text-red-200 hover:bg-red-500/20"
-                                  >
-                                    <Trash2 size={16} />
-                                    Remove Lesson
-                                  </button>
-                                </div>
+                                  <div className="flex items-center gap-3">
+                                    {lesson.duration && (
+                                      <span className="hidden items-center gap-1 text-xs font-bold text-slate-400 sm:inline-flex">
+                                        <Clock size={14} />
+                                        {lesson.duration}
+                                      </span>
+                                    )}
 
-                                <div className="grid gap-4 md:grid-cols-2">
-                                  <Field
-                                    label="Lesson Title"
-                                    value={lesson.title}
-                                    onChange={(value) =>
-                                      updateLessonField(
-                                        sectionIndex,
-                                        lessonIndex,
-                                        "title",
-                                        value,
-                                      )
-                                    }
-                                    placeholder="Example: React Components"
-                                  />
+                                    {isOpen ? (
+                                      <ChevronDown
+                                        size={22}
+                                        className="text-slate-300"
+                                      />
+                                    ) : (
+                                      <ChevronRight
+                                        size={22}
+                                        className="text-slate-300"
+                                      />
+                                    )}
+                                  </div>
+                                </button>
 
-                                  <Field
-                                    label="Duration"
-                                    value={lesson.duration}
-                                    onChange={(value) =>
-                                      updateLessonField(
-                                        sectionIndex,
-                                        lessonIndex,
-                                        "duration",
-                                        value,
-                                      )
-                                    }
-                                    placeholder="20:00"
-                                  />
+                                {isOpen && (
+                                  <div className="border-t border-white/10 p-5">
+                                    <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+                                      <div>
+                                        <p className="font-black text-white">
+                                          Lesson {lessonIndex + 1} Details
+                                        </p>
 
-                                  <Field
-                                    label="Order"
-                                    type="number"
-                                    value={lesson.order}
-                                    onChange={(value) =>
-                                      updateLessonField(
-                                        sectionIndex,
-                                        lessonIndex,
-                                        "order",
-                                        value,
-                                      )
-                                    }
-                                    placeholder="1"
-                                  />
+                                        <p className="text-sm text-slate-500">
+                                          {hasRealLessonId
+                                            ? "Saved lesson"
+                                            : "New lesson. Save course before uploading resources."}
+                                        </p>
+                                      </div>
 
-                                  <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-950 px-4 py-3">
-                                    <input
-                                      type="checkbox"
-                                      checked={Boolean(lesson.isPreview)}
-                                      onChange={(event) =>
-                                        updateLessonField(
-                                          sectionIndex,
-                                          lessonIndex,
-                                          "isPreview",
-                                          event.target.checked,
-                                        )
-                                      }
-                                      className="h-5 w-5 accent-blue-600"
-                                    />
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          removeLesson(
+                                            sectionIndex,
+                                            lessonIndex,
+                                          )
+                                        }
+                                        className="inline-flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm font-bold text-red-200 hover:bg-red-500/20"
+                                      >
+                                        <Trash2 size={16} />
+                                        Remove Lesson
+                                      </button>
+                                    </div>
 
-                                    <span className="font-bold text-slate-200">
-                                      Free Preview Lesson
-                                    </span>
-                                  </label>
+                                    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
+                                      <div>
+                                        <div className="grid gap-4 md:grid-cols-2">
+                                          <Field
+                                            label="Lesson Title"
+                                            value={lesson.title}
+                                            onChange={(value) =>
+                                              updateLessonField(
+                                                sectionIndex,
+                                                lessonIndex,
+                                                "title",
+                                                value,
+                                              )
+                                            }
+                                            placeholder="Auto-filled from video name"
+                                            required
+                                          />
 
-                                  <Field
-                                    label="Video URL"
-                                    value={lesson.videoUrl}
-                                    onChange={(value) =>
-                                      updateLessonField(
-                                        sectionIndex,
-                                        lessonIndex,
-                                        "videoUrl",
-                                        value,
-                                      )
-                                    }
-                                    placeholder="https://..."
-                                  />
+                                          <Field
+                                            label="Duration"
+                                            value={lesson.duration}
+                                            onChange={(value) =>
+                                              updateLessonField(
+                                                sectionIndex,
+                                                lessonIndex,
+                                                "duration",
+                                                value,
+                                              )
+                                            }
+                                            placeholder="Auto-filled"
+                                          />
 
-                                  <Field
-                                    label="Video Key"
-                                    value={lesson.videoKey}
-                                    onChange={(value) =>
-                                      updateLessonField(
-                                        sectionIndex,
-                                        lessonIndex,
-                                        "videoKey",
-                                        value,
-                                      )
-                                    }
-                                    placeholder="course-videos/..."
-                                  />
-                                </div>
+                                          <Field
+                                            label="Order"
+                                            type="number"
+                                            value={lesson.order}
+                                            onChange={(value) =>
+                                              updateLessonField(
+                                                sectionIndex,
+                                                lessonIndex,
+                                                "order",
+                                                value,
+                                              )
+                                            }
+                                            placeholder="1"
+                                            required
+                                          />
 
-                                <div className="mt-4">
-                                  <Field
-                                    label="Lesson Description"
-                                    value={lesson.description}
-                                    onChange={(value) =>
-                                      updateLessonField(
-                                        sectionIndex,
-                                        lessonIndex,
-                                        "description",
-                                        value,
-                                      )
-                                    }
-                                    placeholder="Lesson details..."
-                                    textarea
-                                    rows={3}
-                                  />
-                                </div>
+                                          <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-950 px-4 py-3">
+                                            <input
+                                              type="checkbox"
+                                              checked={Boolean(
+                                                lesson.isPreview,
+                                              )}
+                                              onChange={(event) =>
+                                                updateLessonField(
+                                                  sectionIndex,
+                                                  lessonIndex,
+                                                  "isPreview",
+                                                  event.target.checked,
+                                                )
+                                              }
+                                              className="h-5 w-5 accent-blue-600"
+                                            />
 
-                                <div className="mt-5">
-                                  {hasRealLessonId ? (
-                                    <LessonResourceManager
-                                      courseId={course._id}
-                                      lesson={lesson}
-                                      resources={lesson.resources || []}
-                                      onResourcesChange={(nextResources) =>
-                                        updateLessonResources(
-                                          lesson._id,
-                                          nextResources,
-                                        )
-                                      }
-                                    />
-                                  ) : (
-                                    <div className="rounded-3xl border border-yellow-500/20 bg-yellow-500/10 p-5">
-                                      <div className="flex items-start gap-3">
-                                        <FileText
-                                          size={22}
-                                          className="mt-1 text-yellow-300"
-                                        />
-
-                                        <div>
-                                          <h4 className="font-black text-yellow-200">
-                                            Save course before adding resources
-                                          </h4>
-
-                                          <p className="mt-1 text-sm text-slate-300">
-                                            New lessons need a real MongoDB
-                                            lesson id before PDF, ZIP, DOCX, or
-                                            PPT resources can be uploaded.
-                                          </p>
+                                            <span className="font-bold text-slate-200">
+                                              Free Preview Lesson
+                                            </span>
+                                          </label>
                                         </div>
+
+                                        <div className="mt-4">
+                                          <Field
+                                            label="Lesson Description"
+                                            value={lesson.description}
+                                            onChange={(value) =>
+                                              updateLessonField(
+                                                sectionIndex,
+                                                lessonIndex,
+                                                "description",
+                                                value,
+                                              )
+                                            }
+                                            placeholder="Lesson details..."
+                                            textarea
+                                            rows={3}
+                                          />
+                                        </div>
+
+                                        {(lesson.duration ||
+                                          lesson.originalVideoName ||
+                                          lesson.sizeBytes > 0 ||
+                                          lesson.mimeType ||
+                                          lesson.videoKey) && (
+                                          <div className="mt-4 rounded-2xl border border-blue-500/20 bg-blue-500/10 p-4">
+                                            <p className="mb-3 flex items-center gap-2 text-sm font-black text-blue-200">
+                                              <FileVideo size={16} />
+                                              Saved Video Metadata
+                                            </p>
+
+                                            <div className="space-y-2 text-xs text-slate-300">
+                                              {lesson.duration && (
+                                                <p className="flex items-center gap-2">
+                                                  <Clock size={14} />
+                                                  Duration: {lesson.duration}
+                                                </p>
+                                              )}
+
+                                              {lesson.originalVideoName && (
+                                                <p className="break-all">
+                                                  File:{" "}
+                                                  {lesson.originalVideoName}
+                                                </p>
+                                              )}
+
+                                              {lesson.sizeBytes > 0 && (
+                                                <p>
+                                                  Size:{" "}
+                                                  {formatSizeMB(
+                                                    lesson.sizeBytes,
+                                                  )}
+                                                </p>
+                                              )}
+
+                                              {lesson.mimeType && (
+                                                <p>Type: {lesson.mimeType}</p>
+                                              )}
+
+                                              {lesson.videoKey && (
+                                                <p className="break-all">
+                                                  Video Key: {lesson.videoKey}
+                                                </p>
+                                              )}
+
+                                              {lesson.hlsManifestKey && (
+                                                <p className="break-all">
+                                                  HLS: {lesson.hlsManifestKey}
+                                                </p>
+                                              )}
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      <div>
+                                        <label className="mb-2 block text-sm font-bold text-slate-300">
+                                          Lesson Video
+                                        </label>
+
+                                        <VideoUploadField
+                                          value={lesson.videoUrl}
+                                          courseSlug={
+                                            course.slug ||
+                                            course.title ||
+                                            "course"
+                                          }
+                                          courseId={course._id}
+                                          lessonId={
+                                            hasRealLessonId
+                                              ? lesson._id
+                                              : undefined
+                                          }
+                                          onMetaChange={(metadata) => {
+                                            handleLessonVideoMeta(
+                                              sectionIndex,
+                                              lessonIndex,
+                                              metadata,
+                                            );
+                                          }}
+                                          onChange={(uploadedVideoSource) => {
+                                            updateLessonField(
+                                              sectionIndex,
+                                              lessonIndex,
+                                              "videoUrl",
+                                              uploadedVideoSource,
+                                            );
+                                          }}
+                                        />
                                       </div>
                                     </div>
-                                  )}
-                                </div>
+
+                                    <div className="mt-5">
+                                      {hasRealLessonId ? (
+                                        <LessonResourceManager
+                                          courseId={course._id}
+                                          lesson={lesson}
+                                          resources={lesson.resources || []}
+                                          onResourcesChange={(nextResources) =>
+                                            updateLessonResources(
+                                              lesson._id,
+                                              nextResources,
+                                            )
+                                          }
+                                        />
+                                      ) : (
+                                        <div className="rounded-3xl border border-yellow-500/20 bg-yellow-500/10 p-5">
+                                          <div className="flex items-start gap-3">
+                                            <FileText
+                                              size={22}
+                                              className="mt-1 text-yellow-300"
+                                            />
+
+                                            <div>
+                                              <h4 className="font-black text-yellow-200">
+                                                Save course before adding
+                                                resources
+                                              </h4>
+
+                                              <p className="mt-1 text-sm text-slate-300">
+                                                New lessons need a real MongoDB
+                                                lesson id before PDF, ZIP, DOCX,
+                                                or PPT resources can be
+                                                uploaded.
+                                              </p>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             );
                           })}

@@ -72,6 +72,18 @@ const lessonSchema = new mongoose.Schema(
       trim: true,
     },
 
+    videoKey: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    videoAssetId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "VideoAsset",
+      default: null,
+    },
+
     hlsManifestKey: {
       type: String,
       default: "",
@@ -86,7 +98,30 @@ const lessonSchema = new mongoose.Schema(
 
     duration: {
       type: String,
-      default: "10:00",
+      default: "",
+      trim: true,
+    },
+
+    durationSeconds: {
+      type: Number,
+      default: 0,
+    },
+
+    originalVideoName: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    sizeBytes: {
+      type: Number,
+      default: 0,
+    },
+
+    mimeType: {
+      type: String,
+      default: "",
+      trim: true,
     },
 
     isPreview: {
@@ -158,6 +193,7 @@ const courseSchema = new mongoose.Schema(
     instructorName: {
       type: String,
       required: true,
+      trim: true,
     },
 
     createdBy: {
@@ -187,6 +223,7 @@ const courseSchema = new mongoose.Schema(
     trailerVideoUrl: {
       type: String,
       required: true,
+      trim: true,
     },
 
     isFeatured: {

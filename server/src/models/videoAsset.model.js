@@ -18,12 +18,26 @@ const videoAssetSchema = new mongoose.Schema(
 
     originalKey: {
       type: String,
+      default: "",
+      trim: true,
+    },
+
+    uploadId: {
+      type: String,
+      default: "",
+      index: true,
       trim: true,
     },
 
     originalName: {
       type: String,
       required: true,
+      trim: true,
+    },
+
+    displayTitle: {
+      type: String,
+      default: "",
       trim: true,
     },
 
@@ -51,6 +65,30 @@ const videoAssetSchema = new mongoose.Schema(
       min: 0,
     },
 
+    duration: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    durationSeconds: {
+      type: Number,
+      default: 0,
+    },
+
+    courseId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Course",
+      default: null,
+      index: true,
+    },
+
+    lessonId: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null,
+      index: true,
+    },
+
     sourceType: {
       type: String,
       enum: ["s3", "external", "youtube", "cloudfront"],
@@ -73,27 +111,32 @@ const videoAssetSchema = new mongoose.Schema(
 
     hlsOutputPrefix: {
       type: String,
+      default: "",
       trim: true,
     },
 
     hlsManifestKey: {
       type: String,
+      default: "",
       trim: true,
     },
 
     mediaConvertJobId: {
       type: String,
+      default: "",
       trim: true,
       index: true,
     },
 
     mediaConvertJobStatus: {
       type: String,
+      default: "",
       trim: true,
     },
 
     processingError: {
       type: String,
+      default: "",
       trim: true,
     },
 
@@ -103,10 +146,11 @@ const videoAssetSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 videoAssetSchema.index({ adminId: 1, createdAt: -1 });
 videoAssetSchema.index({ key: 1, hlsStatus: 1 });
+videoAssetSchema.index({ key: 1, uploadId: 1, adminId: 1 });
 
 export const VideoAsset = mongoose.model("VideoAsset", videoAssetSchema);

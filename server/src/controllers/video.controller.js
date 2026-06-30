@@ -72,6 +72,88 @@ const validateVideoMeta = ({ fileName, contentType, sizeBytes }) => {
   return "";
 };
 
+const getUserId = (req) => {
+  return req.user?._id || req.user?.id;
+};
+
+const isSameId = (a, b) => {
+  if (!a || !b) return false;
+
+  return String(a) === String(b);
+};
+
+const findAdminVideoUpload = async ({ req, key, uploadId }) => {
+  const adminId = getUserId(req);
+
+  if (!adminId || !key) return null;
+
+  const video = await VideoAsset.findOne({
+    key,
+    adminId,
+  });
+
+  if (!video) return null;
+
+  if (video.uploadId && uploadId && String(video.uploadId) !== String(uploadId)) {
+    return null;
+  }
+
+  return video;
+};
+
+const syncCourseLessonVideoAfterUpload = async ({
+  req,
+  courseId,
+  lessonId,
+  video,
+  originalName = "",
+  mimeType = "",
+  sizeBytes = 0,
+  displayTitle = "",
+  duration = "",
+  durationSeconds = 0,
+}) => {
+  if (!courseId || !lessonId || !video?._id) return;
+
+  const course = await Course.findById(courseId);
+
+  if (!course) return;
+
+  const adminId = getUserId(req);
+
+  if (course.createdBy && !isSameId(course.createdBy, adminId)) {
+    return;
+  }
+
+  if (!course.createdBy) {
+    course.createdBy = adminId;
+  }
+
+  const lesson = findLessonById(course, lessonId);
+
+  if (!lesson) return;
+
+  lesson.videoUrl = video.key;
+  lesson.videoKey = video.key;
+  lesson.videoAssetId = video._id;
+  lesson.hlsManifestKey = video.hlsManifestKey || lesson.hlsManifestKey || "";
+  lesson.hlsOutputPrefix = video.hlsOutputPrefix || lesson.hlsOutputPrefix || "";
+  lesson.originalVideoName =
+    originalName || video.originalName || lesson.originalVideoName || "";
+  lesson.mimeType = mimeType || video.mimeType || lesson.mimeType || "";
+  lesson.sizeBytes = Number(sizeBytes || video.sizeBytes || lesson.sizeBytes || 0);
+  lesson.duration = duration || video.duration || lesson.duration || "";
+  lesson.durationSeconds = Number(
+    durationSeconds || video.durationSeconds || lesson.durationSeconds || 0,
+  );
+
+  if (!lesson.title && displayTitle) {
+    lesson.title = displayTitle;
+  }
+
+  await course.save();
+};
+
 const isOwnUploadKey = ({ key, user }) => {
   return String(key || "").includes(String(user?._id || ""));
 };
@@ -520,6 +602,9 @@ export const confirmAdminVideoUpload = async (req, res) => {
       courseSlug,
       courseId,
       lessonId,
+      displayTitle = "",
+      duration = "",
+      durationSeconds = 0,
     } = req.body;
 
     if (!key || !originalName || !mimeType || !sizeBytes) {
@@ -583,7 +668,19 @@ export const confirmAdminVideoUpload = async (req, res) => {
         sourceType: "s3",
         status: "uploaded",
         hlsStatus: "not_started",
+        courseId: courseId || null,
+        lessonId: lessonId || null,
+        displayTitle,
+        duration,
+        durationSeconds: Number(durationSeconds || 0),
       });
+    } else {
+      video.displayTitle = displayTitle || video.displayTitle || "";
+      video.duration = duration || video.duration || "";
+      video.durationSeconds = Number(durationSeconds || video.durationSeconds || 0);
+      video.courseId = courseId || video.courseId || null;
+      video.lessonId = lessonId || video.lessonId || null;
+      await video.save();
     }
 
     if (video.hlsStatus === "ready" || video.hlsStatus === "processing") {
@@ -619,7 +716,14 @@ export const confirmAdminVideoUpload = async (req, res) => {
 
 export const initiateAdminMultipartUpload = async (req, res) => {
   try {
-    const { fileName, contentType, sizeBytes, courseSlug } = req.body;
+    const {
+      fileName,
+      contentType,
+      sizeBytes,
+      courseSlug,
+      courseId,
+      lessonId,
+    } = req.body;
 
     const validationMessage = validateVideoMeta({
       fileName,
@@ -634,8 +738,10 @@ export const initiateAdminMultipartUpload = async (req, res) => {
       });
     }
 
+    const adminId = getUserId(req);
+
     const key = buildVideoKey({
-      adminId: req.user._id,
+      adminId,
       courseSlug,
       originalName: fileName,
     });
@@ -645,12 +751,44 @@ export const initiateAdminMultipartUpload = async (req, res) => {
       contentType,
     });
 
+    const video = await VideoAsset.findOneAndUpdate(
+      {
+        key: multipart.key,
+        adminId,
+      },
+      {
+        $set: {
+          adminId,
+          key: multipart.key,
+          originalKey: multipart.key,
+          uploadId: multipart.uploadId,
+          originalName: fileName,
+          bucket: getBucketName(),
+          region: getRegion(),
+          mimeType: contentType,
+          sizeBytes: Number(sizeBytes || 0),
+          sourceType: "s3",
+          status: "uploaded",
+          hlsStatus: "not_started",
+          courseId: courseId || null,
+          lessonId: lessonId || null,
+          processingError: "",
+        },
+      },
+      {
+        new: true,
+        upsert: true,
+        setDefaultsOnInsert: true,
+      },
+    );
+
     return res.status(200).json({
       success: true,
       uploadId: multipart.uploadId,
       key: multipart.key,
       bucket: multipart.bucket,
       region: multipart.region,
+      video,
     });
   } catch (error) {
     console.error("INITIATE_MULTIPART_UPLOAD_ERROR:", error);
@@ -674,10 +812,17 @@ export const getAdminMultipartPartUrl = async (req, res) => {
       });
     }
 
-    if (!isOwnUploadKey({ key, user: req.user })) {
+    const video = await findAdminVideoUpload({
+      req,
+      key,
+      uploadId,
+    });
+
+    if (!video) {
       return res.status(403).json({
         success: false,
-        message: "You can upload parts only for your own video",
+        message:
+          "You can upload parts only for your own video. Please clear old uploads and choose video again.",
       });
     }
 
@@ -716,6 +861,9 @@ export const completeAdminMultipartUpload = async (req, res) => {
       courseSlug,
       courseId,
       lessonId,
+      displayTitle = "",
+      duration = "",
+      durationSeconds = 0,
     } = req.body;
 
     if (!key || !uploadId || !Array.isArray(parts) || parts.length === 0) {
@@ -745,13 +893,6 @@ export const completeAdminMultipartUpload = async (req, res) => {
       });
     }
 
-    if (!isOwnUploadKey({ key, user: req.user })) {
-      return res.status(403).json({
-        success: false,
-        message: "You can complete only your own video upload",
-      });
-    }
-
     const courseAccess = await canManageCourseForVideo({
       req,
       courseId,
@@ -761,6 +902,20 @@ export const completeAdminMultipartUpload = async (req, res) => {
       return res.status(courseAccess.statusCode || 403).json({
         success: false,
         message: courseAccess.message,
+      });
+    }
+
+    let video = await findAdminVideoUpload({
+      req,
+      key,
+      uploadId,
+    });
+
+    if (!video) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "You can complete upload only for your own video. Please clear old uploads and choose video again.",
       });
     }
 
@@ -779,36 +934,26 @@ export const completeAdminMultipartUpload = async (req, res) => {
       });
     }
 
-    let video = await VideoAsset.findOne({ key });
-
-    if (video && !ensureVideoAssetOwner({ video, user: req.user })) {
-      return res.status(403).json({
-        success: false,
-        message: "You can complete only videos uploaded by you",
-      });
-    }
-
     await completeMultipartUpload({
       key,
       uploadId,
       parts: normalizedParts,
     });
 
-    if (!video) {
-      video = await VideoAsset.create({
-        adminId: req.user._id,
-        key,
-        originalKey: key,
-        originalName,
-        bucket: getBucketName(),
-        region: getRegion(),
-        mimeType,
-        sizeBytes,
-        sourceType: "s3",
-        status: "uploaded",
-        hlsStatus: "not_started",
-      });
-    }
+    video.originalKey = video.originalKey || key;
+    video.originalName = originalName;
+    video.mimeType = mimeType;
+    video.sizeBytes = Number(sizeBytes || 0);
+    video.displayTitle = displayTitle || video.displayTitle || "";
+    video.duration = duration || video.duration || "";
+    video.durationSeconds = Number(durationSeconds || video.durationSeconds || 0);
+    video.courseId = courseId || video.courseId || null;
+    video.lessonId = lessonId || video.lessonId || null;
+    video.status = "uploaded";
+    video.hlsStatus = video.hlsStatus || "not_started";
+    video.processingError = "";
+
+    await video.save();
 
     let hlsStarted = false;
     let hlsError = "";
@@ -835,6 +980,19 @@ export const completeAdminMultipartUpload = async (req, res) => {
         console.warn("HLS processing skipped/failed:", error.message);
       }
     }
+
+    await syncCourseLessonVideoAfterUpload({
+      req,
+      courseId,
+      lessonId,
+      video,
+      originalName,
+      mimeType,
+      sizeBytes,
+      displayTitle,
+      duration,
+      durationSeconds,
+    });
 
     return res.status(201).json({
       success: true,
@@ -867,7 +1025,13 @@ export const abortAdminMultipartUpload = async (req, res) => {
       });
     }
 
-    if (!isOwnUploadKey({ key, user: req.user })) {
+    const video = await findAdminVideoUpload({
+      req,
+      key,
+      uploadId,
+    });
+
+    if (!video) {
       return res.status(403).json({
         success: false,
         message: "You can abort only your own video upload",
@@ -878,6 +1042,11 @@ export const abortAdminMultipartUpload = async (req, res) => {
       key,
       uploadId,
     });
+
+    video.status = "failed";
+    video.hlsStatus = "failed";
+    video.processingError = "Multipart upload aborted by admin";
+    await video.save();
 
     return res.status(200).json({
       success: true,

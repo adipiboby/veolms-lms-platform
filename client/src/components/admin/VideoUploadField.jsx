@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { CheckCircle, FileVideo, Info } from "lucide-react";
+
 import { api } from "../../services/api";
 
 const PART_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -6,6 +8,7 @@ const STORAGE_PREFIX = "veolms-video-upload:";
 
 const normalizeETag = (etag = "") => {
   const clean = String(etag).trim();
+
   return clean.startsWith('"') ? clean : `"${clean}"`;
 };
 
@@ -16,6 +19,7 @@ const getSessionStorageKey = (file) => {
 const getAnySavedUploadExists = () => {
   for (let i = 0; i < localStorage.length; i += 1) {
     const key = localStorage.key(i);
+
     if (key?.startsWith(STORAGE_PREFIX)) return true;
   }
 
@@ -43,6 +47,91 @@ const clearSession = (storageKey) => {
   localStorage.removeItem(storageKey);
 };
 
+const clearAllSavedUploadSessions = () => {
+  Object.keys(localStorage)
+    .filter((key) => key.startsWith(STORAGE_PREFIX))
+    .forEach((key) => localStorage.removeItem(key));
+};
+
+const getApiErrorMessage = (err) => {
+  return (
+    err.response?.data?.message ||
+    err.response?.data?.error ||
+    err.message ||
+    "Video upload failed."
+  );
+};
+
+const formatVideoDuration = (seconds) => {
+  const totalSeconds = Math.floor(Number(seconds) || 0);
+
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const remainingSeconds = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(
+      remainingSeconds,
+    ).padStart(2, "0")}`;
+  }
+
+  return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
+};
+
+const getTitleFromFileName = (fileName = "") => {
+  return fileName
+    .replace(/\.[^/.]+$/, "")
+    .replace(/[-_]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\w\S*/g, (word) => {
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    });
+};
+
+const getVideoDurationFromFile = (file) => {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement("video");
+    const objectUrl = URL.createObjectURL(file);
+
+    video.preload = "metadata";
+    video.muted = true;
+    video.playsInline = true;
+
+    video.onloadedmetadata = () => {
+      URL.revokeObjectURL(objectUrl);
+
+      if (!Number.isFinite(video.duration)) {
+        resolve(0);
+        return;
+      }
+
+      resolve(video.duration);
+    };
+
+    video.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("Unable to read video duration."));
+    };
+
+    video.src = objectUrl;
+  });
+};
+
+const getVideoMetadataFromFile = async (file) => {
+  const durationSeconds = await getVideoDurationFromFile(file);
+
+  return {
+    title: getTitleFromFileName(file.name),
+    duration: formatVideoDuration(durationSeconds),
+    durationSeconds: Math.floor(durationSeconds || 0),
+    originalVideoName: file.name,
+    mimeType: file.type || "video/mp4",
+    sizeBytes: file.size,
+    sizeMB: Number((file.size / 1024 / 1024).toFixed(2)),
+  };
+};
+
 const uploadPartWithProgress = ({ uploadUrl, chunk, onProgress, xhrRef }) => {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -62,7 +151,7 @@ const uploadPartWithProgress = ({ uploadUrl, chunk, onProgress, xhrRef }) => {
         const etag = xhr.getResponseHeader("ETag");
 
         if (!etag) {
-          reject(new Error("ETag missing from S3 response"));
+          reject(new Error("ETag missing from S3 response."));
           return;
         }
 
@@ -70,11 +159,11 @@ const uploadPartWithProgress = ({ uploadUrl, chunk, onProgress, xhrRef }) => {
         return;
       }
 
-      reject(new Error(`S3 upload failed with status ${xhr.status}`));
+      reject(new Error(`S3 upload failed with status ${xhr.status}.`));
     };
 
     xhr.onerror = () => {
-      reject(new Error("Network error while uploading to S3"));
+      reject(new Error("Network error while uploading to S3."));
     };
 
     xhr.onabort = () => {
@@ -88,6 +177,7 @@ const uploadPartWithProgress = ({ uploadUrl, chunk, onProgress, xhrRef }) => {
 const VideoUploadField = ({
   value,
   onChange,
+  onMetaChange,
   onUploadSuccess,
   courseSlug,
   courseId,
@@ -99,8 +189,10 @@ const VideoUploadField = ({
   const pausedRef = useRef(false);
   const sessionRef = useRef(null);
   const storageKeyRef = useRef("");
+  const resumeModeRef = useRef(false);
 
   const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedMetadata, setSelectedMetadata] = useState(null);
   const [hasSavedUpload, setHasSavedUpload] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [paused, setPaused] = useState(false);
@@ -114,22 +206,66 @@ const VideoUploadField = ({
 
   const openFilePicker = () => {
     if (disabled || uploading) return;
+
     fileInputRef.current?.click();
+  };
+
+  const resetInput = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const handleClearOldUploads = () => {
+    if (uploading) return;
+
+    clearAllSavedUploadSessions();
+
+    setHasSavedUpload(false);
+    setSelectedFile(null);
+    setSelectedMetadata(null);
+    setProgress(0);
+    setPaused(false);
+    setError("");
+    setMessage("Old upload sessions cleared. Choose video again.");
+    resetInput();
   };
 
   const handleRemoveVideo = () => {
     if (uploading) return;
 
-    if (onChange) {
-      onChange("");
-    }
+    onChange?.("");
 
+    onMetaChange?.({
+      videoUrl: "",
+      videoKey: "",
+      videoAssetId: null,
+      hlsManifestKey: "",
+      hlsOutputPrefix: "",
+      duration: "",
+      durationSeconds: 0,
+      originalVideoName: "",
+      sizeBytes: 0,
+      mimeType: "",
+    });
+
+    setSelectedFile(null);
+    setSelectedMetadata(null);
+    setProgress(0);
+    setPaused(false);
     setMessage("Video removed from this lesson.");
     setError("");
+    resetInput();
   };
 
-  const startOrResumeUpload = async (file) => {
+  const startOrResumeUpload = async (
+    file,
+    metadataFromSelect = null,
+    options = {},
+  ) => {
+    const shouldResume = Boolean(options.resume);
     const storageKey = getSessionStorageKey(file);
+
     storageKeyRef.current = storageKey;
 
     try {
@@ -140,18 +276,37 @@ const VideoUploadField = ({
       setProgress(0);
       pausedRef.current = false;
 
-      let session = loadSavedSessionForFile(file);
+      const metadata =
+        metadataFromSelect ||
+        selectedMetadata ||
+        (await getVideoMetadataFromFile(file));
+
+      setSelectedMetadata(metadata);
+
+      // Auto-fill lesson title and duration before upload completes.
+      onMetaChange?.(metadata);
+
+      let session = shouldResume ? loadSavedSessionForFile(file) : null;
+
+      // Important:
+      // Choose Video = fresh upload.
+      // Resume Upload = use saved multipart session.
+      if (!shouldResume) {
+        clearSession(storageKey);
+      }
 
       if (session?.uploadId && session?.key) {
         setMessage("Resuming previous upload...");
       } else {
-        setMessage("Starting upload...");
+        setMessage("Starting fresh upload...");
 
         const initiateRes = await api.post("/videos/admin/multipart/initiate", {
           fileName: file.name,
           contentType: file.type || "video/mp4",
           sizeBytes: file.size,
           courseSlug,
+          courseId,
+          lessonId,
         });
 
         session = {
@@ -259,31 +414,43 @@ const VideoUploadField = ({
         key: session.key,
         uploadId: session.uploadId,
         parts: completedParts,
+
         originalName: file.name,
         mimeType: file.type || "video/mp4",
         sizeBytes: file.size,
+
         courseSlug,
         courseId,
         lessonId,
+
+        displayTitle: metadata.title,
+        duration: metadata.duration,
+        durationSeconds: metadata.durationSeconds,
       });
 
       const video = completeRes.data.video;
       const finalVideoKey = video?.key || session.key;
 
-      if (onChange) {
-        onChange(finalVideoKey);
-      }
+      const finalMetadata = {
+        ...metadata,
+        videoUrl: finalVideoKey,
+        videoKey: finalVideoKey,
+        videoAssetId: video?._id || null,
+        hlsManifestKey: video?.hlsManifestKey || "",
+        hlsOutputPrefix: video?.hlsOutputPrefix || "",
+      };
 
-      if (onUploadSuccess) {
-        onUploadSuccess(video);
-      }
+      onChange?.(finalVideoKey);
+      onMetaChange?.(finalMetadata);
+      onUploadSuccess?.(video, finalMetadata);
 
       clearSession(storageKey);
       setHasSavedUpload(getAnySavedUploadExists());
 
       setProgress(100);
-      setMessage("Video uploaded. HLS processing started.");
+      setMessage("Video uploaded successfully. HLS processing started.");
       setPaused(false);
+      setError("");
     } catch (err) {
       if (err.message === "UPLOAD_PAUSED") {
         setPaused(true);
@@ -294,21 +461,40 @@ const VideoUploadField = ({
 
       console.error("VIDEO_UPLOAD_ERROR:", err);
 
-      setError(
-        err.response?.data?.message ||
-          err.response?.data?.error ||
-          err.message ||
-          "Video upload failed",
-      );
+      const errorMessage = getApiErrorMessage(err);
+      const lowerMessage = errorMessage.toLowerCase();
 
+      const isOwnershipError =
+        lowerMessage.includes("only for your own video") ||
+        lowerMessage.includes("forbidden") ||
+        err.response?.status === 403;
+
+      if (isOwnershipError) {
+        if (storageKeyRef.current) {
+          clearSession(storageKeyRef.current);
+        }
+
+        setHasSavedUpload(getAnySavedUploadExists());
+        setSelectedFile(null);
+        setSelectedMetadata(null);
+        setProgress(0);
+        setPaused(false);
+        setMessage("");
+
+        setError(
+          "Old upload session removed. Click Choose Video and upload again fresh.",
+        );
+
+        return;
+      }
+
+      setError(errorMessage);
       setMessage("");
     } finally {
       setUploading(false);
       xhrRef.current = null;
-
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
+      resumeModeRef.current = false;
+      resetInput();
     }
   };
 
@@ -317,7 +503,32 @@ const VideoUploadField = ({
 
     if (!file) return;
 
-    await startOrResumeUpload(file);
+    try {
+      setError("");
+      setMessage("Reading video details...");
+
+      const metadata = await getVideoMetadataFromFile(file);
+
+      setSelectedFile(file);
+      setSelectedMetadata(metadata);
+
+      // Auto-fill immediately before upload.
+      onMetaChange?.(metadata);
+
+      const shouldResume = resumeModeRef.current;
+      resumeModeRef.current = false;
+
+      await startOrResumeUpload(file, metadata, {
+        resume: shouldResume,
+      });
+    } catch (err) {
+      console.error("VIDEO_METADATA_ERROR:", err);
+
+      setError(err.message || "Unable to read video details.");
+      setMessage("");
+      resumeModeRef.current = false;
+      resetInput();
+    }
   };
 
   const handlePauseUpload = () => {
@@ -329,10 +540,14 @@ const VideoUploadField = ({
 
   const handleResumeUpload = async () => {
     if (selectedFile) {
-      await startOrResumeUpload(selectedFile);
+      await startOrResumeUpload(selectedFile, selectedMetadata, {
+        resume: true,
+      });
+
       return;
     }
 
+    resumeModeRef.current = true;
     openFilePicker();
   };
 
@@ -355,18 +570,20 @@ const VideoUploadField = ({
       }
 
       setSelectedFile(null);
+      setSelectedMetadata(null);
       setUploading(false);
       setPaused(false);
       setProgress(0);
       setMessage("Upload cancelled.");
       setError("");
       setHasSavedUpload(getAnySavedUploadExists());
+      resetInput();
     } catch (err) {
       setError(
         err.response?.data?.message ||
           err.response?.data?.error ||
           err.message ||
-          "Failed to cancel upload",
+          "Failed to cancel upload.",
       );
     }
   };
@@ -383,13 +600,28 @@ const VideoUploadField = ({
 
       {value ? (
         <div className="space-y-3">
-          <p className="text-sm font-semibold text-emerald-300">
+          <p className="flex items-center gap-2 text-sm font-semibold text-emerald-300">
+            <CheckCircle size={16} />
             Video selected
           </p>
 
           <p className="break-all rounded-xl bg-slate-900 p-3 text-xs text-slate-400">
             {value}
           </p>
+
+          {selectedMetadata && (
+            <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 p-3">
+              <p className="flex items-center gap-2 text-sm font-bold text-blue-200">
+                <FileVideo size={16} />
+                {selectedMetadata.title}
+              </p>
+
+              <p className="mt-1 text-xs text-slate-400">
+                Duration: {selectedMetadata.duration} • Size:{" "}
+                {selectedMetadata.sizeMB} MB
+              </p>
+            </div>
+          )}
 
           <div className="flex flex-wrap gap-2">
             <button
@@ -409,11 +641,27 @@ const VideoUploadField = ({
             >
               Remove Video
             </button>
+
+            {hasSavedUpload && (
+              <button
+                type="button"
+                onClick={handleClearOldUploads}
+                disabled={disabled || uploading}
+                className="rounded-xl border border-yellow-500/40 px-4 py-2 text-sm font-semibold text-yellow-300 hover:bg-yellow-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Clear Old Uploads
+              </button>
+            )}
           </div>
         </div>
       ) : (
         <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-slate-600 bg-slate-900/70 px-4 py-8 text-center">
           <p className="text-sm text-slate-300">Video is not available.</p>
+
+          <p className="max-w-md text-xs text-slate-500">
+            Select a video. Lesson title and duration will auto-fill from the
+            video file before upload.
+          </p>
 
           <div className="flex flex-wrap justify-center gap-2">
             <button
@@ -435,13 +683,43 @@ const VideoUploadField = ({
                 Resume Upload
               </button>
             )}
+
+            {hasSavedUpload && (
+              <button
+                type="button"
+                onClick={handleClearOldUploads}
+                disabled={disabled || uploading}
+                className="rounded-xl border border-yellow-500/40 px-5 py-2 text-sm font-semibold text-yellow-300 hover:bg-yellow-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Clear Old Uploads
+              </button>
+            )}
           </div>
 
           {hasSavedUpload && !selectedFile && (
             <p className="text-xs text-yellow-300">
-              To resume, choose the same video file again.
+              Old upload session found. Use Resume only for the same video, or
+              Clear Old Uploads.
             </p>
           )}
+        </div>
+      )}
+
+      {selectedMetadata && !value && (
+        <div className="mt-4 rounded-xl border border-blue-500/20 bg-blue-500/10 p-3">
+          <p className="flex items-center gap-2 text-sm font-bold text-blue-200">
+            <Info size={15} />
+            Auto-filled from video
+          </p>
+
+          <p className="mt-1 text-sm text-slate-300">
+            {selectedMetadata.title}
+          </p>
+
+          <p className="mt-1 text-xs text-slate-400">
+            Duration: {selectedMetadata.duration} • Size:{" "}
+            {selectedMetadata.sizeMB} MB
+          </p>
         </div>
       )}
 
