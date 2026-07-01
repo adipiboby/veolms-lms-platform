@@ -22,6 +22,32 @@ import LessonComments from "../components/comments/LessonComments";
 
 const LEARNING_COURSE_TITLE_KEY = "veolms_current_learning_course_title";
 
+const ENABLE_HLS_PLAYBACK = import.meta.env.VITE_ENABLE_HLS_PLAYBACK === "true";
+
+const SIGNED_VIDEO_REFRESH_BUFFER_SECONDS = 120;
+const MIN_SIGNED_VIDEO_REFRESH_SECONDS = 60;
+
+const hasReadyHls = (lesson) => {
+  return Boolean(
+    lesson?.hlsManifestKey ||
+    lesson?.videoHlsManifestKey ||
+    lesson?.hlsOutputPrefix,
+  );
+};
+
+const getSignedVideoRefreshDelayMs = (expiresInSeconds) => {
+  const safeExpiresIn = Number(expiresInSeconds || 0);
+
+  if (!safeExpiresIn) return 0;
+
+  const refreshAfterSeconds = Math.max(
+    MIN_SIGNED_VIDEO_REFRESH_SECONDS,
+    safeExpiresIn - SIGNED_VIDEO_REFRESH_BUFFER_SECONDS,
+  );
+
+  return refreshAfterSeconds * 1000;
+};
+
 const getSafeCompletedLessonIds = (lessonProgress = []) => {
   if (!Array.isArray(lessonProgress)) return new Set();
 
@@ -376,6 +402,9 @@ const LearningPage = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
   const noteTextareaRef = useRef(null);
+  const videoRefreshTimerRef = useRef(null);
+  const activeVideoRequestIdRef = useRef(0);
+  const lastSavedWatchSecondRef = useRef(0);
 
   const [activePanel, setActivePanel] = useState("comments");
 
@@ -402,6 +431,9 @@ const LearningPage = () => {
   const [certificateError, setCertificateError] = useState("");
 
   const [videoSource, setVideoSource] = useState("");
+  const [videoPlaybackType, setVideoPlaybackType] = useState("mp4");
+  const [videoExpiresIn, setVideoExpiresIn] = useState(0);
+  const [videoStartTime, setVideoStartTime] = useState(0);
   const [videoLoading, setVideoLoading] = useState(false);
   const [videoError, setVideoError] = useState("");
 
@@ -455,6 +487,13 @@ const LearningPage = () => {
 
   const isCourseCompleted =
     safeProgress.totalLessons > 0 && safeProgress.progressPercentage === 100;
+
+  const clearVideoRefreshTimer = () => {
+    if (videoRefreshTimerRef.current) {
+      clearTimeout(videoRefreshTimerRef.current);
+      videoRefreshTimerRef.current = null;
+    }
+  };
 
   const updateNavbarCourseTitle = (title) => {
     if (!title) return;
@@ -622,33 +661,203 @@ ${noteContent.trim()}
     }
   };
 
-  const loadSecureVideo = async (lesson) => {
-    if (!course?._id || !lesson?._id) return;
+  const loadLessonWatchPosition = async (lesson) => {
+    if (!isStudentLearning || !course?._id || !lesson?._id) {
+      setVideoStartTime(0);
+      return 0;
+    }
 
     try {
-      setVideoLoading(true);
-      setVideoError("");
-      setVideoSource("");
+      const response = await api.get(
+        `/progress/watch-position/${course._id}/${lesson._id}`,
+      );
 
-      const res = await api.post("/videos/signed-url", {
+      const isCompleted = response.data.isCompleted === true;
+      const watchPositionSeconds = Number(
+        response.data.watchPositionSeconds || 0,
+      );
+      const durationSeconds = Number(response.data.durationSeconds || 0);
+
+      if (isCompleted) {
+        setVideoStartTime(0);
+        return 0;
+      }
+
+      const safeStartTime =
+        durationSeconds > 0
+          ? Math.min(watchPositionSeconds, Math.max(0, durationSeconds - 3))
+          : watchPositionSeconds;
+
+      setVideoStartTime(safeStartTime);
+
+      return safeStartTime;
+    } catch (error) {
+      console.error("LOAD_WATCH_POSITION_ERROR:", error);
+      setVideoStartTime(0);
+      return 0;
+    }
+  };
+
+  const saveLessonWatchPosition = async ({ currentTime, duration, reason }) => {
+    if (!isStudentLearning || !course?._id || !currentLesson?._id) return;
+
+    if (currentLessonCompleted && reason !== "stop") return;
+
+    const safeCurrentTime = Math.max(0, Math.floor(Number(currentTime || 0)));
+    const safeDuration = Math.max(0, Math.floor(Number(duration || 0)));
+
+    if (safeCurrentTime < 1 && reason !== "stop") return;
+
+    if (
+      reason === "interval" &&
+      safeCurrentTime === lastSavedWatchSecondRef.current
+    ) {
+      return;
+    }
+
+    lastSavedWatchSecondRef.current = safeCurrentTime;
+
+    try {
+      await api.post("/progress/watch-position", {
+        courseId: course._id,
+        lessonId: currentLesson._id,
+        watchPositionSeconds: safeCurrentTime,
+        durationSeconds: safeDuration,
+      });
+    } catch (error) {
+      console.error("SAVE_WATCH_POSITION_ERROR:", error);
+    }
+  };
+
+  const scheduleSignedVideoRefresh = ({ lesson, expiresIn }) => {
+    clearVideoRefreshTimer();
+
+    const delayMs = getSignedVideoRefreshDelayMs(expiresIn);
+
+    if (!delayMs || !lesson?._id) return;
+
+    videoRefreshTimerRef.current = setTimeout(() => {
+      loadSecureVideo(lesson, {
+        silent: true,
+        reason: "auto-refresh",
+      });
+    }, delayMs);
+  };
+
+  const loadSecureVideo = async (lesson, options = {}) => {
+    if (!course?._id || !lesson?._id) return;
+
+    const isSilentRefresh = Boolean(options.silent);
+    const requestId = activeVideoRequestIdRef.current + 1;
+    activeVideoRequestIdRef.current = requestId;
+
+    try {
+      clearVideoRefreshTimer();
+
+      if (!isSilentRefresh) {
+        setVideoLoading(true);
+        setVideoError("");
+        setVideoSource("");
+        setVideoPlaybackType("mp4");
+        setVideoExpiresIn(0);
+        setVideoStartTime(0);
+        lastSavedWatchSecondRef.current = 0;
+
+        await loadLessonWatchPosition(lesson);
+      }
+
+      const shouldTryHls = ENABLE_HLS_PLAYBACK && hasReadyHls(lesson);
+
+      if (shouldTryHls) {
+        try {
+          const hlsRes = await api.post(
+            "/videos/hls-access",
+            {
+              courseId: course._id,
+              lessonId: lesson._id,
+            },
+            {
+              withCredentials: true,
+            },
+          );
+
+          if (activeVideoRequestIdRef.current !== requestId) return;
+
+          const manifestUrl = hlsRes.data.manifestUrl || "";
+
+          if (manifestUrl) {
+            setVideoSource(manifestUrl);
+            setVideoPlaybackType("hls");
+            setVideoExpiresIn(Number(hlsRes.data.expiresIn || 0));
+            return;
+          }
+        } catch (hlsError) {
+          if (import.meta.env.DEV) {
+            console.warn("HLS unavailable, falling back to MP4:", {
+              status: hlsError?.response?.status,
+              message: hlsError?.response?.data?.message,
+            });
+          }
+        }
+      }
+
+      const mp4Res = await api.post("/videos/signed-url", {
         courseId: course._id,
         lessonId: lesson._id,
       });
 
+      if (activeVideoRequestIdRef.current !== requestId) return;
+
       const secureVideoUrl =
-        res.data.videoUrl || res.data.signedUrl || res.data.url || "";
+        mp4Res.data.videoUrl || mp4Res.data.signedUrl || mp4Res.data.url || "";
+
+      const expiresIn = Number(mp4Res.data.expiresIn || 0);
+
+      if (!secureVideoUrl) {
+        throw new Error("Secure video URL not received.");
+      }
 
       setVideoSource(secureVideoUrl);
+      setVideoPlaybackType(mp4Res.data.playbackType || "mp4");
+      setVideoExpiresIn(expiresIn);
+
+      scheduleSignedVideoRefresh({
+        lesson,
+        expiresIn,
+      });
+
+      if (isSilentRefresh && import.meta.env.DEV) {
+        console.info("Secure lesson video URL refreshed.", {
+          lessonId: lesson._id,
+          expiresIn,
+        });
+      }
     } catch (error) {
+      if (activeVideoRequestIdRef.current !== requestId) return;
+
       console.error("Failed to load secure video:", error);
 
-      setVideoError(
-        error.response?.data?.message || "Failed to load secure video",
-      );
+      if (!isSilentRefresh) {
+        setVideoError(
+          error.response?.data?.message ||
+            error.message ||
+            "Failed to load secure video",
+        );
 
-      setVideoSource("");
+        setVideoSource("");
+        setVideoPlaybackType("mp4");
+        setVideoExpiresIn(0);
+        setVideoStartTime(0);
+      } else {
+        scheduleSignedVideoRefresh({
+          lesson,
+          expiresIn: videoExpiresIn || 300,
+        });
+      }
     } finally {
-      setVideoLoading(false);
+      if (activeVideoRequestIdRef.current === requestId && !isSilentRefresh) {
+        setVideoLoading(false);
+      }
     }
   };
 
@@ -863,6 +1072,7 @@ ${noteContent.trim()}
 
   useEffect(() => {
     return () => {
+      clearVideoRefreshTimer();
       clearNavbarCourseTitle();
     };
   }, []);
@@ -878,6 +1088,10 @@ ${noteContent.trim()}
 
   const handleLessonClick = async (lesson, sectionTitle) => {
     try {
+      clearVideoRefreshTimer();
+      lastSavedWatchSecondRef.current = 0;
+      setVideoStartTime(0);
+
       setCurrentLesson({
         ...lesson,
         sectionTitle,
@@ -926,6 +1140,8 @@ ${noteContent.trim()}
       if (!nextCompletedState) {
         setCertificate(null);
       } else {
+        setVideoStartTime(0);
+        lastSavedWatchSecondRef.current = 0;
         await fetchCertificateForCourse(course._id);
       }
 
@@ -1082,13 +1298,20 @@ ${noteContent.trim()}
                 </div>
               ) : videoSource ? (
                 <VideoPlayer
-                  key={currentLesson?._id}
+                  key={`${currentLesson?._id}-${videoPlaybackType}`}
                   src={videoSource}
+                  type={videoPlaybackType}
+                  startTime={videoStartTime}
                   title={currentLesson?.title}
+                  progressSaveIntervalSeconds={10}
+                  onProgressSave={saveLessonWatchPosition}
                   onEnded={() => {
                     if (isStudentLearning && !currentLessonCompleted) {
                       handleToggleLessonComplete();
                     }
+                  }}
+                  onError={(message) => {
+                    console.error("VIDEO_PLAYER_ERROR:", message);
                   }}
                 />
               ) : (
@@ -1098,9 +1321,25 @@ ${noteContent.trim()}
               )}
 
               <div className="p-6">
-                <p className="mb-2 text-sm font-black uppercase tracking-[0.18em] text-blue-700 dark:text-blue-300">
-                  {currentLesson?.sectionTitle}
-                </p>
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm font-black uppercase tracking-[0.18em] text-blue-700 dark:text-blue-300">
+                    {currentLesson?.sectionTitle}
+                  </p>
+
+                  <div className="flex flex-wrap gap-2">
+                    {videoStartTime > 0 && !currentLessonCompleted && (
+                      <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 dark:border-blue-400/20 dark:bg-blue-500/10 dark:text-blue-200">
+                        Resuming from saved position
+                      </span>
+                    )}
+
+                    {videoPlaybackType !== "hls" && videoExpiresIn > 0 && (
+                      <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-500 dark:border-white/10 dark:bg-slate-950/70 dark:text-slate-400">
+                        Secure URL auto-refresh enabled
+                      </span>
+                    )}
+                  </div>
+                </div>
 
                 <h2 className="mb-3 text-2xl font-black leading-tight text-slate-950 md:text-3xl dark:text-white">
                   {currentLesson?.title}

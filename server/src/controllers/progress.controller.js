@@ -1,8 +1,17 @@
 import mongoose from "mongoose";
+
 import { Course } from "../models/course.model.js";
 import { LessonProgress } from "../models/lessonProgress.model.js";
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
+
+const normalizeWatchSeconds = (value) => {
+  const numberValue = Number(value || 0);
+
+  if (!Number.isFinite(numberValue)) return 0;
+
+  return Math.max(0, Math.floor(numberValue));
+};
 
 const findLessonInCourse = (course, lessonId) => {
   if (!course?.sections?.length) return null;
@@ -70,6 +79,35 @@ const buildCourseProgress = async ({ userId, courseId }) => {
   };
 };
 
+const validateCourseAndLesson = async ({ courseId, lessonId }) => {
+  if (!isValidObjectId(courseId) || !isValidObjectId(lessonId)) {
+    const error = new Error("Invalid course or lesson id.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const course = await Course.findById(courseId).select("sections title slug");
+
+  if (!course) {
+    const error = new Error("Course not found.");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const lessonData = findLessonInCourse(course, lessonId);
+
+  if (!lessonData) {
+    const error = new Error("Lesson not found in this course.");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  return {
+    course,
+    lessonData,
+  };
+};
+
 export const getCourseProgress = async (req, res) => {
   try {
     const { courseId } = req.params;
@@ -114,29 +152,23 @@ export const updateLessonProgress = async (req, res) => {
     const isCompleted =
       typeof req.body.isCompleted === "boolean" ? req.body.isCompleted : true;
 
-    if (!isValidObjectId(courseId) || !isValidObjectId(lessonId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid course or lesson id.",
-      });
-    }
+    await validateCourseAndLesson({
+      courseId,
+      lessonId,
+    });
 
-    const course = await Course.findById(courseId).select("sections title slug");
+    const updateData = {
+      isCompleted,
+      completedAt: isCompleted ? new Date() : null,
+    };
 
-    if (!course) {
-      return res.status(404).json({
-        success: false,
-        message: "Course not found.",
-      });
-    }
-
-    const lessonData = findLessonInCourse(course, lessonId);
-
-    if (!lessonData) {
-      return res.status(404).json({
-        success: false,
-        message: "Lesson not found in this course.",
-      });
+    /*
+      When lesson is completed, reset resume position to 0.
+      So if student opens completed lesson again, it starts from beginning.
+    */
+    if (isCompleted) {
+      updateData.watchPositionSeconds = 0;
+      updateData.lastWatchedAt = new Date();
     }
 
     const progressItem = await LessonProgress.findOneAndUpdate(
@@ -146,10 +178,7 @@ export const updateLessonProgress = async (req, res) => {
         lessonId,
       },
       {
-        $set: {
-          isCompleted,
-          completedAt: isCompleted ? new Date() : null,
-        },
+        $set: updateData,
       },
       {
         new: true,
@@ -176,9 +205,139 @@ export const updateLessonProgress = async (req, res) => {
   } catch (error) {
     console.error("UPDATE_LESSON_PROGRESS_ERROR:", error);
 
-    return res.status(500).json({
+    return res.status(error.statusCode || 500).json({
       success: false,
-      message: "Failed to update lesson progress.",
+      message: error.message || "Failed to update lesson progress.",
+    });
+  }
+};
+
+export const getLessonWatchPosition = async (req, res) => {
+  try {
+    const { courseId, lessonId } = req.params;
+
+    await validateCourseAndLesson({
+      courseId,
+      lessonId,
+    });
+
+    const progressItem = await LessonProgress.findOne({
+      userId: req.user._id,
+      courseId,
+      lessonId,
+    });
+
+    return res.status(200).json({
+      success: true,
+      watchPositionSeconds: progressItem?.watchPositionSeconds || 0,
+      durationSeconds: progressItem?.durationSeconds || 0,
+      isCompleted: progressItem?.isCompleted || false,
+      lastWatchedAt: progressItem?.lastWatchedAt || null,
+    });
+  } catch (error) {
+    console.error("GET_LESSON_WATCH_POSITION_ERROR:", error);
+
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message || "Failed to fetch lesson watch position.",
+    });
+  }
+};
+
+export const saveLessonWatchPosition = async (req, res) => {
+  try {
+    const { courseId, lessonId } = req.body;
+
+    const watchPositionSeconds = normalizeWatchSeconds(
+      req.body.watchPositionSeconds ?? req.body.currentTime,
+    );
+
+    const durationSeconds = normalizeWatchSeconds(
+      req.body.durationSeconds ?? req.body.duration,
+    );
+
+    await validateCourseAndLesson({
+      courseId,
+      lessonId,
+    });
+
+    const existingProgress = await LessonProgress.findOne({
+      userId: req.user._id,
+      courseId,
+      lessonId,
+    });
+
+    /*
+      If lesson is already completed, do not store resume time.
+      Completed lesson should open from beginning.
+    */
+    if (existingProgress?.isCompleted) {
+      return res.status(200).json({
+        success: true,
+        message: "Lesson already completed. Watch position not updated.",
+        watchPositionSeconds: 0,
+        durationSeconds: existingProgress.durationSeconds || durationSeconds,
+        isCompleted: true,
+      });
+    }
+
+    const safeDurationSeconds =
+      durationSeconds > 0
+        ? durationSeconds
+        : existingProgress?.durationSeconds || 0;
+
+    let safeWatchPositionSeconds = watchPositionSeconds;
+
+    if (safeDurationSeconds > 0) {
+      /*
+        Do not save the exact ending position.
+        Video ended event will mark lesson completed separately.
+      */
+      safeWatchPositionSeconds = Math.min(
+        safeWatchPositionSeconds,
+        Math.max(0, safeDurationSeconds - 3),
+      );
+    }
+
+    const progressItem = await LessonProgress.findOneAndUpdate(
+      {
+        userId: req.user._id,
+        courseId,
+        lessonId,
+      },
+      {
+        $set: {
+          watchPositionSeconds: safeWatchPositionSeconds,
+          durationSeconds: safeDurationSeconds,
+          lastWatchedAt: new Date(),
+        },
+        $setOnInsert: {
+          isCompleted: false,
+          completedAt: null,
+        },
+      },
+      {
+        new: true,
+        upsert: true,
+        runValidators: true,
+        setDefaultsOnInsert: true,
+      },
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Watch position saved.",
+      watchPositionSeconds: progressItem.watchPositionSeconds || 0,
+      durationSeconds: progressItem.durationSeconds || 0,
+      isCompleted: progressItem.isCompleted || false,
+      lastWatchedAt: progressItem.lastWatchedAt || null,
+    });
+  } catch (error) {
+    console.error("SAVE_LESSON_WATCH_POSITION_ERROR:", error);
+
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message || "Failed to save lesson watch position.",
     });
   }
 };

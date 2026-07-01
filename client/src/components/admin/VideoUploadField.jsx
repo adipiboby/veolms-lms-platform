@@ -17,13 +17,17 @@ const getSessionStorageKey = (file) => {
 };
 
 const getAnySavedUploadExists = () => {
-  for (let i = 0; i < localStorage.length; i += 1) {
-    const key = localStorage.key(i);
+  try {
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
 
-    if (key?.startsWith(STORAGE_PREFIX)) return true;
+      if (key?.startsWith(STORAGE_PREFIX)) return true;
+    }
+
+    return false;
+  } catch {
+    return false;
   }
-
-  return false;
 };
 
 const loadSavedSessionForFile = (file) => {
@@ -44,6 +48,8 @@ const saveSession = (storageKey, session) => {
 };
 
 const clearSession = (storageKey) => {
+  if (!storageKey) return;
+
   localStorage.removeItem(storageKey);
 };
 
@@ -59,6 +65,18 @@ const getApiErrorMessage = (err) => {
     err.response?.data?.error ||
     err.message ||
     "Video upload failed."
+  );
+};
+
+const isOldUploadOwnershipError = (err) => {
+  const status = Number(err?.response?.status || 0);
+  const message = getApiErrorMessage(err).toLowerCase();
+
+  return (
+    status === 403 &&
+    (message.includes("own video") ||
+      message.includes("upload parts only for your own video") ||
+      message.includes("you can upload parts only for your own video"))
   );
 };
 
@@ -204,31 +222,43 @@ const VideoUploadField = ({
     setHasSavedUpload(getAnySavedUploadExists());
   }, []);
 
-  const openFilePicker = () => {
-    if (disabled || uploading) return;
-
-    fileInputRef.current?.click();
-  };
-
   const resetInput = () => {
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
   };
 
+  const resetUploadState = () => {
+    pausedRef.current = false;
+    resumeModeRef.current = false;
+    sessionRef.current = null;
+    storageKeyRef.current = "";
+
+    setSelectedFile(null);
+    setSelectedMetadata(null);
+    setUploading(false);
+    setPaused(false);
+    setProgress(0);
+
+    xhrRef.current = null;
+    resetInput();
+  };
+
+  const openFilePicker = () => {
+    if (disabled || uploading) return;
+
+    fileInputRef.current?.click();
+  };
+
   const handleClearOldUploads = () => {
     if (uploading) return;
 
     clearAllSavedUploadSessions();
+    resetUploadState();
 
     setHasSavedUpload(false);
-    setSelectedFile(null);
-    setSelectedMetadata(null);
-    setProgress(0);
-    setPaused(false);
     setError("");
     setMessage("Old upload sessions cleared. Choose video again.");
-    resetInput();
   };
 
   const handleRemoveVideo = () => {
@@ -249,13 +279,21 @@ const VideoUploadField = ({
       mimeType: "",
     });
 
-    setSelectedFile(null);
-    setSelectedMetadata(null);
-    setProgress(0);
-    setPaused(false);
+    resetUploadState();
+
     setMessage("Video removed from this lesson.");
     setError("");
-    resetInput();
+  };
+
+  const handleOldSessionOwnershipError = () => {
+    clearAllSavedUploadSessions();
+    resetUploadState();
+
+    setHasSavedUpload(false);
+    setMessage("");
+    setError(
+      "Old upload session was removed because it belongs to another admin or old login. Please click Choose Video and upload again fresh.",
+    );
   };
 
   const startOrResumeUpload = async (
@@ -283,16 +321,17 @@ const VideoUploadField = ({
 
       setSelectedMetadata(metadata);
 
-      // Auto-fill lesson title and duration before upload completes.
       onMetaChange?.(metadata);
 
       let session = shouldResume ? loadSavedSessionForFile(file) : null;
 
-      // Important:
-      // Choose Video = fresh upload.
-      // Resume Upload = use saved multipart session.
+      /*
+        Choose Video = fresh upload.
+        Resume Upload = use saved multipart session.
+      */
       if (!shouldResume) {
         clearSession(storageKey);
+        session = null;
       }
 
       if (session?.uploadId && session?.key) {
@@ -323,6 +362,7 @@ const VideoUploadField = ({
       }
 
       sessionRef.current = session;
+      setHasSavedUpload(getAnySavedUploadExists());
 
       const totalParts = Math.ceil(file.size / PART_SIZE);
 
@@ -445,10 +485,13 @@ const VideoUploadField = ({
       onUploadSuccess?.(video, finalMetadata);
 
       clearSession(storageKey);
-      setHasSavedUpload(getAnySavedUploadExists());
 
+      sessionRef.current = null;
+      storageKeyRef.current = "";
+
+      setHasSavedUpload(getAnySavedUploadExists());
       setProgress(100);
-      setMessage("Video uploaded successfully. HLS processing started.");
+      setMessage("Video uploaded successfully.");
       setPaused(false);
       setError("");
     } catch (err) {
@@ -461,32 +504,12 @@ const VideoUploadField = ({
 
       console.error("VIDEO_UPLOAD_ERROR:", err);
 
-      const errorMessage = getApiErrorMessage(err);
-      const lowerMessage = errorMessage.toLowerCase();
-
-      const isOwnershipError =
-        lowerMessage.includes("only for your own video") ||
-        lowerMessage.includes("forbidden") ||
-        err.response?.status === 403;
-
-      if (isOwnershipError) {
-        if (storageKeyRef.current) {
-          clearSession(storageKeyRef.current);
-        }
-
-        setHasSavedUpload(getAnySavedUploadExists());
-        setSelectedFile(null);
-        setSelectedMetadata(null);
-        setProgress(0);
-        setPaused(false);
-        setMessage("");
-
-        setError(
-          "Old upload session removed. Click Choose Video and upload again fresh.",
-        );
-
+      if (isOldUploadOwnershipError(err)) {
+        handleOldSessionOwnershipError();
         return;
       }
+
+      const errorMessage = getApiErrorMessage(err);
 
       setError(errorMessage);
       setMessage("");
@@ -495,6 +518,7 @@ const VideoUploadField = ({
       xhrRef.current = null;
       resumeModeRef.current = false;
       resetInput();
+      setHasSavedUpload(getAnySavedUploadExists());
     }
   };
 
@@ -512,7 +536,6 @@ const VideoUploadField = ({
       setSelectedFile(file);
       setSelectedMetadata(metadata);
 
-      // Auto-fill immediately before upload.
       onMetaChange?.(metadata);
 
       const shouldResume = resumeModeRef.current;
@@ -569,22 +592,18 @@ const VideoUploadField = ({
         clearSession(storageKeyRef.current);
       }
 
-      setSelectedFile(null);
-      setSelectedMetadata(null);
-      setUploading(false);
-      setPaused(false);
-      setProgress(0);
+      resetUploadState();
+
       setMessage("Upload cancelled.");
       setError("");
       setHasSavedUpload(getAnySavedUploadExists());
-      resetInput();
     } catch (err) {
-      setError(
-        err.response?.data?.message ||
-          err.response?.data?.error ||
-          err.message ||
-          "Failed to cancel upload.",
-      );
+      if (isOldUploadOwnershipError(err)) {
+        handleOldSessionOwnershipError();
+        return;
+      }
+
+      setError(getApiErrorMessage(err));
     }
   };
 

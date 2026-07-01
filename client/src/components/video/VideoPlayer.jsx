@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import Hls from "hls.js";
 import {
   Loader2,
   Maximize,
@@ -49,12 +50,55 @@ const formatTime = (seconds) => {
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 };
 
-const VideoPlayer = ({ src, title, onEnded }) => {
+const getVideoErrorMessage = (errorCode) => {
+  switch (errorCode) {
+    case 1:
+      return "Video loading was aborted.";
+    case 2:
+      return "Network error while loading video.";
+    case 3:
+      return "Browser could not decode this video.";
+    case 4:
+      return "Video URL or format is not supported.";
+    default:
+      return "Unknown video playback error.";
+  }
+};
+
+const getSafeSeconds = (value) => {
+  const numberValue = Number(value || 0);
+
+  if (!Number.isFinite(numberValue)) return 0;
+
+  return Math.max(0, Math.floor(numberValue));
+};
+
+const VideoPlayer = ({
+  src,
+  title,
+  type = "mp4",
+  startTime = 0,
+  onEnded,
+  onError,
+  onProgressSave,
+  progressSaveIntervalSeconds = 10,
+}) => {
   const videoRef = useRef(null);
   const previewVideoRef = useRef(null);
   const containerRef = useRef(null);
   const progressRef = useRef(null);
   const controlsTimerRef = useRef(null);
+  const hlsRef = useRef(null);
+
+  const initialSeekAppliedRef = useRef(false);
+  const pendingSeekTimeRef = useRef(0);
+  const shouldResumePlaybackRef = useRef(false);
+  const lastSavedSecondRef = useRef(0);
+  const latestPlaybackRef = useRef({
+    currentTime: 0,
+    duration: 0,
+  });
+  const onProgressSaveRef = useRef(onProgressSave);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -73,8 +117,21 @@ const VideoPlayer = ({ src, title, onEnded }) => {
   const [isVideoReady, setIsVideoReady] = useState(false);
   const [isBuffering, setIsBuffering] = useState(true);
   const [playRequested, setPlayRequested] = useState(false);
+  const [playerError, setPlayerError] = useState("");
 
-  const isYouTube = isYouTubeUrl(src);
+  const [qualityLevels, setQualityLevels] = useState([]);
+  const [selectedQuality, setSelectedQuality] = useState("auto");
+
+  const isYouTube = isYouTubeUrl(src || "");
+  const isHlsSource =
+    type === "hls" ||
+    String(src || "")
+      .toLowerCase()
+      .includes(".m3u8");
+
+  useEffect(() => {
+    onProgressSaveRef.current = onProgressSave;
+  }, [onProgressSave]);
 
   const showControlsTemporarily = () => {
     setControlsVisible(true);
@@ -86,6 +143,62 @@ const VideoPlayer = ({ src, title, onEnded }) => {
     controlsTimerRef.current = setTimeout(() => {
       setControlsVisible(false);
     }, 2500);
+  };
+
+  const saveWatchPosition = (reason = "interval", force = false) => {
+    if (isYouTube || typeof onProgressSaveRef.current !== "function") return;
+
+    const video = videoRef.current;
+
+    const safeCurrentTime = getSafeSeconds(
+      video?.currentTime ?? latestPlaybackRef.current.currentTime,
+    );
+
+    const safeDuration = getSafeSeconds(
+      video?.duration ?? latestPlaybackRef.current.duration,
+    );
+
+    if (!force && safeCurrentTime < 1) return;
+
+    if (!force && safeCurrentTime === lastSavedSecondRef.current) return;
+
+    lastSavedSecondRef.current = safeCurrentTime;
+
+    onProgressSaveRef.current({
+      currentTime: safeCurrentTime,
+      duration: safeDuration,
+      reason,
+    });
+  };
+
+  const applyPendingSeekTime = () => {
+    const video = videoRef.current;
+    if (!video || initialSeekAppliedRef.current) return;
+
+    const safeStartTime = getSafeSeconds(
+      pendingSeekTimeRef.current || startTime,
+    );
+
+    if (safeStartTime <= 0) {
+      initialSeekAppliedRef.current = true;
+      return;
+    }
+
+    const safeDuration = Number(video.duration || duration || 0);
+
+    if (safeDuration > 0 && safeStartTime >= safeDuration - 3) {
+      initialSeekAppliedRef.current = true;
+      return;
+    }
+
+    try {
+      video.currentTime = safeStartTime;
+      setCurrentTime(safeStartTime);
+      latestPlaybackRef.current.currentTime = safeStartTime;
+      initialSeekAppliedRef.current = true;
+    } catch (error) {
+      console.warn("Unable to restore video watch position:", error);
+    }
   };
 
   useEffect(() => {
@@ -108,6 +221,19 @@ const VideoPlayer = ({ src, title, onEnded }) => {
   }, [isPlaying]);
 
   useEffect(() => {
+    const video = videoRef.current;
+
+    const previousTime = getSafeSeconds(video?.currentTime || currentTime);
+    const wasPlaying = Boolean(video && !video.paused && !video.ended);
+
+    pendingSeekTimeRef.current =
+      previousTime > 1 ? previousTime : getSafeSeconds(startTime);
+
+    shouldResumePlaybackRef.current = wasPlaying;
+
+    initialSeekAppliedRef.current = false;
+    lastSavedSecondRef.current = 0;
+
     setIsPlaying(false);
     setCurrentTime(0);
     setDuration(0);
@@ -116,7 +242,22 @@ const VideoPlayer = ({ src, title, onEnded }) => {
     setIsVideoReady(false);
     setIsBuffering(true);
     setPlayRequested(false);
-  }, [src]);
+    setPlayerError("");
+    setQualityLevels([]);
+    setSelectedQuality("auto");
+  }, [src, type]);
+
+  useEffect(() => {
+    const safeStartTime = getSafeSeconds(startTime);
+
+    if (safeStartTime <= 0) return;
+
+    pendingSeekTimeRef.current = safeStartTime;
+
+    if (isVideoReady && !initialSeekAppliedRef.current) {
+      applyPendingSeekTime();
+    }
+  }, [startTime, isVideoReady]);
 
   useEffect(() => {
     if (!isFullscreen) return;
@@ -138,11 +279,136 @@ const VideoPlayer = ({ src, title, onEnded }) => {
 
   useEffect(() => {
     return () => {
+      const safeCurrentTime = getSafeSeconds(
+        latestPlaybackRef.current.currentTime,
+      );
+
+      if (
+        safeCurrentTime > 0 &&
+        typeof onProgressSaveRef.current === "function"
+      ) {
+        onProgressSaveRef.current({
+          currentTime: safeCurrentTime,
+          duration: getSafeSeconds(latestPlaybackRef.current.duration),
+          reason: "unmount",
+        });
+      }
+
       if (controlsTimerRef.current) {
         clearTimeout(controlsTimerRef.current);
       }
+
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
     };
   }, []);
+
+  useEffect(() => {
+    const video = videoRef.current;
+
+    if (!video || !src || isYouTube) return;
+
+    setPlayerError("");
+    setIsBuffering(true);
+    setIsVideoReady(false);
+
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
+    }
+
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
+
+    if (isHlsSource) {
+      if (video.canPlayType("application/vnd.apple.mpegurl")) {
+        video.src = src;
+        video.load();
+        return;
+      }
+
+      if (Hls.isSupported()) {
+        const hls = new Hls({
+          enableWorker: true,
+          lowLatencyMode: false,
+          backBufferLength: 90,
+          xhrSetup: (xhr) => {
+            xhr.withCredentials = true;
+          },
+        });
+
+        hlsRef.current = hls;
+
+        hls.loadSource(src);
+        hls.attachMedia(video);
+
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          const levels = hls.levels.map((level, index) => ({
+            index,
+            height: level.height,
+            bitrate: level.bitrate,
+            label: level.height ? `${level.height}p` : `Level ${index + 1}`,
+          }));
+
+          setQualityLevels(levels);
+          setIsVideoReady(true);
+          setIsBuffering(false);
+          applyPendingSeekTime();
+        });
+
+        hls.on(Hls.Events.ERROR, (_, data) => {
+          console.error("HLS_PLAYER_ERROR:", data);
+
+          if (!data?.fatal) return;
+
+          const message =
+            data?.details || data?.type || "Unable to play HLS video.";
+
+          setPlayerError(message);
+          setIsBuffering(false);
+          setIsVideoReady(false);
+
+          if (typeof onError === "function") {
+            onError(message);
+          }
+
+          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+            hls.startLoad();
+            return;
+          }
+
+          if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+            hls.recoverMediaError();
+            return;
+          }
+
+          hls.destroy();
+        });
+
+        return () => {
+          hls.destroy();
+          hlsRef.current = null;
+        };
+      }
+
+      const message = "This browser does not support HLS playback.";
+      setPlayerError(message);
+      setIsBuffering(false);
+      setIsVideoReady(false);
+
+      if (typeof onError === "function") {
+        onError(message);
+      }
+
+      return;
+    }
+
+    video.src = src;
+    video.load();
+  }, [src, type, isHlsSource, isYouTube, onError]);
 
   const safelyPlayVideo = async () => {
     const video = videoRef.current;
@@ -176,6 +442,7 @@ const VideoPlayer = ({ src, title, onEnded }) => {
     if (video.paused) {
       await safelyPlayVideo();
     } else {
+      saveWatchPosition("pause", true);
       video.pause();
       setIsPlaying(false);
     }
@@ -189,6 +456,17 @@ const VideoPlayer = ({ src, title, onEnded }) => {
 
     video.pause();
     video.currentTime = 0;
+
+    latestPlaybackRef.current.currentTime = 0;
+    lastSavedSecondRef.current = 0;
+
+    if (typeof onProgressSaveRef.current === "function") {
+      onProgressSaveRef.current({
+        currentTime: 0,
+        duration: getSafeSeconds(video.duration || duration),
+        reason: "stop",
+      });
+    }
 
     setCurrentTime(0);
     setIsPlaying(false);
@@ -208,6 +486,8 @@ const VideoPlayer = ({ src, title, onEnded }) => {
 
     video.currentTime = nextTime;
     setCurrentTime(nextTime);
+    latestPlaybackRef.current.currentTime = nextTime;
+    saveWatchPosition("seek", true);
     showControlsTemporarily();
   };
 
@@ -218,6 +498,8 @@ const VideoPlayer = ({ src, title, onEnded }) => {
     const newTime = Number(event.target.value);
     video.currentTime = newTime;
     setCurrentTime(newTime);
+    latestPlaybackRef.current.currentTime = newTime;
+    saveWatchPosition("seek", true);
     showControlsTemporarily();
   };
 
@@ -264,6 +546,22 @@ const VideoPlayer = ({ src, title, onEnded }) => {
     showControlsTemporarily();
   };
 
+  const handleQualityChange = (event) => {
+    const value = event.target.value;
+    setSelectedQuality(value);
+
+    const hls = hlsRef.current;
+
+    if (!hls) return;
+
+    if (value === "auto") {
+      hls.currentLevel = -1;
+      return;
+    }
+
+    hls.currentLevel = Number(value);
+  };
+
   const toggleFullscreen = async () => {
     const container = containerRef.current;
     if (!container) return;
@@ -278,6 +576,32 @@ const VideoPlayer = ({ src, title, onEnded }) => {
       showControlsTemporarily();
     } catch (error) {
       console.error("Fullscreen failed:", error);
+    }
+  };
+
+  const handleVideoError = () => {
+    const video = videoRef.current;
+    const mediaError = video?.error;
+
+    const message = getVideoErrorMessage(mediaError?.code);
+
+    console.error("Video element error:", {
+      error: mediaError,
+      code: mediaError?.code,
+      message,
+      currentSrc: video?.currentSrc,
+      networkState: video?.networkState,
+      readyState: video?.readyState,
+      sourceType: type,
+    });
+
+    setPlayerError(message);
+    setIsBuffering(false);
+    setIsVideoReady(false);
+    setPlayRequested(false);
+
+    if (typeof onError === "function") {
+      onError(message);
     }
   };
 
@@ -296,7 +620,8 @@ const VideoPlayer = ({ src, title, onEnded }) => {
 
         <div className="border-t border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-slate-950">
           <p className="text-sm text-slate-600 dark:text-slate-400">
-            YouTube preview mode. Full custom controls work with S3 MP4 videos.
+            YouTube preview mode. Full custom controls work with uploaded lesson
+            videos.
           </p>
         </div>
       </div>
@@ -324,9 +649,10 @@ const VideoPlayer = ({ src, title, onEnded }) => {
       <div className={`${isFullscreen ? "h-screen" : "aspect-video"} bg-black`}>
         <video
           ref={videoRef}
-          src={src}
           className="h-full w-full bg-black object-contain"
           preload="metadata"
+          playsInline
+          crossOrigin={isHlsSource ? "use-credentials" : undefined}
           onClick={togglePlay}
           onLoadStart={() => {
             setIsBuffering(true);
@@ -337,16 +663,20 @@ const VideoPlayer = ({ src, title, onEnded }) => {
             if (!video) return;
 
             setDuration(video.duration || 0);
+            latestPlaybackRef.current.duration = video.duration || 0;
             video.volume = volume;
             video.playbackRate = speed;
+            applyPendingSeekTime();
           }}
           onCanPlay={async () => {
             setIsVideoReady(true);
             setIsBuffering(false);
+            applyPendingSeekTime();
 
-            if (playRequested) {
+            if (playRequested || shouldResumePlaybackRef.current) {
               await safelyPlayVideo();
               setPlayRequested(false);
+              shouldResumePlaybackRef.current = false;
               showControlsTemporarily();
             }
           }}
@@ -358,32 +688,48 @@ const VideoPlayer = ({ src, title, onEnded }) => {
             setIsPlaying(true);
           }}
           onPause={() => {
+            saveWatchPosition("pause", true);
             setIsPlaying(false);
           }}
           onTimeUpdate={() => {
             const video = videoRef.current;
             if (!video) return;
 
-            setCurrentTime(video.currentTime || 0);
+            const nextCurrentTime = video.currentTime || 0;
+            const nextDuration = video.duration || duration || 0;
+
+            setCurrentTime(nextCurrentTime);
+
+            latestPlaybackRef.current = {
+              currentTime: nextCurrentTime,
+              duration: nextDuration,
+            };
+
+            const safeCurrentSecond = getSafeSeconds(nextCurrentTime);
+
+            if (
+              safeCurrentSecond - lastSavedSecondRef.current >=
+              progressSaveIntervalSeconds
+            ) {
+              saveWatchPosition("interval");
+            }
           }}
           onEnded={() => {
+            saveWatchPosition("ended", true);
+
             setIsPlaying(false);
             setPlayRequested(false);
+            latestPlaybackRef.current.currentTime = 0;
             showControlsTemporarily();
 
             if (typeof onEnded === "function") {
               onEnded();
             }
           }}
-          onError={() => {
-            console.error("Video element error:", videoRef.current?.error);
-            setIsBuffering(false);
-            setIsVideoReady(false);
-            setPlayRequested(false);
-          }}
+          onError={handleVideoError}
         />
 
-        {isBuffering && (
+        {isBuffering && !playerError && (
           <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/50">
             <Loader2 className="animate-spin text-blue-300" size={42} />
 
@@ -397,7 +743,19 @@ const VideoPlayer = ({ src, title, onEnded }) => {
           </div>
         )}
 
-        {!isPlaying && controlsVisible && !isBuffering && (
+        {playerError && (
+          <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/80 px-6 text-center">
+            <p className="text-lg font-black text-red-300">
+              Video playback error
+            </p>
+
+            <p className="mt-2 max-w-xl text-sm text-slate-300">
+              {playerError}
+            </p>
+          </div>
+        )}
+
+        {!isPlaying && controlsVisible && !isBuffering && !playerError && (
           <button
             type="button"
             onClick={togglePlay}
@@ -418,7 +776,7 @@ const VideoPlayer = ({ src, title, onEnded }) => {
           onMouseMove={handleProgressHover}
           onMouseLeave={() => setShowPreview(false)}
         >
-          {showPreview && duration > 0 && (
+          {showPreview && duration > 0 && !isHlsSource && (
             <div
               className="pointer-events-none absolute bottom-8 w-44 -translate-x-1/2 overflow-hidden rounded-xl border border-white/20 bg-black shadow-2xl"
               style={{ left: `${hoverLeft}%`, maxWidth: "180px" }}
@@ -546,15 +904,34 @@ const VideoPlayer = ({ src, title, onEnded }) => {
               />
             </div>
 
-            <select
-              disabled
-              className="rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-sm text-slate-400 outline-none disabled:cursor-not-allowed"
-            >
-              <option>Auto Quality</option>
-              <option>360p</option>
-              <option>720p</option>
-              <option>1080p</option>
-            </select>
+            {isHlsSource ? (
+              <select
+                value={selectedQuality}
+                onChange={handleQualityChange}
+                className="rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-sm text-white outline-none"
+              >
+                <option className="bg-slate-900 text-white" value="auto">
+                  Auto Quality
+                </option>
+
+                {qualityLevels.map((level) => (
+                  <option
+                    key={level.index}
+                    className="bg-slate-900 text-white"
+                    value={level.index}
+                  >
+                    {level.label}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <select
+                disabled
+                className="rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-sm text-slate-400 outline-none disabled:cursor-not-allowed"
+              >
+                <option>Auto Quality</option>
+              </select>
+            )}
 
             <button
               type="button"
