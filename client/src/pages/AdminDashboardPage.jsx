@@ -7,7 +7,6 @@ import {
   BarChart3,
   BookOpen,
   CheckCircle,
-  Clock,
   Database,
   IndianRupee,
   Layers,
@@ -79,25 +78,32 @@ const getStudentName = (item) => {
 
 const StatCard = ({ title, value, subtitle, icon: Icon, tone = "blue" }) => {
   const toneClasses = {
-    blue: "bg-blue-500/10 text-blue-300 border-blue-400/20",
-    green: "bg-green-500/10 text-green-300 border-green-400/20",
-    yellow: "bg-yellow-500/10 text-yellow-300 border-yellow-400/20",
-    purple: "bg-purple-500/10 text-purple-300 border-purple-400/20",
-    cyan: "bg-cyan-500/10 text-cyan-300 border-cyan-400/20",
-    rose: "bg-rose-500/10 text-rose-300 border-rose-400/20",
+    blue: "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-400/20 dark:bg-blue-500/10 dark:text-blue-300",
+    green:
+      "border-green-200 bg-green-50 text-green-700 dark:border-green-400/20 dark:bg-green-500/10 dark:text-green-300",
+    yellow:
+      "border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-400/20 dark:bg-yellow-500/10 dark:text-yellow-300",
+    purple:
+      "border-purple-200 bg-purple-50 text-purple-700 dark:border-purple-400/20 dark:bg-purple-500/10 dark:text-purple-300",
+    cyan: "border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-400/20 dark:bg-cyan-500/10 dark:text-cyan-300",
+    rose: "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/20 dark:bg-rose-500/10 dark:text-rose-300",
   };
 
   return (
-    <article className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-6 shadow-2xl shadow-black/20">
+    <article className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/70 dark:border-white/10 dark:bg-white/[0.04] dark:shadow-black/20">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-sm font-bold text-slate-400">{title}</p>
+          <p className="text-sm font-bold text-slate-600 dark:text-slate-400">
+            {title}
+          </p>
 
-          <h3 className="mt-4 break-words text-4xl font-black text-white">
+          <h3 className="mt-4 break-words text-4xl font-black text-slate-950 dark:text-white">
             {value}
           </h3>
 
-          <p className="mt-4 leading-6 text-slate-400">{subtitle}</p>
+          <p className="mt-4 leading-6 text-slate-600 dark:text-slate-400">
+            {subtitle}
+          </p>
         </div>
 
         <div
@@ -114,12 +120,18 @@ const StatCard = ({ title, value, subtitle, icon: Icon, tone = "blue" }) => {
 
 const SectionCard = ({ title, subtitle, children, action }) => {
   return (
-    <section className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-6 shadow-2xl shadow-black/20">
+    <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/70 dark:border-white/10 dark:bg-white/[0.04] dark:shadow-black/20">
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-black text-white">{title}</h2>
+          <h2 className="text-2xl font-black text-slate-950 dark:text-white">
+            {title}
+          </h2>
 
-          {subtitle && <p className="mt-2 text-slate-400">{subtitle}</p>}
+          {subtitle && (
+            <p className="mt-2 text-slate-600 dark:text-slate-400">
+              {subtitle}
+            </p>
+          )}
         </div>
 
         {action}
@@ -132,14 +144,16 @@ const SectionCard = ({ title, subtitle, children, action }) => {
 
 const EmptyState = ({ icon: Icon, title, text }) => {
   return (
-    <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-8 text-center">
-      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-300">
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-8 text-center dark:border-white/10 dark:bg-slate-950/60">
+      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
         <Icon size={28} />
       </div>
 
-      <h3 className="mt-4 font-black text-white">{title}</h3>
+      <h3 className="mt-4 font-black text-slate-950 dark:text-white">
+        {title}
+      </h3>
 
-      <p className="mt-2 text-sm text-slate-400">{text}</p>
+      <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">{text}</p>
     </div>
   );
 };
@@ -262,11 +276,14 @@ const AdminDashboardPage = () => {
 
   if (loading) {
     return (
-      <main className="min-h-screen overflow-x-hidden bg-slate-950 px-4 py-10 text-white">
+      <main className="min-h-screen overflow-x-hidden bg-slate-50 px-4 py-10 text-slate-950 dark:bg-slate-950 dark:text-white">
         <div className="flex min-h-[70vh] flex-col items-center justify-center">
-          <Loader2 size={44} className="animate-spin text-blue-400" />
+          <Loader2
+            size={44}
+            className="animate-spin text-blue-500 dark:text-blue-400"
+          />
 
-          <p className="mt-4 font-semibold text-slate-400">
+          <p className="mt-4 font-semibold text-slate-600 dark:text-slate-400">
             Loading admin dashboard...
           </p>
         </div>
@@ -276,14 +293,14 @@ const AdminDashboardPage = () => {
 
   if (pageError) {
     return (
-      <main className="min-h-screen overflow-x-hidden bg-slate-950 px-4 py-10 text-white">
-        <section className="mx-auto max-w-4xl rounded-[2rem] border border-red-500/30 bg-red-500/10 p-8">
-          <div className="flex items-center gap-3 text-red-200">
+      <main className="min-h-screen overflow-x-hidden bg-slate-50 px-4 py-10 text-slate-950 dark:bg-slate-950 dark:text-white">
+        <section className="mx-auto max-w-4xl rounded-[2rem] border border-red-200 bg-red-50 p-8 dark:border-red-500/30 dark:bg-red-500/10">
+          <div className="flex items-center gap-3 text-red-700 dark:text-red-200">
             <AlertCircle size={28} />
             <h1 className="text-2xl font-black">Dashboard Error</h1>
           </div>
 
-          <p className="mt-4 text-slate-300">{pageError}</p>
+          <p className="mt-4 text-slate-700 dark:text-slate-300">{pageError}</p>
 
           <button
             type="button"
@@ -299,23 +316,23 @@ const AdminDashboardPage = () => {
   }
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-slate-950 text-white">
-      <section className="relative overflow-hidden border-b border-white/10">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.18),transparent_32%),radial-gradient(circle_at_top_right,rgba(147,51,234,0.15),transparent_30%),linear-gradient(180deg,rgba(15,23,42,0),rgba(2,6,23,1))]" />
+    <main className="min-h-screen overflow-x-hidden bg-slate-50 text-slate-950 transition-colors duration-300 dark:bg-slate-950 dark:text-white">
+      <section className="relative overflow-hidden border-b border-slate-200 dark:border-white/10">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.10),transparent_32%),radial-gradient(circle_at_top_right,rgba(147,51,234,0.08),transparent_30%),linear-gradient(180deg,rgba(248,250,252,0),rgba(248,250,252,1))] dark:bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.18),transparent_32%),radial-gradient(circle_at_top_right,rgba(147,51,234,0.15),transparent_30%),linear-gradient(180deg,rgba(15,23,42,0),rgba(2,6,23,1))]" />
 
         <div className="relative mx-auto max-w-7xl px-4 py-10">
           <div className="flex flex-wrap items-end justify-between gap-5">
             <div>
-              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-blue-400/20 bg-blue-500/10 px-4 py-2 text-sm font-black text-blue-200">
+              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-black text-blue-700 dark:border-blue-400/20 dark:bg-blue-500/10 dark:text-blue-200">
                 <BarChart3 size={17} />
                 Admin Overview
               </div>
 
-              <h1 className="text-4xl font-black md:text-5xl">
+              <h1 className="text-4xl font-black text-slate-950 md:text-5xl dark:text-white">
                 Admin Dashboard
               </h1>
 
-              <p className="mt-3 max-w-3xl text-slate-400">
+              <p className="mt-3 max-w-3xl text-slate-600 dark:text-slate-400">
                 Track students, courses, enrollments, revenue, videos, reviews,
                 and platform activity in one clean dashboard.
               </p>
@@ -324,7 +341,7 @@ const AdminDashboardPage = () => {
             <button
               type="button"
               onClick={fetchDashboardData}
-              className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 font-black text-slate-200 hover:bg-white/10"
+              className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-3 font-black text-slate-800 shadow-sm hover:bg-slate-100 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
             >
               <RefreshCw size={17} />
               Refresh
@@ -463,10 +480,10 @@ const AdminDashboardPage = () => {
                 text="Top courses will appear after students enroll."
               />
             ) : (
-              <div className="overflow-hidden rounded-2xl border border-white/10">
+              <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10">
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[650px] text-left">
-                    <thead className="bg-white/[0.04] text-sm text-slate-400">
+                    <thead className="bg-slate-50 text-sm text-slate-600 dark:bg-white/[0.04] dark:text-slate-400">
                       <tr>
                         <th className="px-5 py-4 font-bold">Course</th>
                         <th className="px-5 py-4 font-bold">Enrollments</th>
@@ -475,16 +492,16 @@ const AdminDashboardPage = () => {
                       </tr>
                     </thead>
 
-                    <tbody className="divide-y divide-white/10">
+                    <tbody className="divide-y divide-slate-200 dark:divide-white/10">
                       {cleanTopCourses.map((course) => (
                         <tr key={course?._id || course?.title}>
                           <td className="px-5 py-4">
-                            <p className="line-clamp-1 font-black text-white">
+                            <p className="line-clamp-1 font-black text-slate-950 dark:text-white">
                               {getCourseTitle(course)}
                             </p>
                           </td>
 
-                          <td className="px-5 py-4 text-slate-300">
+                          <td className="px-5 py-4 text-slate-700 dark:text-slate-300">
                             {formatNumber(
                               course?.enrollmentCount ||
                                 course?.totalEnrollments ||
@@ -493,7 +510,7 @@ const AdminDashboardPage = () => {
                             )}
                           </td>
 
-                          <td className="px-5 py-4 text-slate-300">
+                          <td className="px-5 py-4 text-slate-700 dark:text-slate-300">
                             {Number(
                               course?.averageRating || course?.rating || 0,
                             ) > 0
@@ -503,7 +520,7 @@ const AdminDashboardPage = () => {
                               : "New"}
                           </td>
 
-                          <td className="px-5 py-4 font-bold text-green-300">
+                          <td className="px-5 py-4 font-bold text-green-700 dark:text-green-300">
                             {formatCurrency(course?.revenue || 0)}
                           </td>
                         </tr>
@@ -533,30 +550,30 @@ const AdminDashboardPage = () => {
                       review?._id ||
                       `${getCourseTitle(review)}-${review?.createdAt}`
                     }
-                    className="rounded-2xl border border-white/10 bg-slate-950/60 p-5"
+                    className="rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-white/10 dark:bg-slate-950/60"
                   >
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="font-black text-white">
+                        <p className="font-black text-slate-950 dark:text-white">
                           {getCourseTitle(review)}
                         </p>
 
-                        <p className="mt-1 text-sm text-slate-400">
+                        <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
                           by {getStudentName(review)}
                         </p>
                       </div>
 
-                      <div className="inline-flex items-center gap-1 rounded-full border border-yellow-400/20 bg-yellow-400/10 px-3 py-1 text-sm font-black text-yellow-200">
+                      <div className="inline-flex items-center gap-1 rounded-full border border-yellow-200 bg-yellow-50 px-3 py-1 text-sm font-black text-yellow-700 dark:border-yellow-400/20 dark:bg-yellow-400/10 dark:text-yellow-200">
                         <Star
                           size={15}
-                          className="fill-yellow-300 text-yellow-300"
+                          className="fill-yellow-400 text-yellow-400 dark:fill-yellow-300 dark:text-yellow-300"
                         />
                         {Number(review?.rating || 0)}
                       </div>
                     </div>
 
                     {review?.comment && (
-                      <p className="mt-4 line-clamp-2 leading-6 text-slate-300">
+                      <p className="mt-4 line-clamp-2 leading-6 text-slate-700 dark:text-slate-300">
                         {review.comment}
                       </p>
                     )}
@@ -582,10 +599,10 @@ const AdminDashboardPage = () => {
               text="Recent enrollments will appear after students buy or join courses."
             />
           ) : (
-            <div className="overflow-hidden rounded-2xl border border-white/10">
+            <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10">
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[760px] text-left">
-                  <thead className="bg-white/[0.04] text-sm text-slate-400">
+                  <thead className="bg-slate-50 text-sm text-slate-600 dark:bg-white/[0.04] dark:text-slate-400">
                     <tr>
                       <th className="px-5 py-4 font-bold">Student</th>
                       <th className="px-5 py-4 font-bold">Course</th>
@@ -594,11 +611,11 @@ const AdminDashboardPage = () => {
                     </tr>
                   </thead>
 
-                  <tbody className="divide-y divide-white/10">
+                  <tbody className="divide-y divide-slate-200 dark:divide-white/10">
                     {cleanRecentEnrollments.slice(0, 8).map((enrollment) => (
                       <tr key={enrollment?._id || enrollment?.createdAt}>
                         <td className="px-5 py-4">
-                          <p className="font-black text-white">
+                          <p className="font-black text-slate-950 dark:text-white">
                             {getStudentName(enrollment)}
                           </p>
 
@@ -611,17 +628,17 @@ const AdminDashboardPage = () => {
                           )}
                         </td>
 
-                        <td className="px-5 py-4 text-slate-300">
+                        <td className="px-5 py-4 text-slate-700 dark:text-slate-300">
                           {getCourseTitle(enrollment)}
                         </td>
 
-                        <td className="px-5 py-4 text-slate-300">
+                        <td className="px-5 py-4 text-slate-700 dark:text-slate-300">
                           {formatDate(
                             enrollment?.createdAt || enrollment?.enrolledAt,
                           )}
                         </td>
 
-                        <td className="px-5 py-4 font-bold text-green-300">
+                        <td className="px-5 py-4 font-bold text-green-700 dark:text-green-300">
                           {formatCurrency(
                             enrollment?.amount ||
                               enrollment?.price ||
@@ -653,20 +670,20 @@ const AdminDashboardPage = () => {
               {recentVideos.slice(0, 6).map((video) => (
                 <article
                   key={video?._id || video?.key || video?.fileName}
-                  className="rounded-2xl border border-white/10 bg-slate-950/60 p-5"
+                  className="rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-white/10 dark:bg-slate-950/60"
                 >
-                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-300">
+                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
                     <Video size={24} />
                   </div>
 
-                  <h3 className="line-clamp-2 font-black text-white">
+                  <h3 className="line-clamp-2 font-black text-slate-950 dark:text-white">
                     {video?.title ||
                       video?.originalName ||
                       video?.fileName ||
                       "Course Video"}
                   </h3>
 
-                  <div className="mt-4 space-y-2 text-sm text-slate-400">
+                  <div className="mt-4 space-y-2 text-sm text-slate-600 dark:text-slate-400">
                     <p>Size: {formatBytes(video?.size || video?.sizeBytes)}</p>
 
                     <p>
@@ -674,7 +691,7 @@ const AdminDashboardPage = () => {
                       {formatDate(video?.createdAt || video?.uploadedAt)}
                     </p>
 
-                    <p className="inline-flex items-center gap-2 text-green-300">
+                    <p className="inline-flex items-center gap-2 text-green-700 dark:text-green-300">
                       <CheckCircle size={15} />
                       Protected video asset
                     </p>
@@ -685,19 +702,19 @@ const AdminDashboardPage = () => {
           )}
         </SectionCard>
 
-        <div className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-6 md:p-8">
+        <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/70 md:p-8 dark:border-white/10 dark:bg-white/[0.04] dark:shadow-black/20">
           <div className="grid gap-6 md:grid-cols-[1fr_auto] md:items-center">
             <div>
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-green-400/20 bg-green-500/10 px-4 py-2 text-sm font-black text-green-200">
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-green-200 bg-green-50 px-4 py-2 text-sm font-black text-green-700 dark:border-green-400/20 dark:bg-green-500/10 dark:text-green-200">
                 <Award size={16} />
                 Admin Workflow
               </div>
 
-              <h2 className="text-2xl font-black md:text-3xl">
+              <h2 className="text-2xl font-black text-slate-950 md:text-3xl dark:text-white">
                 Keep dashboard for analytics. Manage uploads inside courses.
               </h2>
 
-              <p className="mt-3 max-w-3xl text-slate-400">
+              <p className="mt-3 max-w-3xl text-slate-600 dark:text-slate-400">
                 Uploading videos should happen from course or lesson management,
                 not from the main dashboard. This keeps the dashboard clean and
                 professional.

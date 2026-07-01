@@ -22,13 +22,14 @@ import ProtectedRoute from "./routes/ProtectedRoute";
 import RoleRoute from "./routes/RoleRoute";
 
 import MyAccountPage from "./pages/MyAccountPage";
+import FeedPage from "./pages/FeedPage.jsx";
 const App = () => {
   const location = useLocation();
 
   const isAdminRoute = location.pathname.startsWith("/admin");
 
   return (
-    <>
+    <div className="min-h-screen bg-slate-50 text-slate-950 transition-colors duration-300 dark:bg-slate-950 dark:text-white">
       {!isAdminRoute && <Navbar />}
 
       <Routes>
@@ -141,6 +142,8 @@ const App = () => {
             </ProtectedRoute>
           }
         />
+
+        {/* Account */}
         <Route
           path="/my-account"
           element={
@@ -149,8 +152,16 @@ const App = () => {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/feed"
+          element={
+            <ProtectedRoute>
+              <FeedPage />
+            </ProtectedRoute>
+          }
+        />
       </Routes>
-    </>
+    </div>
   );
 };
 

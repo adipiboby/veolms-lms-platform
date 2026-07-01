@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+
 import { useAuth } from "../context/AuthContext";
 import GoogleLoginButton from "../components/auth/GoogleLoginButton";
+
 const LoginPage = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
@@ -14,15 +16,15 @@ const LoginPage = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleChange = (e) => {
-    setFormData((prev) => ({
-      ...prev,
-      [e.target.name]: e.target.value,
+  const handleChange = (event) => {
+    setFormData((previousData) => ({
+      ...previousData,
+      [event.target.name]: event.target.value,
     }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
 
     try {
       setError("");
@@ -43,45 +45,59 @@ const LoginPage = () => {
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl">
-        <h1 className="text-3xl font-bold text-white mb-2">Welcome back</h1>
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-50 px-4 py-12 text-slate-950 transition-colors duration-300 dark:bg-slate-950 dark:text-white">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.12),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(147,51,234,0.10),transparent_34%)] dark:bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.18),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(147,51,234,0.16),transparent_34%)]" />
 
-        <p className="text-slate-400 mb-8">
-          Login to continue your learning journey.
-        </p>
+      <div className="relative w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 shadow-2xl shadow-slate-200/70 dark:border-white/10 dark:bg-slate-900 dark:shadow-black/40">
+        <div className="mb-8">
+          <div className="mb-4 inline-flex rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-black text-blue-700 dark:border-blue-400/20 dark:bg-blue-500/10 dark:text-blue-300">
+            VeoLMS Login
+          </div>
+
+          <h1 className="text-3xl font-black text-slate-950 dark:text-white">
+            Welcome back
+          </h1>
+
+          <p className="mt-2 text-slate-600 dark:text-slate-400">
+            Login to continue your learning journey.
+          </p>
+        </div>
 
         {error && (
-          <div className="mb-5 bg-red-500/10 border border-red-500/30 text-red-300 px-4 py-3 rounded-xl">
+          <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
             {error}
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="block text-sm text-slate-300 mb-2">Email</label>
+            <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
+              Email
+            </label>
+
             <input
               type="email"
               name="email"
               value={formData.email}
               onChange={handleChange}
               required
-              className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700 text-white outline-none focus:border-blue-500"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-500"
               placeholder="you@example.com"
             />
           </div>
 
           <div>
-            <label className="block text-sm text-slate-300 mb-2">
+            <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
               Password
             </label>
+
             <input
               type="password"
               name="password"
               value={formData.password}
               onChange={handleChange}
               required
-              className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700 text-white outline-none focus:border-blue-500"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-500"
               placeholder="Enter password"
             />
           </div>
@@ -89,22 +105,28 @@ const LoginPage = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-xl font-bold"
+            className="w-full rounded-xl bg-blue-600 py-3 font-black text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {loading ? "Logging in..." : "Login"}
           </button>
+
           <div className="my-6 flex items-center gap-3">
-            <div className="h-px flex-1 bg-white/10" />
-            <span className="text-sm text-slate-400">or</span>
-            <div className="h-px flex-1 bg-white/10" />
+            <div className="h-px flex-1 bg-slate-200 dark:bg-white/10" />
+            <span className="text-sm text-slate-500 dark:text-slate-400">
+              or
+            </span>
+            <div className="h-px flex-1 bg-slate-200 dark:bg-white/10" />
           </div>
 
           <GoogleLoginButton />
         </form>
 
-        <p className="text-slate-400 text-sm mt-6 text-center">
+        <p className="mt-6 text-center text-sm text-slate-600 dark:text-slate-400">
           New to VeoLMS?{" "}
-          <Link to="/register" className="text-blue-400 font-semibold">
+          <Link
+            to="/register"
+            className="font-black text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+          >
             Create account
           </Link>
         </p>

@@ -86,7 +86,7 @@ const UserAvatar = ({ item, size = "md" }) => {
 
   return (
     <div
-      className={`${sizeClass} shrink-0 overflow-hidden rounded-full border border-white/10 bg-white/10`}
+      className={`${sizeClass} shrink-0 overflow-hidden rounded-full border border-slate-200 bg-slate-100 dark:border-white/10 dark:bg-white/10`}
     >
       {avatar ? (
         <img
@@ -99,8 +99,8 @@ const UserAvatar = ({ item, size = "md" }) => {
         <div
           className={`flex h-full w-full items-center justify-center font-black ${
             isAdminRole(role)
-              ? "bg-blue-500 text-white"
-              : "bg-slate-700 text-slate-100"
+              ? "bg-blue-600 text-white"
+              : "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-100"
           }`}
         >
           {getInitial(name)}
@@ -115,7 +115,7 @@ const RoleBadge = ({ role, small = false }) => {
 
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full border border-blue-400/30 bg-blue-500/15 font-black text-blue-200 ${
+      className={`inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 font-black text-blue-700 dark:border-blue-400/30 dark:bg-blue-500/15 dark:text-blue-200 ${
         small ? "px-2 py-0.5 text-[10px]" : "px-2.5 py-1 text-xs"
       }`}
     >
@@ -176,7 +176,9 @@ const ReplyCard = ({
 
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <h4 className="text-sm font-black text-white">{authorName}</h4>
+          <h4 className="text-sm font-black text-slate-950 dark:text-white">
+            {authorName}
+          </h4>
 
           <RoleBadge role={role} small />
 
@@ -191,9 +193,9 @@ const ReplyCard = ({
           </span>
         </div>
 
-        <p className="mt-1 whitespace-pre-line break-words text-sm leading-6 text-slate-300">
+        <p className="mt-1 whitespace-pre-line break-words text-sm leading-6 text-slate-700 dark:text-slate-300">
           {replyItem?.replyToName && (
-            <span className="mr-1 font-black text-blue-300">
+            <span className="mr-1 font-black text-blue-700 dark:text-blue-300">
               @{replyItem.replyToName}
             </span>
           )}
@@ -204,7 +206,7 @@ const ReplyCard = ({
           <button
             type="button"
             onClick={() => setReplyOpen((value) => !value)}
-            className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold text-slate-400 hover:bg-white/10 hover:text-white"
+            className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white"
           >
             {replyOpen ? <X size={13} /> : <Reply size={13} />}
             {replyOpen ? "Cancel" : "Reply"}
@@ -215,7 +217,7 @@ const ReplyCard = ({
               type="button"
               onClick={() => onDeleteReply(comment, replyItem)}
               disabled={deletingReplyId === currentDeletingId}
-              className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold text-red-300 hover:bg-red-500/10 hover:text-red-200 disabled:opacity-60"
+              className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold text-red-600 hover:bg-red-50 hover:text-red-700 disabled:opacity-60 dark:text-red-300 dark:hover:bg-red-500/10 dark:hover:text-red-200"
             >
               {deletingReplyId === currentDeletingId ? (
                 <Loader2 size={13} className="animate-spin" />
@@ -229,9 +231,9 @@ const ReplyCard = ({
 
         {replyOpen && (
           <form onSubmit={handleSubmitReplyToReply} className="mt-3">
-            <div className="rounded-2xl border border-blue-400/20 bg-blue-500/10 p-3">
-              <div className="mb-2 flex items-center justify-between rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2">
-                <p className="text-xs font-bold text-blue-200">
+            <div className="rounded-2xl border border-blue-200 bg-blue-50 p-3 dark:border-blue-400/20 dark:bg-blue-500/10">
+              <div className="mb-2 flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 dark:border-white/10 dark:bg-slate-950/60">
+                <p className="text-xs font-bold text-blue-700 dark:text-blue-200">
                   Replying to @{authorName}
                 </p>
 
@@ -241,7 +243,7 @@ const ReplyCard = ({
                     setReplyOpen(false);
                     setReplyMessage("");
                   }}
-                  className="text-slate-400 hover:text-white"
+                  className="text-slate-500 hover:text-slate-950 dark:text-slate-400 dark:hover:text-white"
                 >
                   <X size={14} />
                 </button>
@@ -254,10 +256,10 @@ const ReplyCard = ({
                 maxLength={1000}
                 autoFocus
                 placeholder={`Write your reply to ${authorName}...`}
-                className="w-full resize-none bg-transparent p-2 text-sm leading-6 text-white outline-none placeholder:text-slate-500"
+                className="w-full resize-none bg-transparent p-2 text-sm leading-6 text-slate-950 outline-none placeholder:text-slate-400 dark:text-white dark:placeholder:text-slate-500"
               />
 
-              <div className="flex items-center justify-between gap-3 border-t border-white/10 pt-3">
+              <div className="flex items-center justify-between gap-3 border-t border-slate-200 pt-3 dark:border-white/10">
                 <p className="text-xs text-slate-500">
                   {replyMessage.length}/1000
                 </p>
@@ -342,8 +344,8 @@ const CommentCard = ({
     <article
       className={`rounded-2xl border p-4 ${
         isAdminComment
-          ? "border-blue-400/30 bg-blue-500/10"
-          : "border-white/10 bg-slate-950/60"
+          ? "border-blue-200 bg-blue-50 dark:border-blue-400/30 dark:bg-blue-500/10"
+          : "border-slate-200 bg-white dark:border-white/10 dark:bg-slate-950/60"
       }`}
     >
       <div className="flex items-start gap-3">
@@ -351,12 +353,14 @@ const CommentCard = ({
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h4 className="font-black text-white">{authorName}</h4>
+            <h4 className="font-black text-slate-950 dark:text-white">
+              {authorName}
+            </h4>
 
             <RoleBadge role={role} />
 
             {comment?.isPinned && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-yellow-400/30 bg-yellow-500/10 px-2.5 py-1 text-xs font-black text-yellow-200">
+              <span className="inline-flex items-center gap-1 rounded-full border border-yellow-200 bg-yellow-50 px-2.5 py-1 text-xs font-black text-yellow-700 dark:border-yellow-400/30 dark:bg-yellow-500/10 dark:text-yellow-200">
                 <Pin size={12} />
                 Pinned
               </span>
@@ -373,7 +377,7 @@ const CommentCard = ({
             {formatDateTime(comment?.createdAt)}
           </p>
 
-          <p className="mt-3 whitespace-pre-line break-words leading-7 text-slate-300">
+          <p className="mt-3 whitespace-pre-line break-words leading-7 text-slate-700 dark:text-slate-300">
             {comment?.message}
           </p>
 
@@ -381,7 +385,7 @@ const CommentCard = ({
             <button
               type="button"
               onClick={() => setReplyOpen((value) => !value)}
-              className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-bold text-slate-300 hover:bg-white/10 hover:text-white"
+              className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
             >
               {replyOpen ? <X size={15} /> : <Reply size={15} />}
               {replyOpen ? "Cancel" : "Reply"}
@@ -391,7 +395,7 @@ const CommentCard = ({
               <button
                 type="button"
                 onClick={() => setRepliesOpen((value) => !value)}
-                className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-black text-blue-300 hover:bg-blue-500/10 hover:text-blue-200"
+                className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-black text-blue-700 hover:bg-blue-50 hover:text-blue-800 dark:text-blue-300 dark:hover:bg-blue-500/10 dark:hover:text-blue-200"
               >
                 {repliesOpen ? (
                   <ChevronUp size={16} />
@@ -409,7 +413,7 @@ const CommentCard = ({
 
           {replyOpen && (
             <form onSubmit={handleSubmitMainReply} className="mt-3">
-              <div className="rounded-2xl border border-white/10 bg-slate-950/80 p-3">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-slate-950/80">
                 <textarea
                   value={replyMessage}
                   onChange={(event) => setReplyMessage(event.target.value)}
@@ -421,10 +425,10 @@ const CommentCard = ({
                       ? "Write admin reply..."
                       : "Write your reply..."
                   }
-                  className="w-full resize-none bg-transparent p-2 text-sm leading-6 text-white outline-none placeholder:text-slate-500"
+                  className="w-full resize-none bg-transparent p-2 text-sm leading-6 text-slate-950 outline-none placeholder:text-slate-400 dark:text-white dark:placeholder:text-slate-500"
                 />
 
-                <div className="flex items-center justify-between gap-3 border-t border-white/10 pt-3">
+                <div className="flex items-center justify-between gap-3 border-t border-slate-200 pt-3 dark:border-white/10">
                   <p className="text-xs text-slate-500">
                     {replyMessage.length}/1000
                   </p>
@@ -454,7 +458,7 @@ const CommentCard = ({
           )}
 
           {repliesOpen && replies.length > 0 && (
-            <div className="mt-4 space-y-4 border-l border-white/10 pl-4">
+            <div className="mt-4 space-y-4 border-l border-slate-200 pl-4 dark:border-white/10">
               {replies.map((replyItem) => (
                 <ReplyCard
                   key={replyItem?._id}
@@ -478,7 +482,7 @@ const CommentCard = ({
                 type="button"
                 onClick={() => onPin(comment)}
                 disabled={pinningId === comment?._id}
-                className="rounded-xl border border-white/10 bg-white/5 p-2 text-slate-300 hover:bg-white/10 hover:text-white disabled:opacity-60"
+                className="rounded-xl border border-slate-200 bg-slate-50 p-2 text-slate-600 hover:bg-slate-100 hover:text-slate-950 disabled:opacity-60 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
                 title={comment?.isPinned ? "Unpin comment" : "Pin comment"}
               >
                 {pinningId === comment?._id ? (
@@ -494,7 +498,7 @@ const CommentCard = ({
                 type="button"
                 onClick={() => onDelete(comment)}
                 disabled={deletingId === comment?._id}
-                className="rounded-xl border border-red-500/20 bg-red-500/10 p-2 text-red-200 hover:bg-red-500/20 disabled:opacity-60"
+                className="rounded-xl border border-red-200 bg-red-50 p-2 text-red-700 hover:bg-red-100 disabled:opacity-60 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-200 dark:hover:bg-red-500/20"
                 title="Delete comment"
               >
                 {deletingId === comment?._id ? (
@@ -808,44 +812,46 @@ const LessonComments = ({ courseId, lessonId }) => {
   if (!canLoadComments) return null;
 
   return (
-    <section className="rounded-[1.7rem] border border-white/10 bg-white/[0.04] p-5">
+    <section className="rounded-[1.7rem] border border-slate-200 bg-white p-5 shadow-xl shadow-slate-200/70 dark:border-white/10 dark:bg-white/[0.04] dark:shadow-black/20">
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-300">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
             <MessageCircle size={22} />
           </div>
 
           <div>
-            <h2 className="text-xl font-black text-white">Lesson Discussion</h2>
+            <h2 className="text-xl font-black text-slate-950 dark:text-white">
+              Lesson Discussion
+            </h2>
 
-            <p className="mt-1 text-sm text-slate-400">
+            <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
               Ask doubts, reply to comments, and reply exactly where you are
               reading.
             </p>
           </div>
         </div>
 
-        <span className="rounded-full border border-white/10 bg-slate-950/60 px-3 py-1 text-sm font-bold text-slate-300">
+        <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm font-bold text-slate-700 dark:border-white/10 dark:bg-slate-950/60 dark:text-slate-300">
           {discussionCount} messages
         </span>
       </div>
 
       {error && (
-        <div className="mb-4 flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-100">
+        <div className="mb-4 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100">
           <AlertCircle size={18} className="mt-0.5 shrink-0" />
           <p>{error}</p>
         </div>
       )}
 
       {successMessage && (
-        <div className="mb-4 flex items-start gap-3 rounded-2xl border border-green-500/30 bg-green-500/10 p-4 text-sm text-green-100">
+        <div className="mb-4 flex items-start gap-3 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-700 dark:border-green-500/30 dark:bg-green-500/10 dark:text-green-100">
           <CheckCircle size={18} className="mt-0.5 shrink-0" />
           <p>{successMessage}</p>
         </div>
       )}
 
       <form onSubmit={handleSubmitComment} className="mb-6">
-        <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-3">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-slate-950/70">
           <textarea
             value={message}
             onChange={(event) => setMessage(event.target.value)}
@@ -856,10 +862,10 @@ const LessonComments = ({ courseId, lessonId }) => {
             }
             rows={3}
             maxLength={1000}
-            className="w-full resize-none bg-transparent p-2 text-sm leading-6 text-white outline-none placeholder:text-slate-500"
+            className="w-full resize-none bg-transparent p-2 text-sm leading-6 text-slate-950 outline-none placeholder:text-slate-400 dark:text-white dark:placeholder:text-slate-500"
           />
 
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-3 dark:border-white/10">
             <p className="text-xs text-slate-500">
               {message.length}/1000 characters
             </p>
@@ -886,19 +892,26 @@ const LessonComments = ({ courseId, lessonId }) => {
       </form>
 
       {loading ? (
-        <div className="flex min-h-[180px] flex-col items-center justify-center rounded-2xl border border-white/10 bg-slate-950/60">
-          <Loader2 size={32} className="animate-spin text-blue-400" />
-          <p className="mt-3 text-sm text-slate-400">Loading comments...</p>
+        <div className="flex min-h-[180px] flex-col items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-slate-950/60">
+          <Loader2
+            size={32}
+            className="animate-spin text-blue-500 dark:text-blue-400"
+          />
+          <p className="mt-3 text-sm text-slate-600 dark:text-slate-400">
+            Loading comments...
+          </p>
         </div>
       ) : sortedComments.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-8 text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-300">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-8 text-center dark:border-white/10 dark:bg-slate-950/60">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
             <MessageCircle size={27} />
           </div>
 
-          <h3 className="mt-4 font-black text-white">No comments yet</h3>
+          <h3 className="mt-4 font-black text-slate-950 dark:text-white">
+            No comments yet
+          </h3>
 
-          <p className="mt-2 text-sm text-slate-400">
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
             Start the discussion for this lesson.
           </p>
         </div>

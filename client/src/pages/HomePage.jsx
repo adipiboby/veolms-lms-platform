@@ -5,7 +5,6 @@ import {
   Award,
   BarChart3,
   BookOpen,
-  CheckCircle,
   Clock,
   FileText,
   Layers,
@@ -46,8 +45,9 @@ const getCourseImage = (course) => {
 };
 
 const getCourseLessonsCount = (course) => {
-  if (!Array.isArray(course?.sections))
+  if (!Array.isArray(course?.sections)) {
     return Number(course?.lessonsCount || 0);
+  }
 
   return course.sections.reduce((total, section) => {
     return (
@@ -100,8 +100,9 @@ const parseDurationToMinutes = (duration) => {
 };
 
 const getCourseTotalMinutes = (course) => {
-  if (!Array.isArray(course?.sections))
+  if (!Array.isArray(course?.sections)) {
     return Number(course?.totalMinutes || 0);
+  }
 
   return course.sections.reduce((courseTotal, section) => {
     const lessons = Array.isArray(section.lessons) ? section.lessons : [];
@@ -157,25 +158,31 @@ const getEnrollmentProgress = (enrollment) => {
 
 const StatBox = ({ value, label }) => {
   return (
-    <div className="rounded-[1.4rem] border border-white/10 bg-white/[0.05] p-5 shadow-2xl shadow-black/20">
-      <h3 className="text-3xl font-black text-white md:text-4xl">{value}</h3>
-      <p className="mt-2 text-sm text-slate-400">{label}</p>
+    <div className="rounded-[1.4rem] border border-slate-200 bg-white p-5 shadow-xl shadow-slate-200/60 dark:border-white/10 dark:bg-white/[0.05] dark:shadow-black/20">
+      <h3 className="text-3xl font-black text-slate-950 md:text-4xl dark:text-white">
+        {value}
+      </h3>
+
+      <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">{label}</p>
     </div>
   );
 };
 
 const FeatureCard = ({ icon: Icon, title, description, tone = "blue" }) => {
   const toneClasses = {
-    blue: "bg-blue-500/10 text-blue-300 border-blue-400/20",
-    green: "bg-green-500/10 text-green-300 border-green-400/20",
-    purple: "bg-purple-500/10 text-purple-300 border-purple-400/20",
-    yellow: "bg-yellow-500/10 text-yellow-300 border-yellow-400/20",
-    cyan: "bg-cyan-500/10 text-cyan-300 border-cyan-400/20",
-    rose: "bg-rose-500/10 text-rose-300 border-rose-400/20",
+    blue: "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-400/20 dark:bg-blue-500/10 dark:text-blue-300",
+    green:
+      "border-green-200 bg-green-50 text-green-700 dark:border-green-400/20 dark:bg-green-500/10 dark:text-green-300",
+    purple:
+      "border-purple-200 bg-purple-50 text-purple-700 dark:border-purple-400/20 dark:bg-purple-500/10 dark:text-purple-300",
+    yellow:
+      "border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-400/20 dark:bg-yellow-500/10 dark:text-yellow-300",
+    cyan: "border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-400/20 dark:bg-cyan-500/10 dark:text-cyan-300",
+    rose: "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/20 dark:bg-rose-500/10 dark:text-rose-300",
   };
 
   return (
-    <article className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-6 shadow-2xl shadow-black/20 transition duration-300 hover:-translate-y-1 hover:border-blue-400/40 hover:bg-white/[0.07]">
+    <article className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/70 transition duration-300 hover:-translate-y-1 hover:border-blue-300 hover:shadow-2xl dark:border-white/10 dark:bg-white/[0.04] dark:shadow-black/20 dark:hover:border-blue-400/40 dark:hover:bg-white/[0.07]">
       <div
         className={`flex h-14 w-14 items-center justify-center rounded-2xl border ${
           toneClasses[tone] || toneClasses.blue
@@ -184,9 +191,13 @@ const FeatureCard = ({ icon: Icon, title, description, tone = "blue" }) => {
         <Icon size={27} />
       </div>
 
-      <h3 className="mt-5 text-xl font-black text-white">{title}</h3>
+      <h3 className="mt-5 text-xl font-black text-slate-950 dark:text-white">
+        {title}
+      </h3>
 
-      <p className="mt-3 leading-7 text-slate-400">{description}</p>
+      <p className="mt-3 leading-7 text-slate-600 dark:text-slate-400">
+        {description}
+      </p>
     </article>
   );
 };
@@ -197,8 +208,8 @@ const CourseCard = ({ course }) => {
   const enrollments = getCourseEnrollments(course);
 
   return (
-    <article className="group flex min-w-0 flex-col overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.04] shadow-2xl shadow-black/20 transition duration-300 hover:-translate-y-1 hover:border-blue-400/40 hover:bg-white/[0.07]">
-      <div className="relative aspect-video overflow-hidden bg-slate-900">
+    <article className="group flex min-w-0 flex-col overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl shadow-slate-200/70 transition duration-300 hover:-translate-y-1 hover:border-blue-300 hover:shadow-2xl dark:border-white/10 dark:bg-white/[0.04] dark:shadow-black/20 dark:hover:border-blue-400/40 dark:hover:bg-white/[0.07]">
+      <div className="relative aspect-video overflow-hidden bg-slate-200 dark:bg-slate-900">
         <img
           src={getCourseImage(course)}
           alt={course?.title || "Course thumbnail"}
@@ -222,51 +233,58 @@ const CourseCard = ({ course }) => {
 
       <div className="flex flex-1 flex-col p-5">
         <div className="mb-4 flex items-center justify-between gap-3">
-          <div className="inline-flex min-w-0 items-center gap-2 rounded-full border border-yellow-400/20 bg-yellow-400/10 px-3 py-1 text-sm text-yellow-200">
+          <div className="inline-flex min-w-0 items-center gap-2 rounded-full border border-yellow-200 bg-yellow-50 px-3 py-1 text-sm text-yellow-700 dark:border-yellow-400/20 dark:bg-yellow-400/10 dark:text-yellow-200">
             <Star
               size={15}
-              className="shrink-0 fill-yellow-300 text-yellow-300"
+              className="shrink-0 fill-yellow-400 text-yellow-400 dark:fill-yellow-300 dark:text-yellow-300"
             />
+
             <span className="font-black">
               {rating > 0 ? rating.toFixed(1) : "New"}
             </span>
           </div>
 
-          <div className="inline-flex shrink-0 items-center gap-2 text-sm text-slate-400">
+          <div className="inline-flex shrink-0 items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
             <Users size={15} />
             {enrollments}
           </div>
         </div>
 
-        <h3 className="line-clamp-2 break-words text-xl font-black leading-tight text-white">
+        <h3 className="line-clamp-2 break-words text-xl font-black leading-tight text-slate-950 dark:text-white">
           {course?.title}
         </h3>
 
-        <p className="mt-3 line-clamp-3 break-words text-sm leading-6 text-slate-400">
+        <p className="mt-3 line-clamp-3 break-words text-sm leading-6 text-slate-600 dark:text-slate-400">
           {course?.shortDescription ||
             course?.description ||
             "Learn through secure video lessons with progress tracking and certificates."}
         </p>
 
         <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
-          <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3 text-slate-300">
-            <BookOpen size={16} className="shrink-0 text-blue-300" />
+          <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-slate-700 dark:border-white/10 dark:bg-slate-950/60 dark:text-slate-300">
+            <BookOpen
+              size={16}
+              className="shrink-0 text-blue-600 dark:text-blue-300"
+            />
             <span className="truncate">{lessonsCount} lessons</span>
           </div>
 
-          <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3 text-slate-300">
-            <Clock size={16} className="shrink-0 text-green-300" />
+          <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-slate-700 dark:border-white/10 dark:bg-slate-950/60 dark:text-slate-300">
+            <Clock
+              size={16}
+              className="shrink-0 text-green-600 dark:text-green-300"
+            />
             <span className="truncate">Lifetime</span>
           </div>
         </div>
 
-        <div className="mt-5 flex items-center justify-between gap-3 border-t border-white/10 pt-5">
+        <div className="mt-5 flex items-center justify-between gap-3 border-t border-slate-200 pt-5 dark:border-white/10">
           <div className="min-w-0">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-500">
               Instructor
             </p>
 
-            <p className="truncate font-bold text-slate-200">
+            <p className="truncate font-bold text-slate-800 dark:text-slate-200">
               {course?.instructor ||
                 course?.instructorName ||
                 course?.createdBy?.name ||
@@ -289,18 +307,24 @@ const CourseCard = ({ course }) => {
 
 const StepCard = ({ number, title, description, icon: Icon }) => {
   return (
-    <article className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-6 shadow-2xl shadow-black/20">
+    <article className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/70 dark:border-white/10 dark:bg-white/[0.04] dark:shadow-black/20">
       <div className="flex items-center justify-between gap-4">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-300">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
           <Icon size={27} />
         </div>
 
-        <span className="text-5xl font-black text-white/10">{number}</span>
+        <span className="text-5xl font-black text-slate-200 dark:text-white/10">
+          {number}
+        </span>
       </div>
 
-      <h3 className="mt-6 text-xl font-black text-white">{title}</h3>
+      <h3 className="mt-6 text-xl font-black text-slate-950 dark:text-white">
+        {title}
+      </h3>
 
-      <p className="mt-3 leading-7 text-slate-400">{description}</p>
+      <p className="mt-3 leading-7 text-slate-600 dark:text-slate-400">
+        {description}
+      </p>
     </article>
   );
 };
@@ -325,6 +349,7 @@ const DashboardPreview = ({
     : 0;
 
   const completedLessons = Number(progress?.completedLessons || 0);
+
   const totalLessons =
     Number(progress?.totalLessons || 0) ||
     getCourseLessonsCount(course) ||
@@ -334,15 +359,15 @@ const DashboardPreview = ({
   const totalMinutes = getCourseTotalMinutes(course) || stats.totalMinutes || 0;
 
   return (
-    <div className="rounded-[2rem] border border-white/10 bg-white/[0.05] shadow-2xl shadow-blue-950/30 backdrop-blur-xl">
-      <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
+    <div className="rounded-[2rem] border border-slate-200 bg-white shadow-2xl shadow-slate-200/80 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.05] dark:shadow-blue-950/30">
+      <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5 dark:border-white/10">
         <div className="flex items-center gap-2">
           <span className="h-3.5 w-3.5 rounded-full bg-red-500" />
           <span className="h-3.5 w-3.5 rounded-full bg-yellow-400" />
           <span className="h-3.5 w-3.5 rounded-full bg-green-400" />
         </div>
 
-        <p className="text-sm text-slate-400 md:text-base">
+        <p className="text-sm text-slate-600 md:text-base dark:text-slate-400">
           {isRealStudent
             ? "Your Learning Progress"
             : "Student Dashboard Preview"}
@@ -388,53 +413,61 @@ const DashboardPreview = ({
         </div>
 
         {progressError && isRealStudent && (
-          <div className="mt-5 rounded-2xl border border-yellow-400/20 bg-yellow-400/10 p-4 text-sm text-yellow-100">
+          <div className="mt-5 rounded-2xl border border-yellow-300 bg-yellow-50 p-4 text-sm text-yellow-800 dark:border-yellow-400/20 dark:bg-yellow-400/10 dark:text-yellow-100">
             Unable to load your latest progress right now.
           </div>
         )}
 
         <div className="mt-5 grid grid-cols-3 gap-4">
-          <div className="rounded-2xl bg-slate-950/75 p-4">
-            <BookOpen size={22} className="text-cyan-300" />
-            <h4 className="mt-5 text-2xl font-black text-white">
+          <div className="rounded-2xl bg-slate-50 p-4 dark:bg-slate-950/75">
+            <BookOpen size={22} className="text-cyan-600 dark:text-cyan-300" />
+
+            <h4 className="mt-5 text-2xl font-black text-slate-950 dark:text-white">
               {stats.coursesCount}
             </h4>
-            <p className="text-sm text-slate-400">
+
+            <p className="text-sm text-slate-600 dark:text-slate-400">
               {isRealStudent ? "My Courses" : "Courses"}
             </p>
           </div>
 
-          <div className="rounded-2xl bg-slate-950/75 p-4">
-            <Video size={22} className="text-purple-300" />
-            <h4 className="mt-5 text-2xl font-black text-white">
+          <div className="rounded-2xl bg-slate-50 p-4 dark:bg-slate-950/75">
+            <Video size={22} className="text-purple-600 dark:text-purple-300" />
+
+            <h4 className="mt-5 text-2xl font-black text-slate-950 dark:text-white">
               {stats.lessonsCount}
             </h4>
-            <p className="text-sm text-slate-400">Lessons</p>
+
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              Lessons
+            </p>
           </div>
 
-          <div className="rounded-2xl bg-slate-950/75 p-4">
-            <Clock size={22} className="text-yellow-300" />
-            <h4 className="mt-5 text-2xl font-black text-white">
+          <div className="rounded-2xl bg-slate-50 p-4 dark:bg-slate-950/75">
+            <Clock size={22} className="text-yellow-600 dark:text-yellow-300" />
+
+            <h4 className="mt-5 text-2xl font-black text-slate-950 dark:text-white">
               {formatLearningTime(totalMinutes || stats.totalMinutes)}
             </h4>
-            <p className="text-sm text-slate-400">Time</p>
+
+            <p className="text-sm text-slate-600 dark:text-slate-400">Time</p>
           </div>
         </div>
 
-        <div className="mt-5 rounded-2xl bg-slate-950/75 p-5">
+        <div className="mt-5 rounded-2xl bg-slate-50 p-5 dark:bg-slate-950/75">
           <div className="flex items-center gap-4">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-white">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-slate-200 text-slate-800 dark:bg-white/10 dark:text-white">
               <PlayCircle size={31} />
             </div>
 
             <div className="min-w-0 flex-1">
-              <h4 className="line-clamp-1 font-black text-white">
+              <h4 className="line-clamp-1 font-black text-slate-950 dark:text-white">
                 {hasCourse
                   ? `Resume: ${previewTitle}`
                   : "Explore a course to start learning"}
               </h4>
 
-              <p className="mt-1 text-sm text-slate-400">
+              <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
                 {isRealStudent
                   ? `${completedLessons}/${totalLessons} lessons completed`
                   : "Enroll to track real progress"}
@@ -445,7 +478,7 @@ const DashboardPreview = ({
               to={
                 isRealStudent && hasCourse ? "/student/dashboard" : "/courses"
               }
-              className="hidden rounded-2xl bg-white px-6 py-3 text-sm font-black text-slate-950 hover:bg-slate-200 sm:inline-flex"
+              className="hidden rounded-2xl border border-slate-200 bg-white px-6 py-3 text-sm font-black text-slate-950 shadow-sm hover:bg-slate-100 sm:inline-flex dark:border-white/10 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
             >
               {isRealStudent && hasCourse ? "Open" : "View"}
             </Link>
@@ -599,28 +632,32 @@ const HomePage = () => {
     isStudent && enrolledCourses.length > 0 ? "/student/dashboard" : "/courses";
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-slate-950 text-white">
-      <section className="relative overflow-hidden border-b border-white/10">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.20),transparent_34%),radial-gradient(circle_at_top_right,rgba(147,51,234,0.18),transparent_34%),linear-gradient(180deg,rgba(15,23,42,0),rgba(2,6,23,1))]" />
+    <main className="min-h-screen overflow-x-hidden bg-slate-50 text-slate-950 transition-colors duration-300 dark:bg-slate-950 dark:text-white">
+      <section className="relative overflow-hidden border-b border-slate-200 dark:border-white/10">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.12),transparent_34%),radial-gradient(circle_at_top_right,rgba(147,51,234,0.10),transparent_34%),linear-gradient(180deg,rgba(248,250,252,0),rgba(248,250,252,1))] dark:bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.20),transparent_34%),radial-gradient(circle_at_top_right,rgba(147,51,234,0.18),transparent_34%),linear-gradient(180deg,rgba(15,23,42,0),rgba(2,6,23,1))]" />
 
         <div className="relative mx-auto grid max-w-7xl gap-10 px-4 py-12 md:py-16 lg:grid-cols-[minmax(0,1fr)_minmax(420px,0.9fr)] lg:items-center">
           <div className="min-w-0">
-            <div className="mb-8 inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/[0.06] px-5 py-3 text-sm font-black text-blue-100 shadow-2xl shadow-black/20 backdrop-blur-xl">
-              <Sparkles size={18} className="text-blue-300" />
+            <div className="mb-8 inline-flex items-center gap-3 rounded-full border border-blue-200 bg-blue-50 px-5 py-3 text-sm font-black text-blue-700 shadow-xl shadow-slate-200/70 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.06] dark:text-blue-100 dark:shadow-black/20">
+              <Sparkles
+                size={18}
+                className="text-blue-600 dark:text-blue-300"
+              />
+
               {isStudent
                 ? "Your personal learning overview"
                 : "Production-like LMS for modern learners"}
             </div>
 
-            <h1 className="max-w-4xl break-words text-5xl font-black leading-[1.05] md:text-7xl">
+            <h1 className="max-w-4xl break-words text-5xl font-black leading-[1.05] text-slate-950 md:text-7xl dark:text-white">
               Learn skills.
-              <span className="block bg-gradient-to-r from-blue-400 via-cyan-300 to-purple-400 bg-clip-text text-transparent">
+              <span className="block bg-gradient-to-r from-blue-500 via-cyan-500 to-purple-500 bg-clip-text text-transparent dark:from-blue-400 dark:via-cyan-300 dark:to-purple-400">
                 Track progress.
               </span>
               Grow faster.
             </h1>
 
-            <p className="mt-7 max-w-3xl text-lg leading-8 text-slate-300 md:text-xl md:leading-9">
+            <p className="mt-7 max-w-3xl text-lg leading-8 text-slate-700 md:text-xl md:leading-9 dark:text-slate-300">
               {isStudent
                 ? "Your homepage shows your real enrolled courses, completed lessons, and learning progress from your student dashboard."
                 : "Discover structured web development courses, preview lessons, enroll securely, take lesson notes, complete progress, and earn certificates from one professional learning platform."}
@@ -629,7 +666,7 @@ const HomePage = () => {
             <div className="mt-8 flex flex-wrap gap-4">
               <Link
                 to="/courses"
-                className="inline-flex items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-blue-600 to-fuchsia-600 px-7 py-4 font-black text-white shadow-2xl shadow-blue-950/40 hover:opacity-95"
+                className="inline-flex items-center justify-center gap-3 rounded-2xl border border-white/20 !bg-slate-950 px-7 py-4 font-black !text-white shadow-xl shadow-black/30 hover:!bg-slate-900"
               >
                 Explore Courses
                 <ArrowRight size={18} />
@@ -637,14 +674,13 @@ const HomePage = () => {
 
               <Link
                 to={startLearningPath}
-                className="inline-flex items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/10 px-7 py-4 font-black text-white hover:bg-white/15"
+                className="inline-flex items-center justify-center gap-3 rounded-2xl border border-slate-300 bg-slate-950 px-7 py-4 font-black text-white shadow-xl shadow-slate-300/40 hover:bg-slate-800 dark:border-white/20 dark:bg-white/10 dark:shadow-none dark:hover:bg-white/15"
               >
                 {isStudent && enrolledCourses.length > 0
                   ? "Open Dashboard"
                   : "Start Learning"}
               </Link>
             </div>
-
             <div className="mt-10 grid gap-4 sm:grid-cols-3">
               <StatBox
                 value={heroStats.coursesCount}
@@ -662,9 +698,15 @@ const HomePage = () => {
 
           <div className="min-w-0">
             {loadingProgress && isStudent ? (
-              <div className="flex min-h-[540px] flex-col items-center justify-center rounded-[2rem] border border-white/10 bg-white/[0.05]">
-                <Loader2 size={40} className="animate-spin text-blue-400" />
-                <p className="mt-4 text-slate-400">Loading your progress...</p>
+              <div className="flex min-h-[540px] flex-col items-center justify-center rounded-[2rem] border border-slate-200 bg-white shadow-xl shadow-slate-200/70 dark:border-white/10 dark:bg-white/[0.05] dark:shadow-none">
+                <Loader2
+                  size={40}
+                  className="animate-spin text-blue-500 dark:text-blue-400"
+                />
+
+                <p className="mt-4 text-slate-600 dark:text-slate-400">
+                  Loading your progress...
+                </p>
               </div>
             ) : (
               <DashboardPreview
@@ -682,16 +724,16 @@ const HomePage = () => {
       <section className="mx-auto max-w-7xl px-4 py-12">
         <div className="mb-8 flex flex-wrap items-end justify-between gap-5">
           <div>
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-blue-400/20 bg-blue-500/10 px-4 py-2 text-sm font-black text-blue-200">
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-black text-blue-700 dark:border-blue-400/20 dark:bg-blue-500/10 dark:text-blue-200">
               <ShieldCheck size={16} />
               Why VeoLMS
             </div>
 
-            <h2 className="text-3xl font-black md:text-4xl">
+            <h2 className="text-3xl font-black text-slate-950 md:text-4xl dark:text-white">
               Built like a real learning product
             </h2>
 
-            <p className="mt-3 max-w-3xl text-slate-400">
+            <p className="mt-3 max-w-3xl text-slate-600 dark:text-slate-400">
               VeoLMS is designed with protected videos, progress tracking,
               notes, reviews, certificates, and admin analytics.
             </p>
@@ -746,16 +788,16 @@ const HomePage = () => {
       <section className="mx-auto max-w-7xl px-4 py-12">
         <div className="mb-8 flex flex-wrap items-end justify-between gap-5">
           <div>
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-purple-400/20 bg-purple-500/10 px-4 py-2 text-sm font-black text-purple-200">
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-purple-200 bg-purple-50 px-4 py-2 text-sm font-black text-purple-700 dark:border-purple-400/20 dark:bg-purple-500/10 dark:text-purple-200">
               <BookOpen size={16} />
               Featured Courses
             </div>
 
-            <h2 className="text-3xl font-black md:text-4xl">
+            <h2 className="text-3xl font-black text-slate-950 md:text-4xl dark:text-white">
               Start with available courses
             </h2>
 
-            <p className="mt-3 max-w-3xl text-slate-400">
+            <p className="mt-3 max-w-3xl text-slate-600 dark:text-slate-400">
               Preview courses, check lessons, enroll securely, and continue from
               your student dashboard.
             </p>
@@ -763,7 +805,7 @@ const HomePage = () => {
 
           <Link
             to="/courses"
-            className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 font-black text-slate-200 hover:bg-white/10"
+            className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-3 font-black text-slate-800 shadow-sm hover:bg-slate-100 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
           >
             View All Courses
             <ArrowRight size={17} />
@@ -771,24 +813,27 @@ const HomePage = () => {
         </div>
 
         {loadingCourses ? (
-          <div className="flex min-h-[260px] flex-col items-center justify-center rounded-[2rem] border border-white/10 bg-white/[0.04]">
-            <Loader2 size={40} className="animate-spin text-blue-400" />
+          <div className="flex min-h-[260px] flex-col items-center justify-center rounded-[2rem] border border-slate-200 bg-white shadow-xl shadow-slate-200/70 dark:border-white/10 dark:bg-white/[0.04] dark:shadow-none">
+            <Loader2
+              size={40}
+              className="animate-spin text-blue-500 dark:text-blue-400"
+            />
 
-            <p className="mt-4 font-semibold text-slate-400">
+            <p className="mt-4 font-semibold text-slate-600 dark:text-slate-400">
               Loading featured courses...
             </p>
           </div>
         ) : featuredCourses.length === 0 ? (
-          <div className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-8 text-center">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-blue-500/10 text-blue-300">
+          <div className="rounded-[2rem] border border-slate-200 bg-white p-8 text-center shadow-xl shadow-slate-200/70 dark:border-white/10 dark:bg-white/[0.04] dark:shadow-none">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
               <BookOpen size={31} />
             </div>
 
-            <h3 className="mt-5 text-2xl font-black text-white">
+            <h3 className="mt-5 text-2xl font-black text-slate-950 dark:text-white">
               Courses will appear here
             </h3>
 
-            <p className="mt-2 text-slate-400">
+            <p className="mt-2 text-slate-600 dark:text-slate-400">
               Once admin publishes courses, students can explore them from this
               section.
             </p>
@@ -814,18 +859,18 @@ const HomePage = () => {
       </section>
 
       <section className="mx-auto max-w-7xl px-4 py-12">
-        <div className="rounded-[2.2rem] border border-white/10 bg-white/[0.04] p-6 shadow-2xl shadow-black/20 md:p-8">
+        <div className="rounded-[2.2rem] border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/70 md:p-8 dark:border-white/10 dark:bg-white/[0.04] dark:shadow-black/20">
           <div className="mb-8">
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-green-400/20 bg-green-500/10 px-4 py-2 text-sm font-black text-green-200">
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-green-200 bg-green-50 px-4 py-2 text-sm font-black text-green-700 dark:border-green-400/20 dark:bg-green-500/10 dark:text-green-200">
               <Layers size={16} />
               Simple Learning Flow
             </div>
 
-            <h2 className="text-3xl font-black md:text-4xl">
+            <h2 className="text-3xl font-black text-slate-950 md:text-4xl dark:text-white">
               How learning works
             </h2>
 
-            <p className="mt-3 max-w-3xl text-slate-400">
+            <p className="mt-3 max-w-3xl text-slate-600 dark:text-slate-400">
               The journey is simple for students and professional for admins.
             </p>
           </div>
@@ -856,7 +901,7 @@ const HomePage = () => {
       </section>
 
       <section className="mx-auto max-w-7xl px-4 pb-14 pt-8">
-        <div className="relative overflow-hidden rounded-[2.3rem] border border-white/10 bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 p-8 shadow-2xl shadow-blue-950/40 md:p-10">
+        <div className="relative overflow-hidden rounded-[2.3rem] border border-white/10 bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 p-8 shadow-2xl shadow-blue-950/20 md:p-10 dark:shadow-blue-950/40">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.24),transparent_30%)]" />
 
           <div className="relative grid gap-8 md:grid-cols-[1fr_auto] md:items-center">

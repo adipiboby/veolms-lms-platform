@@ -276,6 +276,7 @@ const StudentDashboardPage = () => {
       const progress = progressMap[String(courseId)];
 
       const courseTotalLessons = getTotalLessons(enrollment, course, progress);
+
       const courseCompletedLessons = getCompletedLessons(
         enrollment,
         progress,
@@ -301,10 +302,12 @@ const StudentDashboardPage = () => {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-[#050816] px-6 py-10 text-white">
+      <main className="min-h-screen bg-slate-50 px-6 py-10 text-slate-950 dark:bg-slate-950 dark:text-white">
         <div className="mx-auto max-w-7xl">
-          <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-8">
-            <p className="text-slate-300">Loading student dashboard...</p>
+          <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-xl shadow-slate-200/70 dark:border-white/10 dark:bg-slate-900/70 dark:shadow-black/20">
+            <p className="text-slate-600 dark:text-slate-300">
+              Loading student dashboard...
+            </p>
           </div>
         </div>
       </main>
@@ -312,20 +315,20 @@ const StudentDashboardPage = () => {
   }
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-[#050816] px-5 py-10 text-white sm:px-6 lg:px-8">
+    <main className="min-h-screen overflow-x-hidden bg-slate-50 px-5 py-10 text-slate-950 transition-colors duration-300 sm:px-6 lg:px-8 dark:bg-slate-950 dark:text-white">
       <div className="mx-auto max-w-7xl space-y-10">
-        <section className="rounded-[2rem] border border-slate-800 bg-gradient-to-br from-slate-900 to-slate-950 p-6 shadow-2xl shadow-blue-950/20 sm:p-8">
+        <section className="rounded-[2rem] border border-slate-200 bg-gradient-to-br from-white to-slate-100 p-6 shadow-2xl shadow-slate-200/70 sm:p-8 dark:border-white/10 dark:from-slate-900 dark:to-slate-950 dark:shadow-blue-950/20">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.25em] text-blue-300">
+              <p className="text-sm font-semibold uppercase tracking-[0.25em] text-blue-700 dark:text-blue-300">
                 Student Dashboard
               </p>
 
-              <h1 className="mt-3 text-3xl font-black sm:text-4xl">
+              <h1 className="mt-3 text-3xl font-black text-slate-950 sm:text-4xl dark:text-white">
                 Welcome back{user?.name ? `, ${user.name}` : ""} 👋
               </h1>
 
-              <p className="mt-3 max-w-2xl text-slate-400">
+              <p className="mt-3 max-w-2xl text-slate-600 dark:text-slate-400">
                 Continue your enrolled courses, track your lesson progress, and
                 download certificates after completion.
               </p>
@@ -340,50 +343,64 @@ const StudentDashboardPage = () => {
           </div>
 
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-2xl border border-slate-800 bg-white/5 p-5">
-              <p className="text-3xl font-black">
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-white/5">
+              <p className="text-3xl font-black text-slate-950 dark:text-white">
                 {dashboardStats.totalCourses}
               </p>
-              <p className="mt-2 text-sm text-slate-400">Enrolled Courses</p>
+              <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+                Enrolled Courses
+              </p>
             </div>
 
-            <div className="rounded-2xl border border-slate-800 bg-white/5 p-5">
-              <p className="text-3xl font-black">
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-white/5">
+              <p className="text-3xl font-black text-slate-950 dark:text-white">
                 {dashboardStats.completedLessons}/{dashboardStats.totalLessons}
               </p>
-              <p className="mt-2 text-sm text-slate-400">Lessons Completed</p>
+              <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+                Lessons Completed
+              </p>
             </div>
 
-            <div className="rounded-2xl border border-slate-800 bg-white/5 p-5">
-              <p className="text-3xl font-black">
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-white/5">
+              <p className="text-3xl font-black text-slate-950 dark:text-white">
                 {dashboardStats.overallProgress}%
               </p>
-              <p className="mt-2 text-sm text-slate-400">Overall Progress</p>
+              <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+                Overall Progress
+              </p>
             </div>
 
-            <div className="rounded-2xl border border-slate-800 bg-white/5 p-5">
-              <p className="text-3xl font-black">
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-white/5">
+              <p className="text-3xl font-black text-slate-950 dark:text-white">
                 {dashboardStats.certificatesCount}
               </p>
-              <p className="mt-2 text-sm text-slate-400">Certificates</p>
+              <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+                Certificates
+              </p>
             </div>
           </div>
         </section>
 
-        <section className="rounded-[2rem] border border-slate-800 bg-slate-900/70 p-6 sm:p-8">
+        <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/70 sm:p-8 dark:border-white/10 dark:bg-slate-900/70 dark:shadow-black/20">
           <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h2 className="text-2xl font-black">My Courses</h2>
-              <p className="mt-2 text-slate-400">
+              <h2 className="text-2xl font-black text-slate-950 dark:text-white">
+                My Courses
+              </h2>
+
+              <p className="mt-2 text-slate-600 dark:text-slate-400">
                 Continue learning from where you stopped.
               </p>
             </div>
           </div>
 
           {enrollments.length === 0 ? (
-            <div className="rounded-3xl border border-dashed border-slate-700 bg-slate-950/70 p-10 text-center">
-              <h3 className="text-xl font-black">No enrolled courses yet</h3>
-              <p className="mt-3 text-slate-400">
+            <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center dark:border-slate-700 dark:bg-slate-950/70">
+              <h3 className="text-xl font-black text-slate-950 dark:text-white">
+                No enrolled courses yet
+              </h3>
+
+              <p className="mt-3 text-slate-600 dark:text-slate-400">
                 Explore courses and enroll to start learning.
               </p>
 
@@ -419,7 +436,6 @@ const StudentDashboardPage = () => {
                   progress,
                 });
 
-                const lessons = getLessons(course);
                 const durationMinutes = getCourseDurationMinutes(course);
                 const resumeLesson = findResumeLesson(course, progress);
 
@@ -430,9 +446,9 @@ const StudentDashboardPage = () => {
                 return (
                   <article
                     key={String(courseId || enrollment._id)}
-                    className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-950 shadow-xl shadow-slate-950/40"
+                    className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/70 dark:border-white/10 dark:bg-slate-950 dark:shadow-slate-950/40"
                   >
-                    <div className="h-48 overflow-hidden bg-slate-900">
+                    <div className="h-48 overflow-hidden bg-slate-100 dark:bg-slate-900">
                       {course?.thumbnail ? (
                         <img
                           src={course.thumbnail}
@@ -448,57 +464,60 @@ const StudentDashboardPage = () => {
 
                     <div className="space-y-5 p-6">
                       <div className="flex items-center justify-between gap-3">
-                        <span className="rounded-full border border-blue-500/40 bg-blue-500/10 px-4 py-1 text-sm font-bold text-blue-200">
+                        <span className="rounded-full border border-blue-200 bg-blue-50 px-4 py-1 text-sm font-bold text-blue-700 dark:border-blue-500/40 dark:bg-blue-500/10 dark:text-blue-200">
                           {course?.category || "Course"}
                         </span>
 
-                        <span className="text-sm text-slate-400">
+                        <span className="text-sm text-slate-500 dark:text-slate-400">
                           {course?.level || "Beginner"}
                         </span>
                       </div>
 
                       <div>
-                        <h3 className="text-2xl font-black">
+                        <h3 className="text-2xl font-black text-slate-950 dark:text-white">
                           {course?.title || "Untitled Course"}
                         </h3>
 
-                        <p className="mt-2 text-slate-400">
+                        <p className="mt-2 text-slate-600 dark:text-slate-400">
                           {course?.shortDescription ||
                             "Continue learning this course."}
                         </p>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-4 text-sm text-slate-400">
+                      <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600 dark:text-slate-400">
                         <span>🎬 {totalLessons} lessons</span>
                         <span>⏱️ {formatDuration(durationMinutes)}</span>
                       </div>
 
                       <div>
                         <div className="mb-3 flex items-center justify-between text-sm">
-                          <span className="text-slate-300">Progress</span>
-                          <span className="font-black text-cyan-300">
+                          <span className="text-slate-700 dark:text-slate-300">
+                            Progress
+                          </span>
+
+                          <span className="font-black text-cyan-700 dark:text-cyan-300">
                             {progressPercentage}%
                           </span>
                         </div>
 
-                        <div className="h-3 overflow-hidden rounded-full bg-slate-800">
+                        <div className="h-3 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
                           <div
                             className="h-full rounded-full bg-gradient-to-r from-blue-600 to-purple-600 transition-all duration-500"
                             style={{ width: `${progressPercentage}%` }}
                           />
                         </div>
 
-                        <p className="mt-3 text-sm text-slate-400">
+                        <p className="mt-3 text-sm text-slate-600 dark:text-slate-400">
                           {completedLessons} of {totalLessons} lessons completed
                         </p>
                       </div>
 
-                      <div className="rounded-2xl border border-slate-800 bg-white/5 p-4">
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/5">
                         <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
                           Resume Lesson
                         </p>
 
-                        <p className="mt-2 truncate font-bold text-slate-200">
+                        <p className="mt-2 truncate font-bold text-slate-800 dark:text-slate-200">
                           {resumeLesson?.title || "Start from first lesson"}
                         </p>
                       </div>
@@ -518,22 +537,25 @@ const StudentDashboardPage = () => {
           )}
         </section>
 
-        <section className="rounded-[2rem] border border-slate-800 bg-slate-900/70 p-6 sm:p-8">
+        <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/70 sm:p-8 dark:border-white/10 dark:bg-slate-900/70 dark:shadow-black/20">
           <div className="mb-6 flex items-center gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-yellow-400/10 text-2xl">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-yellow-50 text-2xl dark:bg-yellow-400/10">
               🏅
             </div>
 
             <div>
-              <h2 className="text-2xl font-black">My Certificates</h2>
-              <p className="mt-1 text-slate-400">
+              <h2 className="text-2xl font-black text-slate-950 dark:text-white">
+                My Certificates
+              </h2>
+
+              <p className="mt-1 text-slate-600 dark:text-slate-400">
                 View and download your completed course certificates.
               </p>
             </div>
           </div>
 
           {certificates.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-950/60 p-6 text-slate-400">
+            <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-slate-600 dark:border-slate-700 dark:bg-slate-950/60 dark:text-slate-400">
               No certificates generated yet. Complete a course to unlock your
               certificate.
             </div>
@@ -542,21 +564,21 @@ const StudentDashboardPage = () => {
               {certificates.map((certificate) => (
                 <div
                   key={certificate._id || certificate.certificateId}
-                  className="rounded-2xl border border-slate-800 bg-slate-950 p-5"
+                  className="rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-white/10 dark:bg-slate-950"
                 >
-                  <h3 className="font-black">
+                  <h3 className="font-black text-slate-950 dark:text-white">
                     {certificate.courseTitle ||
                       certificate.course?.title ||
                       "Course Certificate"}
                   </h3>
 
-                  <p className="mt-2 text-sm text-slate-400">
+                  <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
                     Certificate ID: {certificate.certificateId}
                   </p>
 
                   <Link
-                    to={`/certificate/verify/${certificate.certificateId}`}
-                    className="mt-4 inline-flex rounded-xl bg-yellow-400 px-4 py-2 text-sm font-black text-slate-950"
+                    to={`/certificates/${certificate.certificateId}`}
+                    className="mt-4 inline-flex rounded-xl bg-yellow-400 px-4 py-2 text-sm font-black text-slate-950 hover:bg-yellow-300"
                   >
                     View Certificate
                   </Link>

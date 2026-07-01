@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Award, CheckCircle, Loader2, Printer } from "lucide-react";
+
 import { api } from "../services/api";
 
 const formatDate = (date) => {
@@ -45,11 +46,14 @@ const CertificatePage = () => {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
+      <main className="flex min-h-screen items-center justify-center bg-slate-50 text-slate-950 transition-colors duration-300 dark:bg-slate-950 dark:text-white">
         <div className="text-center">
-          <Loader2 className="animate-spin text-blue-400 mx-auto" size={44} />
+          <Loader2
+            className="mx-auto animate-spin text-blue-500 dark:text-blue-400"
+            size={44}
+          />
 
-          <p className="mt-4 text-slate-400 font-semibold">
+          <p className="mt-4 font-semibold text-slate-600 dark:text-slate-400">
             Loading certificate...
           </p>
         </div>
@@ -59,17 +63,17 @@ const CertificatePage = () => {
 
   if (error) {
     return (
-      <main className="min-h-screen bg-slate-950 text-white pt-28 px-4">
-        <div className="max-w-3xl mx-auto rounded-3xl border border-red-500/30 bg-red-500/10 p-8">
-          <h1 className="text-3xl font-black text-red-300">
+      <main className="min-h-screen bg-slate-50 px-4 pt-28 text-slate-950 transition-colors duration-300 dark:bg-slate-950 dark:text-white">
+        <div className="mx-auto max-w-3xl rounded-3xl border border-red-200 bg-red-50 p-8 dark:border-red-500/30 dark:bg-red-500/10">
+          <h1 className="text-3xl font-black text-red-700 dark:text-red-300">
             Certificate Not Found
           </h1>
 
-          <p className="text-slate-300 mt-3">{error}</p>
+          <p className="mt-3 text-slate-700 dark:text-slate-300">{error}</p>
 
           <Link
             to="/"
-            className="inline-flex mt-6 px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold"
+            className="mt-6 inline-flex rounded-2xl bg-blue-600 px-6 py-3 font-bold text-white hover:bg-blue-700"
           >
             Go Home
           </Link>
@@ -97,12 +101,13 @@ const CertificatePage = () => {
               overflow: hidden !important;
             }
 
-            #root > * {
-              display: none !important;
+            body * {
+              visibility: hidden !important;
             }
 
-            #root > .certificate-print-page {
-              display: flex !important;
+            .certificate-print-page,
+            .certificate-print-page * {
+              visibility: visible !important;
             }
 
             .print-hidden {
@@ -110,13 +115,16 @@ const CertificatePage = () => {
             }
 
             .certificate-print-page {
+              position: fixed !important;
+              inset: 0 !important;
               width: 100% !important;
-              height: calc(210mm - 16mm) !important;
+              height: 100% !important;
               min-height: 0 !important;
               margin: 0 !important;
               padding: 0 !important;
               background: white !important;
               overflow: hidden !important;
+              display: flex !important;
               align-items: center !important;
               justify-content: center !important;
               page-break-after: avoid !important;
@@ -196,54 +204,58 @@ const CertificatePage = () => {
         `}
       </style>
 
-      <main className="certificate-print-page min-h-screen bg-slate-950 text-white pt-24 px-4 py-10">
-        <div className="max-w-5xl mx-auto certificate-print-area">
-          <div className="flex justify-between items-center mb-6 print-hidden">
-            <Link to="/student/dashboard" className="text-blue-400 font-bold">
+      <main className="certificate-print-page min-h-screen bg-slate-50 px-4 py-10 pt-24 text-slate-950 transition-colors duration-300 dark:bg-slate-950 dark:text-white">
+        <div className="certificate-print-area mx-auto max-w-5xl">
+          <div className="print-hidden mb-6 flex items-center justify-between">
+            <Link
+              to="/student/dashboard"
+              className="font-bold text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+            >
               ← Back to Dashboard
             </Link>
 
             <button
+              type="button"
               onClick={() => window.print()}
-              className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold"
+              className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 font-bold text-white hover:bg-blue-700"
             >
               <Printer size={18} />
               Print / Download
             </button>
           </div>
 
-          <section className="certificate-card bg-white text-slate-950 rounded-[2rem] p-10 md:p-14 border-[12px] border-blue-700 shadow-2xl flex items-center justify-center">
-            <div className="text-center w-full">
-              <div className="certificate-logo mx-auto h-20 w-20 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center">
+          <section className="certificate-card flex items-center justify-center rounded-[2rem] border-[12px] border-blue-700 bg-white p-10 text-slate-950 shadow-2xl md:p-14">
+            <div className="w-full text-center">
+              <div className="certificate-logo mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-blue-100 text-blue-700">
                 <Award size={42} />
               </div>
 
-              <p className="mt-5 text-sm font-bold tracking-[0.4em] text-blue-700 uppercase">
+              <p className="mt-5 text-sm font-bold uppercase tracking-[0.4em] text-blue-700">
                 Certificate of Completion
               </p>
 
-              <h1 className="certificate-main-title text-4xl md:text-6xl font-black mt-3">
+              <h1 className="certificate-main-title mt-3 text-4xl font-black md:text-6xl">
                 VeoLMS
               </h1>
 
-              <p className="text-slate-500 mt-4">
+              <p className="mt-4 text-slate-500">
                 This certificate is proudly presented to
               </p>
 
-              <h2 className="certificate-student-name text-4xl md:text-5xl font-black mt-5 border-b-2 border-slate-300 inline-block px-10 pb-3">
+              <h2 className="certificate-student-name mt-5 inline-block border-b-2 border-slate-300 px-10 pb-3 text-4xl font-black md:text-5xl">
                 {certificate.studentName}
               </h2>
 
-              <p className="text-slate-500 mt-7">
+              <p className="mt-7 text-slate-500">
                 for successfully completing the course
               </p>
 
-              <h3 className="certificate-course-title text-3xl md:text-4xl font-black mt-4 text-blue-700">
+              <h3 className="certificate-course-title mt-4 text-3xl font-black text-blue-700 md:text-4xl">
                 {certificate.courseTitle}
               </h3>
 
               {certificate.instructorName && (
-                <p className="text-slate-600 mt-4">
+                <p className="mt-4 text-slate-600">
                   Instructor:{" "}
                   <span className="font-bold">
                     {certificate.instructorName}
@@ -251,7 +263,7 @@ const CertificatePage = () => {
                 </p>
               )}
 
-              <div className="certificate-info-row mt-8 flex flex-col md:flex-row justify-center gap-5 text-sm">
+              <div className="certificate-info-row mt-8 flex flex-col justify-center gap-5 text-sm md:flex-row">
                 <div className="certificate-info-card rounded-2xl bg-slate-100 px-6 py-4">
                   <p className="text-slate-500">Certificate ID</p>
                   <p className="font-black">{certificate.certificateId}</p>
@@ -272,7 +284,7 @@ const CertificatePage = () => {
                 </div>
               </div>
 
-              <div className="certificate-verified mt-8 inline-flex items-center gap-2 text-green-700 font-bold">
+              <div className="certificate-verified mt-8 inline-flex items-center gap-2 font-bold text-green-700">
                 <CheckCircle size={22} />
                 Verified Certificate
               </div>

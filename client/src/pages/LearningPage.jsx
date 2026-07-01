@@ -81,7 +81,10 @@ const renderInlineMarkdown = (text) => {
   return parts.map((part, index) => {
     if (part.startsWith("**") && part.endsWith("**")) {
       return (
-        <strong key={index} className="font-black text-white">
+        <strong
+          key={index}
+          className="font-black text-slate-950 dark:text-white"
+        >
           {part.slice(2, -2)}
         </strong>
       );
@@ -114,7 +117,7 @@ const NotePreview = ({ content }) => {
           return (
             <h3
               key={key}
-              className="border-b border-white/10 pb-2 text-xl font-black leading-snug text-white"
+              className="border-b border-slate-200 pb-2 text-xl font-black leading-snug text-slate-950 dark:border-white/10 dark:text-white"
             >
               {line.replace("# ", "")}
             </h3>
@@ -125,7 +128,7 @@ const NotePreview = ({ content }) => {
           return (
             <h4
               key={key}
-              className="pt-1 text-base font-black leading-snug text-slate-100"
+              className="pt-1 text-base font-black leading-snug text-slate-800 dark:text-slate-100"
             >
               {line.replace("## ", "")}
             </h4>
@@ -136,7 +139,7 @@ const NotePreview = ({ content }) => {
           return (
             <p
               key={key}
-              className="pl-3 text-[15px] font-semibold leading-7 text-slate-200"
+              className="pl-3 text-[15px] font-semibold leading-7 text-slate-700 dark:text-slate-200"
             >
               {renderInlineMarkdown(line)}
             </p>
@@ -144,7 +147,10 @@ const NotePreview = ({ content }) => {
         }
 
         return (
-          <p key={key} className="text-sm leading-7 text-slate-300">
+          <p
+            key={key}
+            className="text-sm leading-7 text-slate-700 dark:text-slate-300"
+          >
             {renderInlineMarkdown(line)}
           </p>
         );
@@ -214,8 +220,8 @@ const TabButton = ({ active, icon: Icon, label, badge, onClick }) => {
       onClick={onClick}
       className={`inline-flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-black transition ${
         active
-          ? "border-blue-400/50 bg-blue-600 text-white shadow-lg shadow-blue-950/30"
-          : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white"
+          ? "border-blue-500 bg-blue-600 text-white shadow-lg shadow-blue-600/20"
+          : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-950 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
       }`}
     >
       <Icon size={17} />
@@ -224,7 +230,9 @@ const TabButton = ({ active, icon: Icon, label, badge, onClick }) => {
       {badge !== undefined && badge !== null && (
         <span
           className={`rounded-full px-2 py-0.5 text-xs ${
-            active ? "bg-white/20 text-white" : "bg-white/10 text-slate-300"
+            active
+              ? "bg-white/20 text-white"
+              : "bg-slate-100 text-slate-600 dark:bg-white/10 dark:text-slate-300"
           }`}
         >
           {badge}
@@ -275,42 +283,46 @@ const LessonResources = ({ courseId, lesson }) => {
   };
 
   return (
-    <section className="mt-5 rounded-3xl border border-white/10 bg-slate-950/70 p-5">
+    <section className="mt-5 rounded-3xl border border-slate-200 bg-slate-50 p-5 dark:border-white/10 dark:bg-slate-950/70">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-purple-500/10 text-purple-300">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-purple-50 text-purple-700 dark:bg-purple-500/10 dark:text-purple-300">
             <Paperclip size={24} />
           </div>
 
           <div>
-            <h2 className="text-2xl font-black text-white">Lesson Resources</h2>
+            <h2 className="text-2xl font-black text-slate-950 dark:text-white">
+              Lesson Resources
+            </h2>
 
-            <p className="mt-1 text-sm text-slate-400">
+            <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
               Files and materials added by admin for this lesson.
             </p>
           </div>
         </div>
 
-        <span className="rounded-full border border-white/10 bg-slate-950/70 px-3 py-1 text-sm font-bold text-slate-300">
+        <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-sm font-bold text-slate-700 dark:border-white/10 dark:bg-slate-950/70 dark:text-slate-300">
           {resources.length} files
         </span>
       </div>
 
       {resourceError && (
-        <div className="mb-4 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm font-bold text-red-200">
+        <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
           {resourceError}
         </div>
       )}
 
       {resources.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white/5 text-slate-400">
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center dark:border-white/10 dark:bg-white/[0.03]">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 dark:bg-white/5 dark:text-slate-400">
             <FileText size={27} />
           </div>
 
-          <h3 className="mt-4 font-black text-white">No resources added yet</h3>
+          <h3 className="mt-4 font-black text-slate-950 dark:text-white">
+            No resources added yet
+          </h3>
 
-          <p className="mt-2 text-sm text-slate-400">
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
             When admin attaches PDF, ZIP, notes, or assignment files, they will
             appear here.
           </p>
@@ -320,14 +332,14 @@ const LessonResources = ({ courseId, lesson }) => {
           {resources.map((resource, index) => (
             <article
               key={resource?._id || resource?.fileKey || resource?.url || index}
-              className="flex items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4"
+              className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[0.03]"
             >
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-300">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
                 <FileText size={21} />
               </div>
 
               <div className="min-w-0 flex-1">
-                <h3 className="truncate font-black text-white">
+                <h3 className="truncate font-black text-slate-950 dark:text-white">
                   {getResourceTitle(resource)}
                 </h3>
 
@@ -343,7 +355,7 @@ const LessonResources = ({ courseId, lesson }) => {
                 type="button"
                 onClick={() => handleOpenResource(resource)}
                 disabled={openingResourceId === resource._id}
-                className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-bold text-slate-200 hover:bg-white/10 disabled:opacity-60"
+                className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-800 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
               >
                 {openingResourceId === resource._id ? (
                   <Loader2 size={16} className="animate-spin" />
@@ -1018,9 +1030,12 @@ ${noteContent.trim()}
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-slate-950 px-4 py-4 text-white">
-        <div className="flex items-center gap-3 text-slate-400">
-          <Loader2 className="animate-spin text-blue-400" size={24} />
+      <main className="min-h-screen bg-slate-50 px-4 py-4 text-slate-950 dark:bg-slate-950 dark:text-white">
+        <div className="flex items-center gap-3 text-slate-600 dark:text-slate-400">
+          <Loader2
+            className="animate-spin text-blue-500 dark:text-blue-400"
+            size={24}
+          />
           Loading learning page...
         </div>
       </main>
@@ -1029,30 +1044,30 @@ ${noteContent.trim()}
 
   if (error) {
     return (
-      <main className="min-h-screen bg-slate-950 px-4 py-4 text-white">
-        <div className="mx-auto max-w-3xl rounded-3xl border border-red-500/30 bg-red-500/10 p-8">
-          <h1 className="mb-3 text-3xl font-black text-red-300">
+      <main className="min-h-screen bg-slate-50 px-4 py-4 text-slate-950 dark:bg-slate-950 dark:text-white">
+        <div className="mx-auto max-w-3xl rounded-3xl border border-red-200 bg-red-50 p-8 dark:border-red-500/30 dark:bg-red-500/10">
+          <h1 className="mb-3 text-3xl font-black text-red-700 dark:text-red-300">
             Access Denied
           </h1>
 
-          <p className="mb-6 text-slate-300">{error}</p>
+          <p className="mb-6 text-slate-700 dark:text-slate-300">{error}</p>
         </div>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
+    <main className="min-h-screen bg-slate-50 text-slate-950 transition-colors duration-300 dark:bg-slate-950 dark:text-white">
       <section className="mx-auto max-w-[1600px] px-4 pb-8 pt-4 md:px-6">
         {isAdminLearning && (
-          <div className="mb-4 rounded-2xl border border-blue-400/20 bg-blue-500/10 px-5 py-4 text-sm font-bold text-blue-200">
+          <div className="mb-4 rounded-2xl border border-blue-200 bg-blue-50 px-5 py-4 text-sm font-bold text-blue-700 dark:border-blue-400/20 dark:bg-blue-500/10 dark:text-blue-200">
             Admin preview mode: you are viewing your own course learning page.
           </div>
         )}
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_460px] xl:grid-cols-[minmax(0,1fr)_520px]">
           <div className="space-y-5">
-            <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/5">
+            <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/70 dark:border-white/10 dark:bg-white/5 dark:shadow-black/20">
               {videoLoading ? (
                 <div className="flex aspect-video flex-col items-center justify-center bg-black text-slate-400">
                   <Loader2 className="animate-spin text-blue-400" size={36} />
@@ -1083,15 +1098,15 @@ ${noteContent.trim()}
               )}
 
               <div className="p-6">
-                <p className="mb-2 text-sm font-black uppercase tracking-[0.18em] text-blue-300">
+                <p className="mb-2 text-sm font-black uppercase tracking-[0.18em] text-blue-700 dark:text-blue-300">
                   {currentLesson?.sectionTitle}
                 </p>
 
-                <h2 className="mb-3 text-2xl font-black leading-tight md:text-3xl">
+                <h2 className="mb-3 text-2xl font-black leading-tight text-slate-950 md:text-3xl dark:text-white">
                   {currentLesson?.title}
                 </h2>
 
-                <p className="text-slate-400">
+                <p className="text-slate-600 dark:text-slate-400">
                   {isAdminLearning
                     ? "Preview your lesson, check resources, and reply to student comments."
                     : "Watch this lesson and continue through the course curriculum."}
@@ -1120,8 +1135,8 @@ ${noteContent.trim()}
                       disabled={updatingCompletion}
                       className={`inline-flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-black transition ${
                         currentLessonCompleted
-                          ? "border-green-400/30 bg-green-500/15 text-green-200 hover:bg-green-500/25"
-                          : "border-green-400/20 bg-green-500/10 text-green-100 hover:bg-green-500/20"
+                          ? "border-green-200 bg-green-50 text-green-700 hover:bg-green-100 dark:border-green-400/30 dark:bg-green-500/15 dark:text-green-200 dark:hover:bg-green-500/25"
+                          : "border-green-200 bg-green-50 text-green-700 hover:bg-green-100 dark:border-green-400/20 dark:bg-green-500/10 dark:text-green-100 dark:hover:bg-green-500/20"
                       } disabled:cursor-not-allowed disabled:opacity-80`}
                     >
                       {updatingCompletion ? (
@@ -1140,37 +1155,37 @@ ${noteContent.trim()}
                 </div>
 
                 {isStudentLearning && lessonCompleteMessage && (
-                  <div className="mt-4 rounded-2xl border border-green-500/20 bg-green-500/10 p-4 text-sm font-bold text-green-200">
+                  <div className="mt-4 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm font-bold text-green-700 dark:border-green-500/20 dark:bg-green-500/10 dark:text-green-200">
                     {lessonCompleteMessage}
                   </div>
                 )}
 
                 {isStudentLearning && lessonCompleteError && (
-                  <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm font-bold text-red-200">
+                  <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
                     {lessonCompleteError}
                   </div>
                 )}
 
                 {isStudentLearning && certificateError && (
-                  <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm font-bold text-red-200">
+                  <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
                     {certificateError}
                   </div>
                 )}
 
                 {isStudentLearning && isCourseCompleted && (
-                  <div className="mt-5 rounded-3xl border border-yellow-400/20 bg-yellow-500/10 p-5">
+                  <div className="mt-5 rounded-3xl border border-yellow-200 bg-yellow-50 p-5 dark:border-yellow-400/20 dark:bg-yellow-500/10">
                     <div className="flex flex-wrap items-center justify-between gap-4">
                       <div className="flex items-start gap-3">
-                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-yellow-500/15 text-yellow-300">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-yellow-100 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-300">
                           <Award size={25} />
                         </div>
 
                         <div>
-                          <h3 className="text-xl font-black text-yellow-200">
+                          <h3 className="text-xl font-black text-yellow-800 dark:text-yellow-200">
                             Course Completed
                           </h3>
 
-                          <p className="mt-1 text-sm text-slate-300">
+                          <p className="mt-1 text-sm text-slate-700 dark:text-slate-300">
                             You completed all lessons. You can now generate or
                             download your certificate.
                           </p>
@@ -1195,7 +1210,7 @@ ${noteContent.trim()}
                           type="button"
                           onClick={handleGenerateCertificate}
                           disabled={certificateLoading}
-                          className="inline-flex items-center gap-2 rounded-2xl bg-yellow-500 px-5 py-3 text-sm font-black text-slate-950 hover:bg-yellow-600 disabled:opacity-60"
+                          className="inline-flex items-center gap-2 rounded-2xl bg-yellow-500 px-5 py-3 text-sm font-black text-slate-950 hover:bg-yellow-600 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           {certificateLoading ? (
                             <Loader2 size={17} className="animate-spin" />
@@ -1214,7 +1229,7 @@ ${noteContent.trim()}
                 {activePanel === "comments" &&
                   course?._id &&
                   currentLesson?._id && (
-                    <div className="mt-5">
+                    <div className="mt-5 rounded-3xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-slate-950/60">
                       <LessonComments
                         courseId={course._id}
                         lessonId={currentLesson._id}
@@ -1232,20 +1247,20 @@ ${noteContent.trim()}
             </div>
           </div>
 
-          <aside className="overflow-hidden rounded-3xl border border-white/10 bg-white/5">
-            <div className="border-b border-white/10 p-5">
+          <aside className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/70 dark:border-white/10 dark:bg-white/5 dark:shadow-black/20">
+            <div className="border-b border-slate-200 p-5 dark:border-white/10">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-300">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
                     <BookOpen size={22} />
                   </div>
 
                   <div>
-                    <h3 className="text-2xl font-black leading-tight">
+                    <h3 className="text-2xl font-black leading-tight text-slate-950 dark:text-white">
                       Course Lessons
                     </h3>
 
-                    <p className="mt-1 text-sm text-slate-400">
+                    <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
                       {lessons.length} lessons
                     </p>
                   </div>
@@ -1257,8 +1272,8 @@ ${noteContent.trim()}
                     onClick={toggleNotesPanel}
                     className={`relative flex h-12 w-12 items-center justify-center rounded-2xl border transition ${
                       notesOpen
-                        ? "border-blue-400/50 bg-blue-500/15 text-blue-300"
-                        : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
+                        ? "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-400/50 dark:bg-blue-500/15 dark:text-blue-300"
+                        : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10"
                     }`}
                     title="Lesson notes"
                   >
@@ -1273,43 +1288,46 @@ ${noteContent.trim()}
             </div>
 
             {isStudentLearning && notesOpen && (
-              <div className="border-b border-white/10 bg-slate-950/80 p-5">
+              <div className="border-b border-slate-200 bg-slate-50 p-5 dark:border-white/10 dark:bg-slate-950/80">
                 <div className="mb-4 flex items-center justify-between gap-3">
-                  <p className="text-xs font-black uppercase tracking-[0.24em] text-blue-300">
+                  <p className="text-xs font-black uppercase tracking-[0.24em] text-blue-700 dark:text-blue-300">
                     Lesson Notes
                   </p>
 
                   {noteLoading && (
-                    <Loader2 className="animate-spin text-blue-400" size={18} />
+                    <Loader2
+                      className="animate-spin text-blue-500 dark:text-blue-400"
+                      size={18}
+                    />
                   )}
                 </div>
 
                 {noteError && (
-                  <div className="mb-3 rounded-2xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
+                  <div className="mb-3 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
                     {noteError}
                   </div>
                 )}
 
                 {noteMessage && (
-                  <div className="mb-3 rounded-2xl border border-green-500/30 bg-green-500/10 p-3 text-sm text-green-200">
+                  <div className="mb-3 rounded-2xl border border-green-200 bg-green-50 p-3 text-sm text-green-700 dark:border-green-500/30 dark:bg-green-500/10 dark:text-green-200">
                     {noteMessage}
                   </div>
                 )}
 
                 {hasCurrentLessonNote && !noteEditMode ? (
-                  <div className="rounded-3xl border border-white/10 bg-slate-950/60 p-5">
+                  <div className="rounded-3xl border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-slate-950/60">
                     <div className="mb-4 flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/5 text-blue-300">
+                        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-blue-700 dark:bg-white/5 dark:text-blue-300">
                           <FileText size={22} />
                         </div>
 
                         <div>
-                          <p className="text-xs font-black uppercase tracking-[0.2em] text-blue-300">
+                          <p className="text-xs font-black uppercase tracking-[0.2em] text-blue-700 dark:text-blue-300">
                             Saved Note
                           </p>
 
-                          <p className="mt-1 text-sm text-slate-400">
+                          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
                             Click note text or Edit to continue writing
                           </p>
                         </div>
@@ -1319,7 +1337,7 @@ ${noteContent.trim()}
                         <button
                           type="button"
                           onClick={handleDownloadNote}
-                          className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-bold text-slate-200 hover:bg-white/10"
+                          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-800 hover:bg-slate-100 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
                         >
                           <Download size={16} />
                           Download
@@ -1339,7 +1357,7 @@ ${noteContent.trim()}
                     <button
                       type="button"
                       onClick={focusNoteTypingArea}
-                      className="w-full cursor-text rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-left"
+                      className="w-full cursor-text rounded-2xl border border-slate-200 bg-slate-50 p-5 text-left dark:border-white/10 dark:bg-white/[0.03]"
                       title="Click to edit note"
                     >
                       <NotePreview content={noteContent} />
@@ -1349,7 +1367,7 @@ ${noteContent.trim()}
                       type="button"
                       onClick={handleDeleteNote}
                       disabled={noteDeleting || noteLoading}
-                      className="mt-5 inline-flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-bold text-red-200 hover:bg-red-500/20 disabled:opacity-60"
+                      className="mt-5 inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-bold text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200 dark:hover:bg-red-500/20"
                     >
                       <Trash2 size={16} />
                       {noteDeleting ? "Deleting..." : "Delete Note"}
@@ -1362,7 +1380,7 @@ ${noteContent.trim()}
                         <button
                           type="button"
                           onClick={() => addFormatToNote("h1")}
-                          className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-black text-slate-100 hover:bg-white/10"
+                          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-black text-slate-800 hover:bg-slate-100 dark:border-white/10 dark:bg-white/5 dark:text-slate-100 dark:hover:bg-white/10"
                         >
                           H1 Heading
                         </button>
@@ -1370,7 +1388,7 @@ ${noteContent.trim()}
                         <button
                           type="button"
                           onClick={() => addFormatToNote("h2")}
-                          className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-black text-slate-100 hover:bg-white/10"
+                          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-black text-slate-800 hover:bg-slate-100 dark:border-white/10 dark:bg-white/5 dark:text-slate-100 dark:hover:bg-white/10"
                         >
                           H2 Sub
                         </button>
@@ -1378,7 +1396,7 @@ ${noteContent.trim()}
                         <button
                           type="button"
                           onClick={() => addFormatToNote("point")}
-                          className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-bold text-slate-200 hover:bg-white/10"
+                          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
                         >
                           • Point
                         </button>
@@ -1386,7 +1404,7 @@ ${noteContent.trim()}
                         <button
                           type="button"
                           onClick={() => addFormatToNote("doubt")}
-                          className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-bold text-slate-200 hover:bg-white/10"
+                          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
                         >
                           Doubt
                         </button>
@@ -1394,7 +1412,7 @@ ${noteContent.trim()}
                         <button
                           type="button"
                           onClick={() => addFormatToNote("summary")}
-                          className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-bold text-slate-200 hover:bg-white/10"
+                          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
                         >
                           Summary
                         </button>
@@ -1407,7 +1425,7 @@ ${noteContent.trim()}
                               key={emoji}
                               type="button"
                               onClick={() => addEmojiToNote(emoji)}
-                              className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-lg transition hover:bg-white/10"
+                              className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-lg transition hover:bg-slate-100 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"
                               title={`Add ${emoji}`}
                             >
                               {emoji}
@@ -1435,7 +1453,7 @@ React components help split UI into reusable parts.
 
 • **Props pass data from parent to child**
 ❓ Doubt: Revise useEffect again.`}
-                      className="w-full resize-none rounded-3xl border border-white/10 bg-slate-900 px-5 py-4 text-[15px] leading-7 text-slate-100 outline-none placeholder:text-slate-500 focus:border-blue-400/50"
+                      className="w-full resize-none rounded-3xl border border-slate-200 bg-white px-5 py-4 text-[15px] leading-7 text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 dark:border-white/10 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-blue-400/50"
                     />
 
                     <div className="mt-3 flex flex-wrap gap-2">
@@ -1443,7 +1461,7 @@ React components help split UI into reusable parts.
                         type="button"
                         onClick={handleSaveNote}
                         disabled={noteSaving || noteLoading}
-                        className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60"
+                        className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         <Save size={16} />
                         {noteSaving ? "Saving..." : "Save"}
@@ -1453,7 +1471,7 @@ React components help split UI into reusable parts.
                         <button
                           type="button"
                           onClick={handleDownloadNote}
-                          className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold text-slate-200 hover:bg-white/10"
+                          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-800 hover:bg-slate-100 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
                         >
                           <Download size={16} />
                           Download
@@ -1464,7 +1482,7 @@ React components help split UI into reusable parts.
                         <button
                           type="button"
                           onClick={() => setNoteEditMode(false)}
-                          className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold text-slate-200 hover:bg-white/10"
+                          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-800 hover:bg-slate-100 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
                         >
                           Cancel
                         </button>
@@ -1476,7 +1494,7 @@ React components help split UI into reusable parts.
                         disabled={
                           noteDeleting || noteLoading || !noteContent.trim()
                         }
-                        className="inline-flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-bold text-red-200 hover:bg-red-500/20 disabled:opacity-60"
+                        className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-bold text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200 dark:hover:bg-red-500/20"
                       >
                         <Trash2 size={16} />
                         {noteDeleting ? "Deleting..." : "Delete"}
@@ -1493,9 +1511,12 @@ React components help split UI into reusable parts.
 
             <div className="max-h-[720px] overflow-y-auto">
               {course?.sections?.map((section) => (
-                <div key={section._id} className="border-b border-white/10">
-                  <div className="bg-slate-950/60 px-5 py-4">
-                    <h4 className="text-lg font-black text-white">
+                <div
+                  key={section._id}
+                  className="border-b border-slate-200 dark:border-white/10"
+                >
+                  <div className="bg-slate-50 px-5 py-4 dark:bg-slate-950/60">
+                    <h4 className="text-lg font-black text-slate-950 dark:text-white">
                       {section.title}
                     </h4>
                   </div>
@@ -1518,18 +1539,18 @@ React components help split UI into reusable parts.
                           }
                           className={`w-full rounded-2xl border p-4 text-left transition ${
                             isActive
-                              ? "border-blue-500/70 bg-blue-600/20"
-                              : "border-white/10 bg-white/5 hover:bg-white/10"
+                              ? "border-blue-500 bg-blue-50 dark:border-blue-500/70 dark:bg-blue-600/20"
+                              : "border-slate-200 bg-slate-50 hover:bg-slate-100 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"
                           }`}
                         >
                           <div className="flex items-start gap-3">
                             <div
                               className={`mt-1 shrink-0 ${
                                 isStudentLearning && isCompleted
-                                  ? "text-green-300"
+                                  ? "text-green-700 dark:text-green-300"
                                   : isActive
-                                    ? "text-blue-300"
-                                    : "text-slate-400"
+                                    ? "text-blue-700 dark:text-blue-300"
+                                    : "text-slate-500 dark:text-slate-400"
                               }`}
                             >
                               {isStudentLearning && isCompleted ? (
@@ -1540,11 +1561,11 @@ React components help split UI into reusable parts.
                             </div>
 
                             <div className="min-w-0 flex-1">
-                              <p className="text-base font-black leading-6 text-white">
+                              <p className="text-base font-black leading-6 text-slate-950 dark:text-white">
                                 {lesson.title}
                               </p>
 
-                              <p className="mt-2 text-sm text-slate-400">
+                              <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
                                 {lesson.duration}
                               </p>
                             </div>
@@ -1552,7 +1573,7 @@ React components help split UI into reusable parts.
                             {isStudentLearning && lessonHasNote && (
                               <FileText
                                 size={18}
-                                className="mt-1 shrink-0 text-blue-300"
+                                className="mt-1 shrink-0 text-blue-700 dark:text-blue-300"
                               />
                             )}
                           </div>

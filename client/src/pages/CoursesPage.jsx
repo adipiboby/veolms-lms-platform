@@ -5,8 +5,6 @@ import {
   BookOpen,
   CheckCircle,
   Clock,
-  IndianRupee,
-  Layers,
   Loader2,
   PlayCircle,
   RefreshCw,
@@ -72,8 +70,9 @@ const getCourseEnrollments = (course) => {
 };
 
 const getCourseLessonsCount = (course) => {
-  if (!Array.isArray(course?.sections))
+  if (!Array.isArray(course?.sections)) {
     return Number(course?.lessonsCount || 0);
+  }
 
   return course.sections.reduce((total, section) => {
     return (
@@ -89,8 +88,8 @@ const PremiumCourseCard = ({ course }) => {
   const lessonsCount = getCourseLessonsCount(course);
 
   return (
-    <article className="group flex min-w-0 flex-col overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.04] shadow-2xl shadow-black/20 transition duration-300 hover:-translate-y-1 hover:border-blue-400/40 hover:bg-white/[0.07]">
-      <div className="relative aspect-video overflow-hidden bg-slate-900">
+    <article className="group flex min-w-0 flex-col overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl shadow-slate-200/70 transition duration-300 hover:-translate-y-1 hover:border-blue-300 hover:shadow-2xl dark:border-white/10 dark:bg-white/[0.04] dark:shadow-black/20 dark:hover:border-blue-400/40 dark:hover:bg-white/[0.07]">
+      <div className="relative aspect-video overflow-hidden bg-slate-200 dark:bg-slate-900">
         <img
           src={getCourseImage(course)}
           alt={course?.title || "Course thumbnail"}
@@ -114,54 +113,62 @@ const PremiumCourseCard = ({ course }) => {
 
       <div className="flex flex-1 flex-col p-5">
         <div className="mb-4 flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2 rounded-full border border-yellow-400/20 bg-yellow-400/10 px-3 py-1 text-sm text-yellow-200">
+          <div className="flex min-w-0 items-center gap-2 rounded-full border border-yellow-200 bg-yellow-50 px-3 py-1 text-sm text-yellow-700 dark:border-yellow-400/20 dark:bg-yellow-400/10 dark:text-yellow-200">
             <Star
               size={15}
-              className="shrink-0 fill-yellow-300 text-yellow-300"
+              className="shrink-0 fill-yellow-400 text-yellow-400 dark:fill-yellow-300 dark:text-yellow-300"
             />
+
             <span className="font-black">
               {rating > 0 ? rating.toFixed(1) : "New"}
             </span>
-            <span className="truncate text-yellow-100/70">
+
+            <span className="truncate text-yellow-600/80 dark:text-yellow-100/70">
               ({reviewsCount})
             </span>
           </div>
 
-          <div className="flex shrink-0 items-center gap-2 text-sm text-slate-400">
+          <div className="flex shrink-0 items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
             <Users size={15} />
             <span>{enrollments}</span>
           </div>
         </div>
 
-        <h2 className="line-clamp-2 break-words text-xl font-black leading-tight text-white">
+        <h2 className="line-clamp-2 break-words text-xl font-black leading-tight text-slate-950 dark:text-white">
           {course?.title}
         </h2>
 
-        <p className="mt-3 line-clamp-3 break-words text-sm leading-6 text-slate-400">
+        <p className="mt-3 line-clamp-3 break-words text-sm leading-6 text-slate-600 dark:text-slate-400">
           {course?.shortDescription ||
             course?.description ||
             "Learn with structured lessons, secure videos, notes, progress tracking, reviews, and certificates."}
         </p>
 
         <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
-          <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3 text-slate-300">
-            <BookOpen size={16} className="shrink-0 text-blue-300" />
+          <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-slate-700 dark:border-white/10 dark:bg-slate-950/60 dark:text-slate-300">
+            <BookOpen
+              size={16}
+              className="shrink-0 text-blue-600 dark:text-blue-300"
+            />
             <span className="truncate">{lessonsCount} lessons</span>
           </div>
 
-          <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3 text-slate-300">
-            <Clock size={16} className="shrink-0 text-green-300" />
+          <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-slate-700 dark:border-white/10 dark:bg-slate-950/60 dark:text-slate-300">
+            <Clock
+              size={16}
+              className="shrink-0 text-green-600 dark:text-green-300"
+            />
             <span className="truncate">Lifetime</span>
           </div>
         </div>
 
-        <div className="mt-5 flex items-center justify-between gap-3 border-t border-white/10 pt-5">
+        <div className="mt-5 flex items-center justify-between gap-3 border-t border-slate-200 pt-5 dark:border-white/10">
           <div className="min-w-0">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
               Instructor
             </p>
 
-            <p className="truncate font-bold text-slate-200">
+            <p className="truncate font-bold text-slate-800 dark:text-slate-200">
               {course?.instructor ||
                 course?.createdBy?.name ||
                 "VeoLMS Instructor"}
@@ -290,11 +297,14 @@ const CoursesPage = () => {
 
   if (loading) {
     return (
-      <main className="min-h-screen overflow-x-hidden bg-slate-950 px-4 py-10 text-white">
+      <main className="min-h-screen overflow-x-hidden bg-slate-50 px-4 py-10 text-slate-950 dark:bg-slate-950 dark:text-white">
         <div className="flex min-h-[70vh] flex-col items-center justify-center">
-          <Loader2 size={44} className="animate-spin text-blue-400" />
+          <Loader2
+            size={44}
+            className="animate-spin text-blue-500 dark:text-blue-400"
+          />
 
-          <p className="mt-4 font-semibold text-slate-400">
+          <p className="mt-4 font-semibold text-slate-600 dark:text-slate-400">
             Loading courses...
           </p>
         </div>
@@ -304,11 +314,13 @@ const CoursesPage = () => {
 
   if (pageError) {
     return (
-      <main className="min-h-screen overflow-x-hidden bg-slate-950 px-4 py-10 text-white">
-        <section className="mx-auto max-w-4xl rounded-[2rem] border border-red-500/30 bg-red-500/10 p-8">
-          <h1 className="text-2xl font-black text-red-200">Courses Error</h1>
+      <main className="min-h-screen overflow-x-hidden bg-slate-50 px-4 py-10 text-slate-950 dark:bg-slate-950 dark:text-white">
+        <section className="mx-auto max-w-4xl rounded-[2rem] border border-red-200 bg-red-50 p-8 dark:border-red-500/30 dark:bg-red-500/10">
+          <h1 className="text-2xl font-black text-red-700 dark:text-red-200">
+            Courses Error
+          </h1>
 
-          <p className="mt-3 text-slate-300">{pageError}</p>
+          <p className="mt-3 text-slate-700 dark:text-slate-300">{pageError}</p>
 
           <button
             type="button"
@@ -324,18 +336,34 @@ const CoursesPage = () => {
   }
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-slate-950 text-white">
-      <section className="relative overflow-hidden border-b border-white/10">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.16),transparent_32%),radial-gradient(circle_at_top_right,rgba(147,51,234,0.14),transparent_30%),linear-gradient(180deg,rgba(15,23,42,0),rgba(2,6,23,1))]" />
+    <main className="min-h-screen overflow-x-hidden bg-slate-50 text-slate-950 transition-colors duration-300 dark:bg-slate-950 dark:text-white">
+      <section className="relative overflow-hidden border-b border-slate-200 dark:border-white/10">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.10),transparent_32%),radial-gradient(circle_at_top_right,rgba(147,51,234,0.08),transparent_30%),linear-gradient(180deg,rgba(248,250,252,0),rgba(248,250,252,1))] dark:bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.16),transparent_32%),radial-gradient(circle_at_top_right,rgba(147,51,234,0.14),transparent_30%),linear-gradient(180deg,rgba(15,23,42,0),rgba(2,6,23,1))]" />
 
         <div className="relative mx-auto max-w-7xl px-4 py-8 md:py-10">
+          <div className="mb-7">
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-black text-blue-700 dark:border-blue-400/20 dark:bg-blue-500/10 dark:text-blue-200">
+              <BookOpen size={16} />
+              Courses
+            </div>
+
+            <h1 className="text-3xl font-black text-slate-950 md:text-5xl dark:text-white">
+              Explore available courses
+            </h1>
+
+            <p className="mt-3 max-w-3xl text-slate-600 dark:text-slate-400">
+              Learn with structured lessons, secure videos, progress tracking,
+              notes, reviews, and certificates.
+            </p>
+          </div>
+
           {shouldShowSearchBar && (
-            <div className="rounded-[2rem] border border-white/10 bg-white/[0.05] p-4 shadow-2xl shadow-black/20 backdrop-blur-xl md:p-5">
+            <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-xl shadow-slate-200/70 backdrop-blur-xl md:p-5 dark:border-white/10 dark:bg-white/[0.05] dark:shadow-black/20">
               <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px_180px_auto]">
                 <div className="relative min-w-0">
                   <Search
                     size={19}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-400"
                   />
 
                   <input
@@ -343,14 +371,14 @@ const CoursesPage = () => {
                     value={searchQuery}
                     onChange={(event) => setSearchQuery(event.target.value)}
                     placeholder="Search courses..."
-                    className="w-full rounded-2xl border border-white/10 bg-slate-950/80 px-11 py-4 text-white outline-none placeholder:text-slate-500 focus:border-blue-500"
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-11 py-4 text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 dark:border-white/10 dark:bg-slate-950/80 dark:text-white dark:placeholder:text-slate-500"
                   />
 
                   {searchQuery && (
                     <button
                       type="button"
                       onClick={() => setSearchQuery("")}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full p-1 text-slate-400 hover:bg-white/10 hover:text-white"
+                      className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-950 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white"
                     >
                       <X size={17} />
                     </button>
@@ -360,7 +388,7 @@ const CoursesPage = () => {
                 <select
                   value={priceFilter}
                   onChange={(event) => setPriceFilter(event.target.value)}
-                  className="rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-4 font-bold text-white outline-none focus:border-blue-500"
+                  className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 font-bold text-slate-950 outline-none focus:border-blue-500 dark:border-white/10 dark:bg-slate-950/80 dark:text-white"
                 >
                   <option value="all">All Prices</option>
                   <option value="free">Free</option>
@@ -370,7 +398,7 @@ const CoursesPage = () => {
                 <select
                   value={sortBy}
                   onChange={(event) => setSortBy(event.target.value)}
-                  className="rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-4 font-bold text-white outline-none focus:border-blue-500"
+                  className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 font-bold text-slate-950 outline-none focus:border-blue-500 dark:border-white/10 dark:bg-slate-950/80 dark:text-white"
                 >
                   <option value="latest">Latest</option>
                   <option value="popular">Popular</option>
@@ -382,28 +410,31 @@ const CoursesPage = () => {
                 <button
                   type="button"
                   onClick={resetFilters}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-5 py-4 font-black text-slate-200 hover:bg-white/10"
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 font-black text-slate-700 hover:bg-slate-100 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
                 >
                   <RefreshCw size={17} />
                   Reset
                 </button>
               </div>
 
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-400">
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600 dark:text-slate-400">
                 <p>
                   Showing{" "}
-                  <span className="font-black text-white">
+                  <span className="font-black text-slate-950 dark:text-white">
                     {filteredCourses.length}
                   </span>{" "}
                   of{" "}
-                  <span className="font-black text-white">
+                  <span className="font-black text-slate-950 dark:text-white">
                     {courses.length}
                   </span>{" "}
                   courses
                 </p>
 
                 <p className="inline-flex items-center gap-2">
-                  <CheckCircle size={16} className="text-green-300" />
+                  <CheckCircle
+                    size={16}
+                    className="text-green-600 dark:text-green-300"
+                  />
                   Search is enabled because courses are more than 10
                 </p>
               </div>
@@ -414,14 +445,16 @@ const CoursesPage = () => {
 
       <section className="mx-auto max-w-7xl px-4 py-8 md:py-10">
         {filteredCourses.length === 0 ? (
-          <div className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-8 text-center">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-blue-500/10 text-blue-300">
+          <div className="rounded-[2rem] border border-slate-200 bg-white p-8 text-center shadow-xl shadow-slate-200/70 dark:border-white/10 dark:bg-white/[0.04] dark:shadow-none">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
               <Search size={30} />
             </div>
 
-            <h2 className="mt-5 text-2xl font-black">No courses found</h2>
+            <h2 className="mt-5 text-2xl font-black text-slate-950 dark:text-white">
+              No courses found
+            </h2>
 
-            <p className="mt-2 text-slate-400">
+            <p className="mt-2 text-slate-600 dark:text-slate-400">
               Try changing your search or filters.
             </p>
 
@@ -448,19 +481,19 @@ const CoursesPage = () => {
       </section>
 
       <section className="mx-auto max-w-7xl px-4 pb-12">
-        <div className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-6 md:p-8">
+        <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/70 md:p-8 dark:border-white/10 dark:bg-white/[0.04] dark:shadow-none">
           <div className="grid gap-6 md:grid-cols-[1fr_auto] md:items-center">
             <div>
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-blue-400/20 bg-blue-500/10 px-4 py-2 text-sm font-black text-blue-200">
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-black text-blue-700 dark:border-blue-400/20 dark:bg-blue-500/10 dark:text-blue-200">
                 <Sparkles size={16} />
                 Learning Path
               </div>
 
-              <h2 className="text-2xl font-black md:text-3xl">
+              <h2 className="text-2xl font-black text-slate-950 md:text-3xl dark:text-white">
                 Start one course. Complete lessons. Earn your certificate.
               </h2>
 
-              <p className="mt-3 max-w-3xl text-slate-400">
+              <p className="mt-3 max-w-3xl text-slate-600 dark:text-slate-400">
                 VeoLMS helps students learn with secure video lessons, progress
                 tracking, notes, reviews, and certificates.
               </p>

@@ -49,7 +49,7 @@ const formatTime = (seconds) => {
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 };
 
-const VideoPlayer = ({ src, title }) => {
+const VideoPlayer = ({ src, title, onEnded }) => {
   const videoRef = useRef(null);
   const previewVideoRef = useRef(null);
   const containerRef = useRef(null);
@@ -211,21 +211,21 @@ const VideoPlayer = ({ src, title }) => {
     showControlsTemporarily();
   };
 
-  const handleProgressChange = (e) => {
+  const handleProgressChange = (event) => {
     const video = videoRef.current;
     if (!video) return;
 
-    const newTime = Number(e.target.value);
+    const newTime = Number(event.target.value);
     video.currentTime = newTime;
     setCurrentTime(newTime);
     showControlsTemporarily();
   };
 
-  const handleProgressHover = (e) => {
+  const handleProgressHover = (event) => {
     if (!progressRef.current || !duration) return;
 
     const rect = progressRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
+    const x = event.clientX - rect.left;
     const percent = Math.max(0, Math.min(x / rect.width, 1));
     const time = percent * duration;
 
@@ -239,26 +239,26 @@ const VideoPlayer = ({ src, title }) => {
       try {
         previewVideo.currentTime = time;
       } catch {
-        // ignore preview seek errors
+        // Ignore preview seek errors.
       }
     }
   };
 
-  const handleSpeedChange = (e) => {
+  const handleSpeedChange = (event) => {
     const video = videoRef.current;
     if (!video) return;
 
-    const newSpeed = Number(e.target.value);
+    const newSpeed = Number(event.target.value);
     video.playbackRate = newSpeed;
     setSpeed(newSpeed);
     showControlsTemporarily();
   };
 
-  const handleVolumeChange = (e) => {
+  const handleVolumeChange = (event) => {
     const video = videoRef.current;
     if (!video) return;
 
-    const newVolume = Number(e.target.value);
+    const newVolume = Number(event.target.value);
     video.volume = newVolume;
     setVolume(newVolume);
     showControlsTemporarily();
@@ -283,19 +283,19 @@ const VideoPlayer = ({ src, title }) => {
 
   if (isYouTube) {
     return (
-      <div className="rounded-3xl bg-black border border-white/10 overflow-hidden">
+      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/70 dark:border-white/10 dark:bg-white/5 dark:shadow-black/20">
         <div className="aspect-video bg-black">
           <iframe
             src={getYouTubeEmbedUrl(src)}
-            title={title}
-            className="w-full h-full"
+            title={title || "Course video"}
+            className="h-full w-full"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
           />
         </div>
 
-        <div className="p-4 bg-slate-950 border-t border-white/10">
-          <p className="text-sm text-slate-400">
+        <div className="border-t border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-slate-950">
+          <p className="text-sm text-slate-600 dark:text-slate-400">
             YouTube preview mode. Full custom controls work with S3 MP4 videos.
           </p>
         </div>
@@ -315,15 +315,17 @@ const VideoPlayer = ({ src, title }) => {
           setControlsVisible(false);
         }
       }}
-      className={`relative bg-black border border-white/10 overflow-hidden ${
-        isFullscreen ? "fixed inset-0 z-[9999] rounded-none" : "rounded-3xl"
+      className={`relative overflow-hidden border bg-black ${
+        isFullscreen
+          ? "fixed inset-0 z-[9999] rounded-none border-black"
+          : "rounded-3xl border-slate-200 shadow-xl shadow-slate-200/70 dark:border-white/10 dark:shadow-black/20"
       }`}
     >
       <div className={`${isFullscreen ? "h-screen" : "aspect-video"} bg-black`}>
         <video
           ref={videoRef}
           src={src}
-          className="w-full h-full object-contain bg-black"
+          className="h-full w-full bg-black object-contain"
           preload="metadata"
           onClick={togglePlay}
           onLoadStart={() => {
@@ -368,6 +370,10 @@ const VideoPlayer = ({ src, title }) => {
             setIsPlaying(false);
             setPlayRequested(false);
             showControlsTemporarily();
+
+            if (typeof onEnded === "function") {
+              onEnded();
+            }
           }}
           onError={() => {
             console.error("Video element error:", videoRef.current?.error);
@@ -385,7 +391,7 @@ const VideoPlayer = ({ src, title }) => {
               Loading video...
             </p>
 
-            <p className="text-xs text-slate-300 mt-1">
+            <p className="mt-1 text-xs text-slate-300">
               Preparing secure lesson playback
             </p>
           </div>
@@ -393,8 +399,9 @@ const VideoPlayer = ({ src, title }) => {
 
         {!isPlaying && controlsVisible && !isBuffering && (
           <button
+            type="button"
             onClick={togglePlay}
-            className="absolute inset-0 z-40 m-auto h-20 w-20 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80"
+            className="absolute inset-0 z-40 m-auto flex h-20 w-20 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80"
           >
             <Play size={34} />
           </button>
@@ -402,8 +409,8 @@ const VideoPlayer = ({ src, title }) => {
       </div>
 
       <div
-        className={`absolute left-0 right-0 bottom-0 z-50 bg-gradient-to-t from-black via-black/80 to-transparent p-4 pt-16 space-y-4 transition-opacity duration-300 ${
-          controlsVisible ? "opacity-100" : "opacity-0 pointer-events-none"
+        className={`absolute bottom-0 left-0 right-0 z-50 space-y-4 bg-gradient-to-t from-black via-black/80 to-transparent p-4 pt-16 transition-opacity duration-300 ${
+          controlsVisible ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
       >
         <div
@@ -413,7 +420,7 @@ const VideoPlayer = ({ src, title }) => {
         >
           {showPreview && duration > 0 && (
             <div
-              className="absolute bottom-8 w-44 -translate-x-1/2 rounded-xl bg-black border border-white/20 shadow-2xl overflow-hidden pointer-events-none"
+              className="pointer-events-none absolute bottom-8 w-44 -translate-x-1/2 overflow-hidden rounded-xl border border-white/20 bg-black shadow-2xl"
               style={{ left: `${hoverLeft}%`, maxWidth: "180px" }}
             >
               <div className="aspect-video bg-black">
@@ -422,7 +429,7 @@ const VideoPlayer = ({ src, title }) => {
                   src={src}
                   muted
                   preload="metadata"
-                  className="w-full h-full object-cover bg-black"
+                  className="h-full w-full bg-black object-cover"
                   onLoadedMetadata={() => {
                     const previewVideo = previewVideoRef.current;
                     if (!previewVideo) return;
@@ -431,7 +438,7 @@ const VideoPlayer = ({ src, title }) => {
                       previewVideo.currentTime = hoverTime;
                       previewVideo.pause();
                     } catch {
-                      // ignore preview seek errors
+                      // Ignore preview seek errors.
                     }
                   }}
                   onSeeked={() => {
@@ -443,7 +450,7 @@ const VideoPlayer = ({ src, title }) => {
                 />
               </div>
 
-              <div className="text-center text-xs font-bold text-white py-1 bg-slate-950">
+              <div className="bg-slate-950 py-1 text-center text-xs font-bold text-white">
                 {formatTime(hoverTime)}
               </div>
             </div>
@@ -456,44 +463,48 @@ const VideoPlayer = ({ src, title }) => {
             max={duration || 0}
             value={currentTime}
             onChange={handleProgressChange}
-            className="w-full cursor-pointer"
+            className="w-full cursor-pointer accent-blue-500"
           />
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-4 text-white">
           <div className="flex items-center gap-3">
             <button
+              type="button"
               onClick={togglePlay}
-              className="h-11 w-11 rounded-full bg-blue-600 hover:bg-blue-700 flex items-center justify-center"
+              className="flex h-11 w-11 items-center justify-center rounded-full bg-blue-600 hover:bg-blue-700"
             >
               {isPlaying ? <Pause size={20} /> : <Play size={20} />}
             </button>
 
             <button
+              type="button"
               onClick={stopVideo}
-              className="h-10 w-10 rounded-full bg-white/10 hover:bg-white/15 flex items-center justify-center"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 hover:bg-white/15"
               title="Stop"
             >
               <Square size={16} />
             </button>
 
             <button
+              type="button"
               onClick={() => seekVideo(-10)}
-              className="h-10 w-10 rounded-full bg-white/10 hover:bg-white/15 flex items-center justify-center"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 hover:bg-white/15"
               title="Back 10 seconds"
             >
               <RotateCcw size={18} />
             </button>
 
             <button
+              type="button"
               onClick={() => seekVideo(10)}
-              className="h-10 w-10 rounded-full bg-white/10 hover:bg-white/15 flex items-center justify-center"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 hover:bg-white/15"
               title="Forward 10 seconds"
             >
               <RotateCw size={18} />
             </button>
 
-            <span className="text-sm text-slate-300 whitespace-nowrap">
+            <span className="whitespace-nowrap text-sm text-slate-300">
               {formatTime(currentTime)} / {formatTime(duration)}
             </span>
           </div>
@@ -502,7 +513,7 @@ const VideoPlayer = ({ src, title }) => {
             <select
               value={speed}
               onChange={handleSpeedChange}
-              className="px-3 py-2 rounded-xl bg-slate-900 text-white text-sm outline-none border border-white/10"
+              className="rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-sm text-white outline-none"
             >
               <option className="bg-slate-900 text-white" value="0.5">
                 0.5x
@@ -531,13 +542,13 @@ const VideoPlayer = ({ src, title }) => {
                 step="0.05"
                 value={volume}
                 onChange={handleVolumeChange}
-                className="w-24"
+                className="w-24 accent-blue-500"
               />
             </div>
 
             <select
               disabled
-              className="px-3 py-2 rounded-xl bg-slate-900 text-slate-400 text-sm outline-none border border-white/10"
+              className="rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-sm text-slate-400 outline-none disabled:cursor-not-allowed"
             >
               <option>Auto Quality</option>
               <option>360p</option>
@@ -546,8 +557,9 @@ const VideoPlayer = ({ src, title }) => {
             </select>
 
             <button
+              type="button"
               onClick={toggleFullscreen}
-              className="h-10 w-10 rounded-full bg-white/10 hover:bg-white/15 flex items-center justify-center"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 hover:bg-white/15"
               title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
             >
               {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
