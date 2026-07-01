@@ -20,6 +20,8 @@ import lessonCommentRoutes from "./routes/lessonComment.routes.js";
 import lessonResourceRoutes from "./routes/lessonResource.routes.js";
 import adminCourseEditRoutes from "./routes/adminCourseEdit.routes.js";
 import feedRoutes from "./routes/feed.routes.js";
+import notificationRoutes from "./routes/notification.routes.js";
+
 const app = express();
 
 /**
@@ -112,6 +114,7 @@ app.use("/api/lesson-comments", lessonCommentRoutes);
 app.use("/api/lesson-resources", lessonResourceRoutes);
 app.use("/api/notes", noteRoutes);
 app.use("/api/feed", feedRoutes);
+app.use("/api/notifications", notificationRoutes);
 app.use((req, res) => {
   res.status(404).json({
     success: false,

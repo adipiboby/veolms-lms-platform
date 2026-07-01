@@ -10,7 +10,6 @@ import {
   completeMultipartUpload,
   createPresignedPartUploadUrl,
   createPresignedUploadUrl,
-  createSignedVideoUrl,
   initiateMultipartUpload,
   uploadVideoToS3,
 } from "../services/s3.service.js";
@@ -28,6 +27,11 @@ import {
   getHlsPrefixFromManifestKey,
   setCloudFrontCookiesOnResponse,
 } from "../services/cloudfront.service.js";
+
+import {
+  createCloudFrontVideoSignedUrl,
+  extractS3KeyFromUrl,
+} from "../utils/cloudFrontVideo.util.js";
 
 const MAX_VIDEO_SIZE_BYTES = 500 * 1024 * 1024;
 
@@ -72,88 +76,6 @@ const validateVideoMeta = ({ fileName, contentType, sizeBytes }) => {
   return "";
 };
 
-const getUserId = (req) => {
-  return req.user?._id || req.user?.id;
-};
-
-const isSameId = (a, b) => {
-  if (!a || !b) return false;
-
-  return String(a) === String(b);
-};
-
-const findAdminVideoUpload = async ({ req, key, uploadId }) => {
-  const adminId = getUserId(req);
-
-  if (!adminId || !key) return null;
-
-  const video = await VideoAsset.findOne({
-    key,
-    adminId,
-  });
-
-  if (!video) return null;
-
-  if (video.uploadId && uploadId && String(video.uploadId) !== String(uploadId)) {
-    return null;
-  }
-
-  return video;
-};
-
-const syncCourseLessonVideoAfterUpload = async ({
-  req,
-  courseId,
-  lessonId,
-  video,
-  originalName = "",
-  mimeType = "",
-  sizeBytes = 0,
-  displayTitle = "",
-  duration = "",
-  durationSeconds = 0,
-}) => {
-  if (!courseId || !lessonId || !video?._id) return;
-
-  const course = await Course.findById(courseId);
-
-  if (!course) return;
-
-  const adminId = getUserId(req);
-
-  if (course.createdBy && !isSameId(course.createdBy, adminId)) {
-    return;
-  }
-
-  if (!course.createdBy) {
-    course.createdBy = adminId;
-  }
-
-  const lesson = findLessonById(course, lessonId);
-
-  if (!lesson) return;
-
-  lesson.videoUrl = video.key;
-  lesson.videoKey = video.key;
-  lesson.videoAssetId = video._id;
-  lesson.hlsManifestKey = video.hlsManifestKey || lesson.hlsManifestKey || "";
-  lesson.hlsOutputPrefix = video.hlsOutputPrefix || lesson.hlsOutputPrefix || "";
-  lesson.originalVideoName =
-    originalName || video.originalName || lesson.originalVideoName || "";
-  lesson.mimeType = mimeType || video.mimeType || lesson.mimeType || "";
-  lesson.sizeBytes = Number(sizeBytes || video.sizeBytes || lesson.sizeBytes || 0);
-  lesson.duration = duration || video.duration || lesson.duration || "";
-  lesson.durationSeconds = Number(
-    durationSeconds || video.durationSeconds || lesson.durationSeconds || 0,
-  );
-
-  if (!lesson.title && displayTitle) {
-    lesson.title = displayTitle;
-  }
-
-  await course.save();
-};
-
 const isOwnUploadKey = ({ key, user }) => {
   return String(key || "").includes(String(user?._id || ""));
 };
@@ -162,6 +84,39 @@ const ensureVideoAssetOwner = ({ video, user }) => {
   if (!video || !user?._id) return false;
 
   return video.adminId?.toString() === user._id.toString();
+};
+
+const isExternalVideoUrl = (value = "") => {
+  const cleanValue = String(value || "").trim();
+
+  if (!cleanValue.startsWith("http://") && !cleanValue.startsWith("https://")) {
+    return false;
+  }
+
+  return (
+    cleanValue.includes("youtube.com") ||
+    cleanValue.includes("youtu.be") ||
+    cleanValue.includes("vimeo.com")
+  );
+};
+
+const getLessonVideoKey = (lesson) => {
+  const videoValue = lesson?.videoKey || lesson?.videoUrl || "";
+
+  if (!videoValue) return "";
+
+  if (isExternalVideoUrl(videoValue)) {
+    return "";
+  }
+
+  if (
+    String(videoValue).startsWith("http://") ||
+    String(videoValue).startsWith("https://")
+  ) {
+    return extractS3KeyFromUrl(videoValue);
+  }
+
+  return videoValue;
 };
 
 const repairOldVideoAssetOwner = async ({ videoAsset, course, user }) => {
@@ -383,15 +338,40 @@ export const getSignedLessonVideoUrl = async (req, res) => {
       });
     }
 
-    if (!lesson.videoUrl) {
+    const rawVideoValue = lesson.videoKey || lesson.videoUrl || "";
+
+    if (!rawVideoValue) {
       return res.status(404).json({
         success: false,
         message: "Lesson video is not available",
       });
     }
 
+    if (isExternalVideoUrl(rawVideoValue)) {
+      return res.status(200).json({
+        success: true,
+        videoUrl: rawVideoValue,
+        playbackType: "external",
+        accessType: access.accessType,
+        expiresIn: null,
+      });
+    }
+
+    const videoKey = getLessonVideoKey(lesson);
+
+    if (!videoKey) {
+      return res.status(404).json({
+        success: false,
+        message: "Lesson video key is missing",
+      });
+    }
+
     const videoAsset = await VideoAsset.findOne({
-      key: lesson.videoUrl,
+      $or: [
+        { key: videoKey },
+        { key: lesson.videoUrl },
+        { key: lesson.videoKey },
+      ],
     });
 
     await repairOldVideoAssetOwner({
@@ -400,20 +380,28 @@ export const getSignedLessonVideoUrl = async (req, res) => {
       user: req.user,
     });
 
-    const videoUrl = await createSignedVideoUrl(lesson.videoUrl);
+    const expiresIn = Number(
+      process.env.CLOUDFRONT_VIDEO_SIGNED_URL_EXPIRES_IN || 3600,
+    );
+
+    const videoUrl = createCloudFrontVideoSignedUrl({
+      key: videoKey,
+      expiresInSeconds: expiresIn,
+    });
 
     return res.status(200).json({
       success: true,
       videoUrl,
+      playbackType: "cloudfront",
       accessType: access.accessType,
-      expiresIn: Number(process.env.S3_SIGNED_URL_EXPIRES_IN || 600),
+      expiresIn,
     });
   } catch (error) {
     console.error("SIGNED_VIDEO_URL_ERROR:", error);
 
     return res.status(500).json({
       success: false,
-      message: "Failed to create signed video URL",
+      message: "Failed to create CloudFront signed video URL",
       error: error.message,
     });
   }
@@ -602,9 +590,6 @@ export const confirmAdminVideoUpload = async (req, res) => {
       courseSlug,
       courseId,
       lessonId,
-      displayTitle = "",
-      duration = "",
-      durationSeconds = 0,
     } = req.body;
 
     if (!key || !originalName || !mimeType || !sizeBytes) {
@@ -668,19 +653,7 @@ export const confirmAdminVideoUpload = async (req, res) => {
         sourceType: "s3",
         status: "uploaded",
         hlsStatus: "not_started",
-        courseId: courseId || null,
-        lessonId: lessonId || null,
-        displayTitle,
-        duration,
-        durationSeconds: Number(durationSeconds || 0),
       });
-    } else {
-      video.displayTitle = displayTitle || video.displayTitle || "";
-      video.duration = duration || video.duration || "";
-      video.durationSeconds = Number(durationSeconds || video.durationSeconds || 0);
-      video.courseId = courseId || video.courseId || null;
-      video.lessonId = lessonId || video.lessonId || null;
-      await video.save();
     }
 
     if (video.hlsStatus === "ready" || video.hlsStatus === "processing") {
@@ -716,14 +689,7 @@ export const confirmAdminVideoUpload = async (req, res) => {
 
 export const initiateAdminMultipartUpload = async (req, res) => {
   try {
-    const {
-      fileName,
-      contentType,
-      sizeBytes,
-      courseSlug,
-      courseId,
-      lessonId,
-    } = req.body;
+    const { fileName, contentType, sizeBytes, courseSlug } = req.body;
 
     const validationMessage = validateVideoMeta({
       fileName,
@@ -738,10 +704,8 @@ export const initiateAdminMultipartUpload = async (req, res) => {
       });
     }
 
-    const adminId = getUserId(req);
-
     const key = buildVideoKey({
-      adminId,
+      adminId: req.user._id,
       courseSlug,
       originalName: fileName,
     });
@@ -751,44 +715,12 @@ export const initiateAdminMultipartUpload = async (req, res) => {
       contentType,
     });
 
-    const video = await VideoAsset.findOneAndUpdate(
-      {
-        key: multipart.key,
-        adminId,
-      },
-      {
-        $set: {
-          adminId,
-          key: multipart.key,
-          originalKey: multipart.key,
-          uploadId: multipart.uploadId,
-          originalName: fileName,
-          bucket: getBucketName(),
-          region: getRegion(),
-          mimeType: contentType,
-          sizeBytes: Number(sizeBytes || 0),
-          sourceType: "s3",
-          status: "uploaded",
-          hlsStatus: "not_started",
-          courseId: courseId || null,
-          lessonId: lessonId || null,
-          processingError: "",
-        },
-      },
-      {
-        new: true,
-        upsert: true,
-        setDefaultsOnInsert: true,
-      },
-    );
-
     return res.status(200).json({
       success: true,
       uploadId: multipart.uploadId,
       key: multipart.key,
       bucket: multipart.bucket,
       region: multipart.region,
-      video,
     });
   } catch (error) {
     console.error("INITIATE_MULTIPART_UPLOAD_ERROR:", error);
@@ -812,17 +744,10 @@ export const getAdminMultipartPartUrl = async (req, res) => {
       });
     }
 
-    const video = await findAdminVideoUpload({
-      req,
-      key,
-      uploadId,
-    });
-
-    if (!video) {
+    if (!isOwnUploadKey({ key, user: req.user })) {
       return res.status(403).json({
         success: false,
-        message:
-          "You can upload parts only for your own video. Please clear old uploads and choose video again.",
+        message: "You can upload parts only for your own video",
       });
     }
 
@@ -861,9 +786,6 @@ export const completeAdminMultipartUpload = async (req, res) => {
       courseSlug,
       courseId,
       lessonId,
-      displayTitle = "",
-      duration = "",
-      durationSeconds = 0,
     } = req.body;
 
     if (!key || !uploadId || !Array.isArray(parts) || parts.length === 0) {
@@ -893,6 +815,13 @@ export const completeAdminMultipartUpload = async (req, res) => {
       });
     }
 
+    if (!isOwnUploadKey({ key, user: req.user })) {
+      return res.status(403).json({
+        success: false,
+        message: "You can complete only your own video upload",
+      });
+    }
+
     const courseAccess = await canManageCourseForVideo({
       req,
       courseId,
@@ -902,20 +831,6 @@ export const completeAdminMultipartUpload = async (req, res) => {
       return res.status(courseAccess.statusCode || 403).json({
         success: false,
         message: courseAccess.message,
-      });
-    }
-
-    let video = await findAdminVideoUpload({
-      req,
-      key,
-      uploadId,
-    });
-
-    if (!video) {
-      return res.status(403).json({
-        success: false,
-        message:
-          "You can complete upload only for your own video. Please clear old uploads and choose video again.",
       });
     }
 
@@ -934,26 +849,36 @@ export const completeAdminMultipartUpload = async (req, res) => {
       });
     }
 
+    let video = await VideoAsset.findOne({ key });
+
+    if (video && !ensureVideoAssetOwner({ video, user: req.user })) {
+      return res.status(403).json({
+        success: false,
+        message: "You can complete only videos uploaded by you",
+      });
+    }
+
     await completeMultipartUpload({
       key,
       uploadId,
       parts: normalizedParts,
     });
 
-    video.originalKey = video.originalKey || key;
-    video.originalName = originalName;
-    video.mimeType = mimeType;
-    video.sizeBytes = Number(sizeBytes || 0);
-    video.displayTitle = displayTitle || video.displayTitle || "";
-    video.duration = duration || video.duration || "";
-    video.durationSeconds = Number(durationSeconds || video.durationSeconds || 0);
-    video.courseId = courseId || video.courseId || null;
-    video.lessonId = lessonId || video.lessonId || null;
-    video.status = "uploaded";
-    video.hlsStatus = video.hlsStatus || "not_started";
-    video.processingError = "";
-
-    await video.save();
+    if (!video) {
+      video = await VideoAsset.create({
+        adminId: req.user._id,
+        key,
+        originalKey: key,
+        originalName,
+        bucket: getBucketName(),
+        region: getRegion(),
+        mimeType,
+        sizeBytes,
+        sourceType: "s3",
+        status: "uploaded",
+        hlsStatus: "not_started",
+      });
+    }
 
     let hlsStarted = false;
     let hlsError = "";
@@ -980,19 +905,6 @@ export const completeAdminMultipartUpload = async (req, res) => {
         console.warn("HLS processing skipped/failed:", error.message);
       }
     }
-
-    await syncCourseLessonVideoAfterUpload({
-      req,
-      courseId,
-      lessonId,
-      video,
-      originalName,
-      mimeType,
-      sizeBytes,
-      displayTitle,
-      duration,
-      durationSeconds,
-    });
 
     return res.status(201).json({
       success: true,
@@ -1025,13 +937,7 @@ export const abortAdminMultipartUpload = async (req, res) => {
       });
     }
 
-    const video = await findAdminVideoUpload({
-      req,
-      key,
-      uploadId,
-    });
-
-    if (!video) {
+    if (!isOwnUploadKey({ key, user: req.user })) {
       return res.status(403).json({
         success: false,
         message: "You can abort only your own video upload",
@@ -1042,11 +948,6 @@ export const abortAdminMultipartUpload = async (req, res) => {
       key,
       uploadId,
     });
-
-    video.status = "failed";
-    video.hlsStatus = "failed";
-    video.processingError = "Multipart upload aborted by admin";
-    await video.save();
 
     return res.status(200).json({
       success: true,

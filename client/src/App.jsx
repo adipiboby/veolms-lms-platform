@@ -23,6 +23,7 @@ import RoleRoute from "./routes/RoleRoute";
 
 import MyAccountPage from "./pages/MyAccountPage";
 import FeedPage from "./pages/FeedPage.jsx";
+import NotificationsPage from "./pages/NotificationsPage.jsx";
 const App = () => {
   const location = useLocation();
 
@@ -157,6 +158,14 @@ const App = () => {
           element={
             <ProtectedRoute>
               <FeedPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/notifications"
+          element={
+            <ProtectedRoute>
+              <NotificationsPage />
             </ProtectedRoute>
           }
         />

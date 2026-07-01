@@ -7,35 +7,11 @@ const feedAttachmentSchema = new mongoose.Schema(
       enum: ["image", "video", "file", "link"],
       default: "image",
     },
-
-    title: {
-      type: String,
-      trim: true,
-      default: "",
-    },
-
-    url: {
-      type: String,
-      trim: true,
-      default: "",
-    },
-
-    key: {
-      type: String,
-      trim: true,
-      default: "",
-    },
-
-    mimeType: {
-      type: String,
-      trim: true,
-      default: "",
-    },
-
-    sizeBytes: {
-      type: Number,
-      default: 0,
-    },
+    title: { type: String, trim: true, default: "" },
+    url: { type: String, trim: true, default: "" },
+    key: { type: String, trim: true, default: "" },
+    mimeType: { type: String, trim: true, default: "" },
+    sizeBytes: { type: Number, default: 0 },
   },
   { _id: true },
 );
@@ -48,23 +24,9 @@ const feedReplySchema = new mongoose.Schema(
       required: true,
       index: true,
     },
-
-    message: {
-      type: String,
-      required: true,
-      trim: true,
-      maxlength: 1000,
-    },
-
-    isEdited: {
-      type: Boolean,
-      default: false,
-    },
-
-    editedAt: {
-      type: Date,
-      default: null,
-    },
+    message: { type: String, required: true, trim: true, maxlength: 1000 },
+    isEdited: { type: Boolean, default: false },
+    editedAt: { type: Date, default: null },
   },
   { timestamps: true },
 );
@@ -77,28 +39,10 @@ const feedCommentSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
-
-    message: {
-      type: String,
-      required: true,
-      trim: true,
-      maxlength: 1000,
-    },
-
-    replies: {
-      type: [feedReplySchema],
-      default: [],
-    },
-
-    isEdited: {
-      type: Boolean,
-      default: false,
-    },
-
-    editedAt: {
-      type: Date,
-      default: null,
-    },
+    message: { type: String, required: true, trim: true, maxlength: 1000 },
+    replies: { type: [feedReplySchema], default: [] },
+    isEdited: { type: Boolean, default: false },
+    editedAt: { type: Date, default: null },
   },
   { timestamps: true },
 );
@@ -139,12 +83,14 @@ const feedPostSchema = new mongoose.Schema(
       default: "general",
       index: true,
     },
+
     priority: {
       type: String,
       enum: ["normal", "important", "urgent"],
       default: "normal",
       index: true,
     },
+
     visibility: {
       type: String,
       enum: ["public", "students", "course"],
@@ -157,12 +103,7 @@ const feedPostSchema = new mongoose.Schema(
       default: [],
     },
 
-    likes: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-      },
-    ],
+    likes: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
 
     comments: {
       type: [feedCommentSchema],
@@ -186,6 +127,7 @@ const feedPostSchema = new mongoose.Schema(
 
 feedPostSchema.index({ createdAt: -1 });
 feedPostSchema.index({ isPinned: -1, createdAt: -1 });
+feedPostSchema.index({ priority: 1, createdAt: -1 });
 feedPostSchema.index({ courseId: 1, createdAt: -1 });
 feedPostSchema.index({ authorId: 1, createdAt: -1 });
 feedPostSchema.index({ category: 1, createdAt: -1 });
