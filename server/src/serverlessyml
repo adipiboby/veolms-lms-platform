@@ -1,0 +1,84 @@
+service: veolms-api
+
+useDotenv: true
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: ap-south-1
+  stage: ${opt:stage, 'dev'}
+  memorySize: 1024
+  timeout: 30
+
+  environment:
+    NODE_ENV: production
+
+    MONGODB_URI: ${env:MONGODB_URI}
+    JWT_SECRET: ${env:JWT_SECRET}
+    JWT_EXPIRES_IN: ${env:JWT_EXPIRES_IN, '7d'}
+
+    CLIENT_URL: ${env:CLIENT_URL}
+    FRONTEND_URL: ${env:FRONTEND_URL, ''}
+    CORS_ORIGINS: ${env:CORS_ORIGINS, ''}
+
+    GOOGLE_CLIENT_ID: ${env:GOOGLE_CLIENT_ID}
+    GOOGLE_CLIENT_SECRET: ${env:GOOGLE_CLIENT_SECRET}
+    GOOGLE_CALLBACK_URL: ${env:GOOGLE_CALLBACK_URL}
+
+    RAZORPAY_KEY_ID: ${env:RAZORPAY_KEY_ID, ''}
+    RAZORPAY_KEY_SECRET: ${env:RAZORPAY_KEY_SECRET, ''}
+
+    AWS_S3_BUCKET_NAME: ${env:AWS_S3_BUCKET_NAME}
+
+    AWS_CLOUDFRONT_URL: ${env:AWS_CLOUDFRONT_URL}
+    CLOUDFRONT_PUBLIC_KEY_ID: ${env:CLOUDFRONT_PUBLIC_KEY_ID}
+    CLOUDFRONT_PRIVATE_KEY: ${env:CLOUDFRONT_PRIVATE_KEY, ''}
+    CLOUDFRONT_PRIVATE_KEY_PATH: ${env:CLOUDFRONT_PRIVATE_KEY_PATH, ''}
+    CLOUDFRONT_VIDEO_SIGNED_URL_EXPIRES_IN: ${env:CLOUDFRONT_VIDEO_SIGNED_URL_EXPIRES_IN, '3600'}
+
+    S3_SIGNED_URL_EXPIRES_IN: ${env:S3_SIGNED_URL_EXPIRES_IN, '600'}
+
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - s3:GetObject
+            - s3:PutObject
+            - s3:DeleteObject
+            - s3:ListBucket
+            - s3:AbortMultipartUpload
+            - s3:CreateMultipartUpload
+            - s3:CompleteMultipartUpload
+            - s3:UploadPart
+          Resource:
+            - arn:aws:s3:::${env:AWS_S3_BUCKET_NAME}
+            - arn:aws:s3:::${env:AWS_S3_BUCKET_NAME}/*
+
+        - Effect: Allow
+          Action:
+            - mediaconvert:CreateJob
+            - mediaconvert:GetJob
+            - mediaconvert:DescribeEndpoints
+          Resource: "*"
+
+functions:
+  api:
+    handler: src/lambda.handler
+    events:
+      - httpApi:
+          path: /
+          method: ANY
+      - httpApi:
+          path: /{proxy+}
+          method: ANY
+
+package:
+  patterns:
+    - "!node_modules/.cache/**"
+    - "!keys/**"
+    - "!uploads/**"
+    - "!*.log"
+    - "src/**"
+    - "package.json"
+    - "package-lock.json"

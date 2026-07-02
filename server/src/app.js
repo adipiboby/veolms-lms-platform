@@ -24,26 +24,32 @@ import notificationRoutes from "./routes/notification.routes.js";
 
 const app = express();
 
-/**
- * Important for production when backend is behind
- * Nginx / Render / Railway / AWS Load Balancer / Cloudflare.
- * This helps express-rate-limit detect real user IP.
- */
 app.set("trust proxy", 1);
 
-const allowedOrigins = [
-  "http://localhost:5173",
-  "http://127.0.0.1:5173",
-  "https://app.lms.adipi.in",
-];
+const getAllowedOrigins = () => {
+  const envOrigins = String(process.env.CORS_ORIGINS || "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  return [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    process.env.CLIENT_URL,
+    process.env.FRONTEND_URL,
+    "https://app.lms.adipi.in",
+    ...envOrigins,
+  ].filter(Boolean);
+};
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allows Postman, server-to-server requests, and mobile apps with no Origin header
       if (!origin) {
         return callback(null, true);
       }
+
+      const allowedOrigins = getAllowedOrigins();
 
       if (allowedOrigins.includes(origin)) {
         return callback(null, true);
@@ -60,29 +66,21 @@ app.use(
 app.use(
   helmet({
     crossOriginOpenerPolicy: false,
+    crossOriginResourcePolicy: {
+      policy: "cross-origin",
+    },
   }),
 );
 
-/**
- * This parses JSON body:
- * req.body will work for JSON requests.
- *
- * 10mb is enough because videos are uploaded directly to S3,
- * not through express.json().
- */
 app.use(express.json({ limit: "10mb" }));
-
-/**
- * This parses form-encoded body:
- * title=React&price=999
- */
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
-
 app.use(cookieParser());
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 300,
+  max: Number(process.env.RATE_LIMIT_MAX || 300),
+  standardHeaders: true,
+  legacyHeaders: false,
   message: {
     success: false,
     message: "Too many requests, please try again later.",
@@ -95,6 +93,15 @@ app.get("/", (req, res) => {
   res.status(200).json({
     success: true,
     message: "VeoLMS API is running",
+    environment: process.env.NODE_ENV || "development",
+  });
+});
+
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "VeoLMS API health check passed",
+    timestamp: new Date().toISOString(),
   });
 });
 
@@ -115,6 +122,7 @@ app.use("/api/lesson-resources", lessonResourceRoutes);
 app.use("/api/notes", noteRoutes);
 app.use("/api/feed", feedRoutes);
 app.use("/api/notifications", notificationRoutes);
+
 app.use((req, res) => {
   res.status(404).json({
     success: false,

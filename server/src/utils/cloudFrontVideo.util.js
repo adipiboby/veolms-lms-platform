@@ -1,8 +1,10 @@
-import fs from "fs";
 import { getSignedUrl } from "@aws-sdk/cloudfront-signer";
+import { getCloudFrontPrivateKey } from "./cloudFrontPrivateKey.util.js";
 
 const normalizeCloudFrontUrl = (url = "") => {
-  const cleanUrl = String(url || "").trim().replace(/\/$/, "");
+  const cleanUrl = String(url || "")
+    .trim()
+    .replace(/\/$/, "");
 
   if (!cleanUrl) return "";
 
@@ -18,22 +20,6 @@ const encodeS3KeyForUrl = (key = "") => {
     .split("/")
     .map((part) => encodeURIComponent(part))
     .join("/");
-};
-
-const getPrivateKey = () => {
-  const privateKeyPath = process.env.CLOUDFRONT_PRIVATE_KEY_PATH;
-
-  if (!privateKeyPath) {
-    throw new Error("CLOUDFRONT_PRIVATE_KEY_PATH is missing in .env.");
-  }
-
-  if (!fs.existsSync(privateKeyPath)) {
-    throw new Error(
-      `CloudFront private key file not found at: ${privateKeyPath}`,
-    );
-  }
-
-  return fs.readFileSync(privateKeyPath, "utf8");
 };
 
 export const extractS3KeyFromUrl = (url = "") => {
@@ -53,7 +39,7 @@ export const createCloudFrontVideoSignedUrl = ({ key, expiresInSeconds }) => {
 
   const publicKeyId = process.env.CLOUDFRONT_PUBLIC_KEY_ID;
 
-  const privateKey = getPrivateKey();
+  const privateKey = getCloudFrontPrivateKey();
 
   const expirySeconds =
     Number(expiresInSeconds) ||
@@ -66,6 +52,10 @@ export const createCloudFrontVideoSignedUrl = ({ key, expiresInSeconds }) => {
 
   if (!publicKeyId) {
     throw new Error("CLOUDFRONT_PUBLIC_KEY_ID is missing in .env.");
+  }
+
+  if (!privateKey) {
+    throw new Error("CloudFront private key is missing.");
   }
 
   if (!key) {
