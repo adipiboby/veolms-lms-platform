@@ -11,6 +11,8 @@ import {
   createPresignedPartUploadUrl,
   createPresignedUploadUrl,
   createSignedVideoUrl,
+  deleteS3Object,
+  deleteS3ObjectsByPrefix,
   initiateMultipartUpload,
   uploadVideoToS3,
 } from "../services/s3.service.js";
@@ -65,6 +67,12 @@ const sanitizeS3PathSegment = (value = "", fallback = "item") => {
     .toLowerCase();
 
   return clean || fallback;
+};
+
+const uniqueValues = (values = []) => {
+  return [...new Set(values.map((value) => String(value || "").trim()))].filter(
+    Boolean,
+  );
 };
 
 const buildUniqueVideoKey = ({
@@ -281,6 +289,257 @@ const canAccessCourseVideo = async ({ req, courseId }) => {
   };
 };
 
+const getLessonVideoSnapshot = (lesson) => {
+  const videoAssetId = lesson?.videoAssetId || null;
+  const videoUrl = lesson?.videoUrl || "";
+  const videoKey = lesson?.videoKey || "";
+  const hlsManifestKey = lesson?.hlsManifestKey || "";
+  const hlsOutputPrefix = lesson?.hlsOutputPrefix || "";
+
+  return {
+    videoAssetId,
+    videoUrl,
+    videoKey,
+    hlsManifestKey,
+    hlsOutputPrefix,
+    hasVideo: Boolean(
+      videoAssetId || videoUrl || videoKey || hlsManifestKey || hlsOutputPrefix,
+    ),
+  };
+};
+
+const clearLessonVideoFields = (lesson) => {
+  lesson.videoUrl = "";
+  lesson.videoKey = "";
+  lesson.videoAssetId = null;
+  lesson.hlsManifestKey = "";
+  lesson.hlsOutputPrefix = "";
+  lesson.originalVideoName = "";
+  lesson.mimeType = "";
+  lesson.sizeBytes = 0;
+  lesson.duration = "";
+  lesson.durationSeconds = 0;
+};
+
+const findVideoAssetForSnapshot = async ({ snapshot, adminId }) => {
+  if (!snapshot || !adminId) return null;
+
+  if (snapshot.videoAssetId) {
+    const videoById = await VideoAsset.findOne({
+      _id: snapshot.videoAssetId,
+      adminId,
+    });
+
+    if (videoById) return videoById;
+  }
+
+  const possibleKeys = uniqueValues([snapshot.videoUrl, snapshot.videoKey]);
+
+  if (!possibleKeys.length) return null;
+
+  return VideoAsset.findOne({
+    adminId,
+    $or: [
+      {
+        key: {
+          $in: possibleKeys,
+        },
+      },
+      {
+        originalKey: {
+          $in: possibleKeys,
+        },
+      },
+    ],
+  });
+};
+
+const isVideoReferencedByAnyLesson = async ({ video, snapshot }) => {
+  const possibleAssetIds = uniqueValues([video?._id, snapshot?.videoAssetId]);
+
+  const possibleKeys = uniqueValues([
+    video?.key,
+    video?.originalKey,
+    snapshot?.videoUrl,
+    snapshot?.videoKey,
+  ]);
+
+  if (!possibleAssetIds.length && !possibleKeys.length) return false;
+
+  const queryParts = [];
+
+  possibleAssetIds.forEach((assetId) => {
+    queryParts.push({
+      "sections.lessons.videoAssetId": assetId,
+    });
+  });
+
+  possibleKeys.forEach((key) => {
+    queryParts.push({
+      "sections.lessons.videoUrl": key,
+    });
+
+    queryParts.push({
+      "sections.lessons.videoKey": key,
+    });
+  });
+
+  if (!queryParts.length) return false;
+
+  const courses = await Course.find({
+    $or: queryParts,
+  }).select("sections");
+
+  for (const course of courses) {
+    for (const section of course.sections || []) {
+      for (const lesson of section.lessons || []) {
+        const lessonAssetId = lesson?.videoAssetId
+          ? String(lesson.videoAssetId)
+          : "";
+
+        const assetMatches =
+          lessonAssetId && possibleAssetIds.includes(lessonAssetId);
+
+        const keyMatches =
+          possibleKeys.includes(String(lesson?.videoUrl || "")) ||
+          possibleKeys.includes(String(lesson?.videoKey || ""));
+
+        if (assetMatches || keyMatches) {
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
+};
+
+const deleteVideoStorageAndAsset = async ({ video, fallbackSnapshot }) => {
+  const deletedObjects = [];
+  const deletedPrefixes = [];
+  const errors = [];
+
+  const objectKeys = uniqueValues([
+    video?.key,
+    video?.originalKey,
+    video?.hlsManifestKey,
+    fallbackSnapshot?.videoUrl,
+    fallbackSnapshot?.videoKey,
+    fallbackSnapshot?.hlsManifestKey,
+  ]);
+
+  const hlsPrefixes = uniqueValues([
+    video?.hlsOutputPrefix,
+    fallbackSnapshot?.hlsOutputPrefix,
+    video?.hlsManifestKey ? getHlsPrefixFromManifestKey(video.hlsManifestKey) : "",
+    fallbackSnapshot?.hlsManifestKey
+      ? getHlsPrefixFromManifestKey(fallbackSnapshot.hlsManifestKey)
+      : "",
+  ]);
+
+  for (const key of objectKeys) {
+    try {
+      await deleteS3Object(key);
+      deletedObjects.push(key);
+    } catch (error) {
+      errors.push({
+        type: "object",
+        key,
+        message: error.message,
+      });
+    }
+  }
+
+  for (const prefix of hlsPrefixes) {
+    try {
+      const result = await deleteS3ObjectsByPrefix(prefix);
+
+      deletedPrefixes.push({
+        prefix,
+        deletedCount: result.deletedCount || 0,
+      });
+    } catch (error) {
+      errors.push({
+        type: "prefix",
+        prefix,
+        message: error.message,
+      });
+    }
+  }
+
+  if (video?._id) {
+    try {
+      await VideoAsset.deleteOne({
+        _id: video._id,
+      });
+    } catch (error) {
+      errors.push({
+        type: "database",
+        videoId: video._id,
+        message: error.message,
+      });
+    }
+  }
+
+  return {
+    deletedObjects,
+    deletedPrefixes,
+    errors,
+  };
+};
+
+const cleanupOldLessonVideoAfterReplace = async ({
+  oldSnapshot,
+  newVideo,
+  adminId,
+}) => {
+  if (!oldSnapshot?.hasVideo) return null;
+
+  const newVideoId = newVideo?._id ? String(newVideo._id) : "";
+  const oldVideoId = oldSnapshot?.videoAssetId
+    ? String(oldSnapshot.videoAssetId)
+    : "";
+
+  const newVideoKeys = uniqueValues([newVideo?.key, newVideo?.originalKey]);
+  const oldVideoKeys = uniqueValues([oldSnapshot.videoUrl, oldSnapshot.videoKey]);
+
+  if (oldVideoId && newVideoId && oldVideoId === newVideoId) {
+    return {
+      skipped: true,
+      reason: "Old video and new video asset are the same",
+    };
+  }
+
+  if (oldVideoKeys.some((key) => newVideoKeys.includes(key))) {
+    return {
+      skipped: true,
+      reason: "Old video and new video key are the same",
+    };
+  }
+
+  const oldVideo = await findVideoAssetForSnapshot({
+    snapshot: oldSnapshot,
+    adminId,
+  });
+
+  const isReferencedElsewhere = await isVideoReferencedByAnyLesson({
+    video: oldVideo,
+    snapshot: oldSnapshot,
+  });
+
+  if (isReferencedElsewhere) {
+    return {
+      skipped: true,
+      reason: "Old video is still referenced by another lesson",
+    };
+  }
+
+  return deleteVideoStorageAndAsset({
+    video: oldVideo,
+    fallbackSnapshot: oldSnapshot,
+  });
+};
+
 const syncCourseLessonVideoAfterUpload = async ({
   req,
   courseId,
@@ -313,28 +572,34 @@ const syncCourseLessonVideoAfterUpload = async ({
 
   if (!lesson) return;
 
+  const oldVideoSnapshot = getLessonVideoSnapshot(lesson);
+
   lesson.videoUrl = video.key;
   lesson.videoKey = video.key;
   lesson.videoAssetId = video._id;
-  lesson.hlsManifestKey = video.hlsManifestKey || lesson.hlsManifestKey || "";
-  lesson.hlsOutputPrefix =
-    video.hlsOutputPrefix || lesson.hlsOutputPrefix || "";
-  lesson.originalVideoName =
-    originalName || video.originalName || lesson.originalVideoName || "";
-  lesson.mimeType = mimeType || video.mimeType || lesson.mimeType || "";
-  lesson.sizeBytes = Number(
-    sizeBytes || video.sizeBytes || lesson.sizeBytes || 0,
-  );
-  lesson.duration = duration || video.duration || lesson.duration || "";
-  lesson.durationSeconds = Number(
-    durationSeconds || video.durationSeconds || lesson.durationSeconds || 0,
-  );
+  lesson.hlsManifestKey = video.hlsManifestKey || "";
+  lesson.hlsOutputPrefix = video.hlsOutputPrefix || "";
+  lesson.originalVideoName = originalName || video.originalName || "";
+  lesson.mimeType = mimeType || video.mimeType || "";
+  lesson.sizeBytes = Number(sizeBytes || video.sizeBytes || 0);
+  lesson.duration = duration || video.duration || "";
+  lesson.durationSeconds = Number(durationSeconds || video.durationSeconds || 0);
 
   if (!lesson.title && displayTitle) {
     lesson.title = displayTitle;
   }
 
   await course.save();
+
+  try {
+    await cleanupOldLessonVideoAfterReplace({
+      oldSnapshot: oldVideoSnapshot,
+      newVideo: video,
+      adminId,
+    });
+  } catch (error) {
+    console.warn("OLD_VIDEO_CLEANUP_AFTER_REPLACE_FAILED:", error.message);
+  }
 };
 
 const startHlsProcessingForVideoAsset = async ({
@@ -1114,6 +1379,105 @@ export const abortAdminMultipartUpload = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to abort multipart upload",
+      error: error.message,
+    });
+  }
+};
+
+export const deleteAdminLessonVideo = async (req, res) => {
+  try {
+    const { courseId, lessonId } = req.params;
+
+    if (!courseId || !lessonId) {
+      return res.status(400).json({
+        success: false,
+        message: "courseId and lessonId are required",
+      });
+    }
+
+    const courseAccess = await canManageCourseForVideo({
+      req,
+      courseId,
+    });
+
+    if (!courseAccess.allowed) {
+      return res.status(courseAccess.statusCode || 403).json({
+        success: false,
+        message: courseAccess.message,
+      });
+    }
+
+    const course = courseAccess.course;
+    const lesson = findLessonById(course, lessonId);
+
+    if (!lesson) {
+      return res.status(404).json({
+        success: false,
+        message: "Lesson not found",
+      });
+    }
+
+    const snapshot = getLessonVideoSnapshot(lesson);
+
+    if (!snapshot.hasVideo) {
+      clearLessonVideoFields(lesson);
+      await course.save();
+
+      return res.status(200).json({
+        success: true,
+        message: "No video was attached to this lesson",
+        cleanup: null,
+      });
+    }
+
+    const video = await findVideoAssetForSnapshot({
+      snapshot,
+      adminId: req.user._id,
+    });
+
+    if (video && !ensureVideoAssetOwner({ video, user: req.user })) {
+      return res.status(403).json({
+        success: false,
+        message: "You can delete only videos uploaded by you",
+      });
+    }
+
+    clearLessonVideoFields(lesson);
+    await course.save();
+
+    const isReferencedElsewhere = await isVideoReferencedByAnyLesson({
+      video,
+      snapshot,
+    });
+
+    if (isReferencedElsewhere) {
+      return res.status(200).json({
+        success: true,
+        message:
+          "Video removed from this lesson. File was not deleted because another lesson still uses it.",
+        cleanup: {
+          skipped: true,
+          reason: "Video is still referenced by another lesson",
+        },
+      });
+    }
+
+    const cleanup = await deleteVideoStorageAndAsset({
+      video,
+      fallbackSnapshot: snapshot,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Lesson video deleted from S3 and database successfully",
+      cleanup,
+    });
+  } catch (error) {
+    console.error("DELETE_ADMIN_LESSON_VIDEO_ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to delete lesson video",
       error: error.message,
     });
   }

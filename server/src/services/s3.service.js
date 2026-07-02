@@ -3,7 +3,10 @@ import {
   AbortMultipartUploadCommand,
   CompleteMultipartUploadCommand,
   CreateMultipartUploadCommand,
+  DeleteObjectCommand,
+  DeleteObjectsCommand,
   GetObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
   UploadPartCommand,
@@ -179,5 +182,86 @@ export const abortMultipartUpload = async ({ key, uploadId }) => {
 
   return {
     success: true,
+  };
+};
+
+export const deleteS3Object = async (key) => {
+  if (!key) {
+    return {
+      success: true,
+      skipped: true,
+      message: "No S3 key provided",
+    };
+  }
+
+  const command = new DeleteObjectCommand({
+    Bucket: getBucketName(),
+    Key: key,
+  });
+
+  await s3Client.send(command);
+
+  return {
+    success: true,
+    bucket: getBucketName(),
+    key,
+  };
+};
+
+export const deleteS3ObjectsByPrefix = async (prefix) => {
+  const safePrefix = String(prefix || "")
+    .trim()
+    .replace(/^\/+/, "");
+
+  if (!safePrefix) {
+    return {
+      success: true,
+      skipped: true,
+      deletedCount: 0,
+      message: "No S3 prefix provided",
+    };
+  }
+
+  let continuationToken = undefined;
+  let deletedCount = 0;
+
+  do {
+    const listCommand = new ListObjectsV2Command({
+      Bucket: getBucketName(),
+      Prefix: safePrefix,
+      ContinuationToken: continuationToken,
+    });
+
+    const listResult = await s3Client.send(listCommand);
+
+    const objectsToDelete = (listResult.Contents || [])
+      .map((item) => ({
+        Key: item.Key,
+      }))
+      .filter((item) => item.Key);
+
+    if (objectsToDelete.length > 0) {
+      const deleteCommand = new DeleteObjectsCommand({
+        Bucket: getBucketName(),
+        Delete: {
+          Objects: objectsToDelete,
+          Quiet: true,
+        },
+      });
+
+      await s3Client.send(deleteCommand);
+      deletedCount += objectsToDelete.length;
+    }
+
+    continuationToken = listResult.IsTruncated
+      ? listResult.NextContinuationToken
+      : undefined;
+  } while (continuationToken);
+
+  return {
+    success: true,
+    bucket: getBucketName(),
+    prefix: safePrefix,
+    deletedCount,
   };
 };

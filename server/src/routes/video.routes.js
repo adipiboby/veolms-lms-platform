@@ -5,6 +5,7 @@ import {
   completeAdminMultipartUpload,
   confirmAdminVideoUpload,
   createAdminVideoUploadUrl,
+  deleteAdminLessonVideo,
   getAdminMediaConvertJobStatus,
   getAdminMultipartPartUrl,
   getAdminStorageOverview,
@@ -74,6 +75,13 @@ router.post(
   protect,
   authorizeRoles("admin"),
   abortAdminMultipartUpload,
+);
+
+router.delete(
+  "/admin/lesson/:courseId/:lessonId",
+  protect,
+  authorizeRoles("admin"),
+  deleteAdminLessonVideo,
 );
 
 router.post(

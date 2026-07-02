@@ -455,32 +455,19 @@ const DashboardPreview = ({
         </div>
 
         <div className="mt-5 rounded-2xl bg-slate-50 p-5 dark:bg-slate-950/75">
-          <div className="flex items-center gap-4">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-slate-200 text-slate-800 dark:bg-white/10 dark:text-white">
-              <PlayCircle size={31} />
-            </div>
-
-            <div className="min-w-0 flex-1">
-              <h4 className="line-clamp-1 font-black text-slate-950 dark:text-white">
-                {hasCourse
-                  ? `Resume: ${previewTitle}`
-                  : "Explore a course to start learning"}
-              </h4>
-
-              <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-                {isRealStudent
-                  ? `${completedLessons}/${totalLessons} lessons completed`
-                  : "Enroll to track real progress"}
-              </p>
-            </div>
+          <div className="flex flex-col gap-4 sm:flex-row">
+            <Link
+              to="/courses"
+              className="inline-flex items-center justify-center rounded-2xl border border-white/25 bg-white/10 px-7 py-4 text-sm font-black text-white shadow-lg backdrop-blur transition hover:bg-white/20"
+            >
+              Explore Courses
+            </Link>
 
             <Link
-              to={
-                isRealStudent && hasCourse ? "/student/dashboard" : "/courses"
-              }
-              className="hidden rounded-2xl border border-slate-200 bg-white px-6 py-3 text-sm font-black text-slate-950 shadow-sm hover:bg-slate-100 sm:inline-flex dark:border-white/10 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
+              to="/student/dashboard"
+              className="inline-flex items-center justify-center rounded-2xl border border-white/20 bg-white px-7 py-4 text-sm font-black text-slate-950 shadow-lg transition hover:bg-slate-100 dark:bg-white dark:text-slate-950"
             >
-              {isRealStudent && hasCourse ? "Open" : "View"}
+              Start Learning
             </Link>
           </div>
         </div>
@@ -902,9 +889,9 @@ const HomePage = () => {
 
       <section className="mx-auto max-w-7xl px-4 pb-14 pt-8">
         <div className="relative overflow-hidden rounded-[2.3rem] border border-white/10 bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 p-8 shadow-2xl shadow-blue-950/20 md:p-10 dark:shadow-blue-950/40">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.24),transparent_30%)]" />
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.24),transparent_30%)]" />
 
-          <div className="relative grid gap-8 md:grid-cols-[1fr_auto] md:items-center">
+          <div className="relative z-10 grid gap-8 md:grid-cols-[1fr_auto] md:items-center">
             <div>
               <h2 className="text-3xl font-black text-white md:text-4xl">
                 Ready to start learning?
@@ -919,15 +906,15 @@ const HomePage = () => {
             <div className="flex flex-wrap gap-4">
               <Link
                 to="/courses"
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-6 py-4 font-black text-slate-950 hover:bg-slate-200"
+                className="relative z-10 inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-6 py-4 font-black !text-slate-950 shadow-lg transition hover:bg-slate-100 dark:bg-white dark:!text-slate-950 dark:hover:bg-slate-100"
               >
-                Explore Courses
-                <ArrowRight size={18} />
+                <span className="!text-slate-950">Explore Courses</span>
+                <ArrowRight size={18} className="!text-slate-950" />
               </Link>
 
               <Link
                 to={startLearningPath}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-6 py-4 font-black text-white hover:bg-white/15"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-6 py-4 font-black text-white transition hover:bg-white/15"
               >
                 {isStudent && enrolledCourses.length > 0
                   ? "Dashboard"
