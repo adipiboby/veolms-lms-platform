@@ -10,8 +10,8 @@
     "seed": "node src/data/seedCourses.js",
     "seed:admin": "node src/data/seedAdmin.js",
     "seed:professional": "node src/seed/seedProfessionalCourses.js",
-     "deploy:lambda": "serverless deploy",
-  "remove:lambda": "serverless remove"
+    "deploy:lambda": "serverless deploy",
+    "remove:lambda": "serverless remove"
   },
   "keywords": [],
   "author": "",
@@ -36,10 +36,12 @@
     "morgan": "^1.11.0",
     "multer": "^2.2.0",
     "razorpay": "^2.9.6",
+    "serverless-http": "^4.0.0",
     "slugify": "^1.6.9",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "nodemon": "^3.1.14"
+    "nodemon": "^3.1.14",
+    "serverless": "^4.38.1"
   }
 }

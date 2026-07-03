@@ -17,7 +17,6 @@ import {
 } from "../controllers/video.controller.js";
 
 import { protect, authorizeRoles } from "../middlewares/auth.middleware.js";
-import { uploadVideo } from "../middlewares/upload.middleware.js";
 
 const router = express.Router();
 
@@ -96,14 +95,6 @@ router.get(
   protect,
   authorizeRoles("admin"),
   getAdminMediaConvertJobStatus,
-);
-
-router.post(
-  "/upload",
-  protect,
-  authorizeRoles("admin"),
-  uploadVideo.single("video"),
-  uploadAdminVideo,
 );
 
 router.get(

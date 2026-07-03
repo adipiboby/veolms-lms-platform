@@ -1,0 +1,452 @@
+{
+  "service": {
+    "service": "veolms-api",
+    "serviceObject": {
+      "name": "veolms-api"
+    },
+    "provider": {
+      "name": "aws",
+      "runtime": "nodejs20.x",
+      "region": "ap-south-1",
+      "stage": "dev",
+      "memorySize": 1024,
+      "timeout": 30,
+      "environment": {
+        "NODE_ENV": "production",
+        "MONGO_URI": "mongodb+srv://adipi:Fv-DJMpdNGT9G_5@cluster0.5bqrvb9.mongodb.net/veoLms",
+        "JWT_SECRET": "BOBYADIPI_SECRETE_VEOLMS_PLATFORM",
+        "JWT_EXPIRES_IN": "7d",
+        "CLIENT_URL": "http://localhost:5173",
+        "FRONTEND_URL": "",
+        "CORS_ORIGINS": "",
+        "GOOGLE_CLIENT_ID": "466859472919-9bgn3sv3jl49sst6f206drc7pq90aai4.apps.googleusercontent.com",
+        "RAZORPAY_KEY_ID": "rzp_test_S3jPlAJ9xHpWWV",
+        "RAZORPAY_KEY_SECRET": "ivfGBBxlI99JeoNLD3eN8Q3l",
+        "AWS_S3_REGION": "us-east-1",
+        "AWS_S3_BUCKET_NAME": "veolms-s3-video-bucket",
+        "AWS_CLOUDFRONT_URL": "https://d2kctv1eaxhj90.cloudfront.net",
+        "CLOUDFRONT_PUBLIC_KEY_ID": "K1GG9L5HPMPSUB",
+        "CLOUDFRONT_PRIVATE_KEY": "",
+        "CLOUDFRONT_PRIVATE_KEY_BASE64": "LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tDQpNSUlFdlFJQkFEQU5CZ2txaGtpRzl3MEJBUUVGQUFTQ0JLY3dnZ1NqQWdFQUFvSUJBUUN5RWh3enhKYjZBck9qDQpydGRLWDlNZHlocXVCaXo0cEVRWEdnc0REVVh6NmZEU2JKajA0YXJkYzZQL0FoZU0vVHlHSm9VZEdmclJQekd1DQpIYWtGOUJYeTZQOXI3aFdZUkY5YVFjVURYSWlsdWFrL1I0ZDdMOTBmZVc0dktTdzFHd01VUmVRdE9CbHNtRzZaDQpWSnJ2aFgycUd3TDllSnczN285bkFRYWowT0VnQ3E4VG9HMVRDQU5lK0dsRDVPc2k0WlVnckRBUTVXSytiWXNYDQpsOG51TnJ4TWQ2MW9mMG5iVU1GVW9yU1RKYU92ZEltVHNuWElneDRHU2lYTzRSdzVPelg4ZVo3c0VVM2t1d2tSDQpnTzIydjNVckJaSG5DaHBINzMxeWFvejdrTWt6bDQ3U04vcGs3YmFWYjB5NWJjSHJIdDNzanFxamN4WFYvTTMxDQpuZWJZSHRwREFnTUJBQUVDZ2dFQUNIU2pzakdibWJPWEpDYWhRbjdhWDRmQlRKSXVnSUFNVzZ4NDZXUXY5aTBkDQpxbUJOd3hNVU1mL1R3Y0F2cmhvNFRZWjJ1N01JSGZlS1BHSmNMRlF5MXA0Snd1NURTRCsyNTJwSUdLakVORnBrDQpsd1NtZ2tyN2pRc1BHRjQwSXpGdExBRkZuSUFWZFBxb0JjL21xNGtETnBpaHc3ZCtjNGw0ZGNPdXRRaXVKLzlGDQppUm1MakZOVFdOTUo2bWQ3NVI5UnFtMkgwK0Q1cWlCUWhSVjVGbzVSUnd1QnpuYlA5QkZFQ0RGVTErdTFYZ1Z0DQpoY25xQVJVNzJrY3o3UFcyWWFNeXJlcUJnY0pOeWtwdnoxMHk2YWhHTUlGV2p1VENJakIyMnhUTUJ4VisrZHdqDQpha2NWM0hYWmwzbXJPOUZNNDFGd1NRWUI0YlY3NWhHK0t5N2V3czlkZ1FLQmdRRG5lNjQzaGRVWXgyUkxzTERJDQpHQUhXdmtLZit3SW1mUkJjUUZPaXBubENQU3lMQndMcjYzM0JLMHJWUzhscDFEQksvU2NrdzJSZlJGcjR4QXU0DQpRNzdKanJBSE1wRC9iMmNMdDhZVmtoZmVzckh4M0gzR2xXN1RSVm1xb1RNVFhQcnZ0M3BJQ2VSMkFsenoxWGpUDQp1T0ZsWENPQVpoVGtuaVo0UlVUOTlGbVMrd0tCZ1FERTdqdUk1YVFpMk56d1lHbzlwVU0zVktpTi9zbkZpdWg3DQpaT3dlWkw3T2cySVpBVnBHcXArcExERkp5WjVDUlAySldMcTNiOHRyT0NQNHRjM2daSk1hRXpPWUNDalJDcktWDQpPUkl2R3kzYU1LSUVEWkRaWUs5TndDM3A3bEFNd3B6WWZULzlGa25uODRzMjRFc1ZUVndhNldiNk9OQTliZjdKDQp4RlYxbFp4eldRS0JnQjdTTXZJbG1hZ0E5SE8zaFBJL2NBODlxZlZQSUl3clhzQkp1RmtSdlZkNmViSFJMeXhtDQpZSW9WejVMeTBsQ0s5aHNsOWM1SlRkWDViZnR0YnZvTDJ4MVBLRlR0QUsxaUVlQlhpY0paZjJBaGZ0dnJOYnY1DQpMWlpueDNhV25BeFo5dmR3QUpJUzd4NWZWaTBKSVZ0ZlpITndmekdiWmZEQ3RmQ1JtSXdQdXRWOUFvR0FHbkxzDQpxQXcvcVRaN0pnV3MveTZOQW9kcVEvZnVYWXUwZ2E0aVVFcXpuY1RqamZ3eWhiOHd4bVhiRU0vMVkyMGtxQ2UwDQpuQ0oxcmFiU25mcTg5ZUJNS1hwZXVaS08rTlI0KzdXNGpYOFcvM0Q4c1pLbzI2a3lvanluYmYzRjNwRGN3KzYrDQpnMTFVKzhRbjlHelhhTHNGSGRBdk5uZ2U3OEV3TVNVZlhUV0UxN0VDZ1lFQXA3ZE9xMEtQWHhpSjYvYVdLVTZaDQphbjgxZWtwazdzTFRpOFYzNVI4OVhkdStvZlVwTjByTnUyTmhoSTdTVnI1N1hqL2FsOGN3U3BhZm9NR25DZnlEDQpNT2hrMldnenNDd3VwcFBSUHl0enVoWGRUcUhUNVl6YjBCUHZxUkVJamtET2xoVHYzZ3hrRXYrTGpKQml3NHE5DQpaSTBZdG1EcFFHdVRXSXNrNGhiZkVoOD0NCi0tLS0tRU5EIFBSSVZBVEUgS0VZLS0tLS0NCg==",
+        "CLOUDFRONT_VIDEO_SIGNED_URL_EXPIRES_IN": "3600",
+        "S3_SIGNED_URL_EXPIRES_IN": "600"
+      },
+      "iam": {
+        "role": {
+          "statements": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "s3:GetObject",
+                "s3:PutObject",
+                "s3:DeleteObject",
+                "s3:ListBucket",
+                "s3:AbortMultipartUpload",
+                "s3:CreateMultipartUpload",
+                "s3:CompleteMultipartUpload",
+                "s3:UploadPart"
+              ],
+              "Resource": [
+                "arn:aws:s3:::veolms-s3-video-bucket",
+                "arn:aws:s3:::veolms-s3-video-bucket/*"
+              ]
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "mediaconvert:CreateJob",
+                "mediaconvert:GetJob",
+                "mediaconvert:DescribeEndpoints"
+              ],
+              "Resource": "*"
+            }
+          ]
+        }
+      },
+      "versionFunctions": true,
+      "compiledCloudFormationTemplate": {
+        "AWSTemplateFormatVersion": "2010-09-09",
+        "Description": "The AWS CloudFormation template for this Serverless application",
+        "Resources": {
+          "ApiLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+              "LogGroupName": "/aws/lambda/veolms-api-dev-api"
+            }
+          },
+          "IamRoleLambdaExecution": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+              "AssumeRolePolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [
+                  {
+                    "Effect": "Allow",
+                    "Principal": {
+                      "Service": [
+                        "lambda.amazonaws.com"
+                      ]
+                    },
+                    "Action": [
+                      "sts:AssumeRole"
+                    ]
+                  }
+                ]
+              },
+              "Policies": [
+                {
+                  "PolicyName": {
+                    "Fn::Join": [
+                      "-",
+                      [
+                        "veolms-api",
+                        "dev",
+                        "lambda"
+                      ]
+                    ]
+                  },
+                  "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                      {
+                        "Effect": "Allow",
+                        "Action": [
+                          "logs:CreateLogStream",
+                          "logs:CreateLogGroup",
+                          "logs:TagResource"
+                        ],
+                        "Resource": [
+                          {
+                            "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/veolms-api-dev*:*"
+                          }
+                        ]
+                      },
+                      {
+                        "Effect": "Allow",
+                        "Action": [
+                          "logs:PutLogEvents"
+                        ],
+                        "Resource": [
+                          {
+                            "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/veolms-api-dev*:*:*"
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "$[\"service\"][\"provider\"][\"iam\"][\"role\"][\"statements\"][0]"
+                      },
+                      {
+                        "$ref": "$[\"service\"][\"provider\"][\"iam\"][\"role\"][\"statements\"][1]"
+                      }
+                    ]
+                  }
+                }
+              ],
+              "Path": "/",
+              "RoleName": {
+                "Fn::Join": [
+                  "-",
+                  [
+                    "veolms-api",
+                    "dev",
+                    {
+                      "Ref": "AWS::Region"
+                    },
+                    "lambdaRole"
+                  ]
+                ]
+              }
+            }
+          },
+          "ApiLambdaFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+              "Code": {
+                "S3Bucket": "serverless-framework-deployments-ap-south-1-53f605f4-d20f",
+                "S3Key": "serverless/veolms-api/dev/1783068835835-2026-07-03T08:53:55.835Z/veolms-api.zip"
+              },
+              "Handler": "src/lambda.handler",
+              "Runtime": "nodejs20.x",
+              "FunctionName": "veolms-api-dev-api",
+              "MemorySize": 1024,
+              "Timeout": 30,
+              "Environment": {
+                "Variables": {
+                  "NODE_ENV": "production",
+                  "MONGO_URI": "mongodb+srv://adipi:Fv-DJMpdNGT9G_5@cluster0.5bqrvb9.mongodb.net/veoLms",
+                  "JWT_SECRET": "BOBYADIPI_SECRETE_VEOLMS_PLATFORM",
+                  "JWT_EXPIRES_IN": "7d",
+                  "CLIENT_URL": "http://localhost:5173",
+                  "FRONTEND_URL": "",
+                  "CORS_ORIGINS": "",
+                  "GOOGLE_CLIENT_ID": "466859472919-9bgn3sv3jl49sst6f206drc7pq90aai4.apps.googleusercontent.com",
+                  "RAZORPAY_KEY_ID": "rzp_test_S3jPlAJ9xHpWWV",
+                  "RAZORPAY_KEY_SECRET": "ivfGBBxlI99JeoNLD3eN8Q3l",
+                  "AWS_S3_REGION": "us-east-1",
+                  "AWS_S3_BUCKET_NAME": "veolms-s3-video-bucket",
+                  "AWS_CLOUDFRONT_URL": "https://d2kctv1eaxhj90.cloudfront.net",
+                  "CLOUDFRONT_PUBLIC_KEY_ID": "K1GG9L5HPMPSUB",
+                  "CLOUDFRONT_PRIVATE_KEY": "",
+                  "CLOUDFRONT_PRIVATE_KEY_BASE64": "LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tDQpNSUlFdlFJQkFEQU5CZ2txaGtpRzl3MEJBUUVGQUFTQ0JLY3dnZ1NqQWdFQUFvSUJBUUN5RWh3enhKYjZBck9qDQpydGRLWDlNZHlocXVCaXo0cEVRWEdnc0REVVh6NmZEU2JKajA0YXJkYzZQL0FoZU0vVHlHSm9VZEdmclJQekd1DQpIYWtGOUJYeTZQOXI3aFdZUkY5YVFjVURYSWlsdWFrL1I0ZDdMOTBmZVc0dktTdzFHd01VUmVRdE9CbHNtRzZaDQpWSnJ2aFgycUd3TDllSnczN285bkFRYWowT0VnQ3E4VG9HMVRDQU5lK0dsRDVPc2k0WlVnckRBUTVXSytiWXNYDQpsOG51TnJ4TWQ2MW9mMG5iVU1GVW9yU1RKYU92ZEltVHNuWElneDRHU2lYTzRSdzVPelg4ZVo3c0VVM2t1d2tSDQpnTzIydjNVckJaSG5DaHBINzMxeWFvejdrTWt6bDQ3U04vcGs3YmFWYjB5NWJjSHJIdDNzanFxamN4WFYvTTMxDQpuZWJZSHRwREFnTUJBQUVDZ2dFQUNIU2pzakdibWJPWEpDYWhRbjdhWDRmQlRKSXVnSUFNVzZ4NDZXUXY5aTBkDQpxbUJOd3hNVU1mL1R3Y0F2cmhvNFRZWjJ1N01JSGZlS1BHSmNMRlF5MXA0Snd1NURTRCsyNTJwSUdLakVORnBrDQpsd1NtZ2tyN2pRc1BHRjQwSXpGdExBRkZuSUFWZFBxb0JjL21xNGtETnBpaHc3ZCtjNGw0ZGNPdXRRaXVKLzlGDQppUm1MakZOVFdOTUo2bWQ3NVI5UnFtMkgwK0Q1cWlCUWhSVjVGbzVSUnd1QnpuYlA5QkZFQ0RGVTErdTFYZ1Z0DQpoY25xQVJVNzJrY3o3UFcyWWFNeXJlcUJnY0pOeWtwdnoxMHk2YWhHTUlGV2p1VENJakIyMnhUTUJ4VisrZHdqDQpha2NWM0hYWmwzbXJPOUZNNDFGd1NRWUI0YlY3NWhHK0t5N2V3czlkZ1FLQmdRRG5lNjQzaGRVWXgyUkxzTERJDQpHQUhXdmtLZit3SW1mUkJjUUZPaXBubENQU3lMQndMcjYzM0JLMHJWUzhscDFEQksvU2NrdzJSZlJGcjR4QXU0DQpRNzdKanJBSE1wRC9iMmNMdDhZVmtoZmVzckh4M0gzR2xXN1RSVm1xb1RNVFhQcnZ0M3BJQ2VSMkFsenoxWGpUDQp1T0ZsWENPQVpoVGtuaVo0UlVUOTlGbVMrd0tCZ1FERTdqdUk1YVFpMk56d1lHbzlwVU0zVktpTi9zbkZpdWg3DQpaT3dlWkw3T2cySVpBVnBHcXArcExERkp5WjVDUlAySldMcTNiOHRyT0NQNHRjM2daSk1hRXpPWUNDalJDcktWDQpPUkl2R3kzYU1LSUVEWkRaWUs5TndDM3A3bEFNd3B6WWZULzlGa25uODRzMjRFc1ZUVndhNldiNk9OQTliZjdKDQp4RlYxbFp4eldRS0JnQjdTTXZJbG1hZ0E5SE8zaFBJL2NBODlxZlZQSUl3clhzQkp1RmtSdlZkNmViSFJMeXhtDQpZSW9WejVMeTBsQ0s5aHNsOWM1SlRkWDViZnR0YnZvTDJ4MVBLRlR0QUsxaUVlQlhpY0paZjJBaGZ0dnJOYnY1DQpMWlpueDNhV25BeFo5dmR3QUpJUzd4NWZWaTBKSVZ0ZlpITndmekdiWmZEQ3RmQ1JtSXdQdXRWOUFvR0FHbkxzDQpxQXcvcVRaN0pnV3MveTZOQW9kcVEvZnVYWXUwZ2E0aVVFcXpuY1RqamZ3eWhiOHd4bVhiRU0vMVkyMGtxQ2UwDQpuQ0oxcmFiU25mcTg5ZUJNS1hwZXVaS08rTlI0KzdXNGpYOFcvM0Q4c1pLbzI2a3lvanluYmYzRjNwRGN3KzYrDQpnMTFVKzhRbjlHelhhTHNGSGRBdk5uZ2U3OEV3TVNVZlhUV0UxN0VDZ1lFQXA3ZE9xMEtQWHhpSjYvYVdLVTZaDQphbjgxZWtwazdzTFRpOFYzNVI4OVhkdStvZlVwTjByTnUyTmhoSTdTVnI1N1hqL2FsOGN3U3BhZm9NR25DZnlEDQpNT2hrMldnenNDd3VwcFBSUHl0enVoWGRUcUhUNVl6YjBCUHZxUkVJamtET2xoVHYzZ3hrRXYrTGpKQml3NHE5DQpaSTBZdG1EcFFHdVRXSXNrNGhiZkVoOD0NCi0tLS0tRU5EIFBSSVZBVEUgS0VZLS0tLS0NCg==",
+                  "CLOUDFRONT_VIDEO_SIGNED_URL_EXPIRES_IN": "3600",
+                  "S3_SIGNED_URL_EXPIRES_IN": "600"
+                }
+              },
+              "Role": {
+                "Fn::GetAtt": [
+                  "IamRoleLambdaExecution",
+                  "Arn"
+                ]
+              }
+            },
+            "DependsOn": [
+              "ApiLogGroup"
+            ]
+          },
+          "ApiLambdaVersionMZCftWP8PZqHu84tS4ySLBqrV6mEsdNvvIbM1BGTJk": {
+            "Type": "AWS::Lambda::Version",
+            "DeletionPolicy": "Retain",
+            "Properties": {
+              "FunctionName": {
+                "Ref": "ApiLambdaFunction"
+              },
+              "CodeSha256": "gQM1RzsHWinNHogfYZKDOFtOXyYZyMc/ctYQNdlVVfs="
+            }
+          },
+          "HttpApi": {
+            "Type": "AWS::ApiGatewayV2::Api",
+            "Properties": {
+              "Name": "dev-veolms-api",
+              "ProtocolType": "HTTP"
+            }
+          },
+          "HttpApiStage": {
+            "Type": "AWS::ApiGatewayV2::Stage",
+            "Properties": {
+              "ApiId": {
+                "Ref": "HttpApi"
+              },
+              "StageName": "$default",
+              "AutoDeploy": true,
+              "DefaultRouteSettings": {
+                "DetailedMetricsEnabled": false
+              }
+            }
+          },
+          "ApiLambdaPermissionHttpApi": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+              "FunctionName": {
+                "Fn::GetAtt": [
+                  "ApiLambdaFunction",
+                  "Arn"
+                ]
+              },
+              "Action": "lambda:InvokeFunction",
+              "Principal": "apigateway.amazonaws.com",
+              "SourceArn": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:",
+                    {
+                      "Ref": "AWS::Partition"
+                    },
+                    ":execute-api:",
+                    {
+                      "Ref": "AWS::Region"
+                    },
+                    ":",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":",
+                    {
+                      "Ref": "HttpApi"
+                    },
+                    "/*"
+                  ]
+                ]
+              }
+            }
+          },
+          "HttpApiIntegrationApi": {
+            "Type": "AWS::ApiGatewayV2::Integration",
+            "Properties": {
+              "ApiId": {
+                "Ref": "HttpApi"
+              },
+              "IntegrationType": "AWS_PROXY",
+              "IntegrationUri": {
+                "$ref": "$[\"service\"][\"provider\"][\"compiledCloudFormationTemplate\"][\"Resources\"][\"ApiLambdaPermissionHttpApi\"][\"Properties\"][\"FunctionName\"]"
+              },
+              "PayloadFormatVersion": "2.0",
+              "TimeoutInMillis": 30000
+            }
+          },
+          "HttpApiRouteAny": {
+            "Type": "AWS::ApiGatewayV2::Route",
+            "Properties": {
+              "ApiId": {
+                "Ref": "HttpApi"
+              },
+              "RouteKey": "ANY /",
+              "Target": {
+                "Fn::Join": [
+                  "/",
+                  [
+                    "integrations",
+                    {
+                      "Ref": "HttpApiIntegrationApi"
+                    }
+                  ]
+                ]
+              }
+            },
+            "DependsOn": "HttpApiIntegrationApi"
+          },
+          "HttpApiRouteAnyProxyVar": {
+            "Type": "AWS::ApiGatewayV2::Route",
+            "Properties": {
+              "ApiId": {
+                "Ref": "HttpApi"
+              },
+              "RouteKey": "ANY /{proxy+}",
+              "Target": {
+                "Fn::Join": [
+                  "/",
+                  [
+                    "integrations",
+                    {
+                      "Ref": "HttpApiIntegrationApi"
+                    }
+                  ]
+                ]
+              }
+            },
+            "DependsOn": "HttpApiIntegrationApi"
+          }
+        },
+        "Outputs": {
+          "ServerlessDeploymentBucketName": {
+            "Value": "serverless-framework-deployments-ap-south-1-53f605f4-d20f",
+            "Export": {
+              "Name": "sls-veolms-api-dev-ServerlessDeploymentBucketName"
+            }
+          },
+          "ApiLambdaFunctionQualifiedArn": {
+            "Description": "Current Lambda function version",
+            "Value": {
+              "Ref": "ApiLambdaVersionMZCftWP8PZqHu84tS4ySLBqrV6mEsdNvvIbM1BGTJk"
+            },
+            "Export": {
+              "Name": "sls-veolms-api-dev-ApiLambdaFunctionQualifiedArn"
+            }
+          },
+          "HttpApiId": {
+            "Description": "Id of the HTTP API",
+            "Value": {
+              "Ref": "HttpApi"
+            },
+            "Export": {
+              "Name": "sls-veolms-api-dev-HttpApiId"
+            }
+          },
+          "HttpApiUrl": {
+            "Description": "URL of the HTTP API",
+            "Value": {
+              "Fn::Join": [
+                "",
+                [
+                  "https://",
+                  {
+                    "Ref": "HttpApi"
+                  },
+                  ".execute-api.",
+                  {
+                    "Ref": "AWS::Region"
+                  },
+                  ".",
+                  {
+                    "Ref": "AWS::URLSuffix"
+                  }
+                ]
+              ]
+            },
+            "Export": {
+              "Name": "sls-veolms-api-dev-HttpApiUrl"
+            }
+          }
+        }
+      },
+      "vpc": {}
+    },
+    "pluginsData": {},
+    "functions": {
+      "api": {
+        "handler": "src/lambda.handler",
+        "events": [
+          {
+            "httpApi": {
+              "path": "/",
+              "method": "ANY"
+            },
+            "resolvedMethod": "ANY",
+            "resolvedPath": "/"
+          },
+          {
+            "httpApi": {
+              "path": "/{proxy+}",
+              "method": "ANY"
+            },
+            "resolvedMethod": "ANY",
+            "resolvedPath": "/{proxy+}"
+          }
+        ],
+        "name": "veolms-api-dev-api",
+        "package": {},
+        "memory": 1024,
+        "timeout": 30,
+        "runtime": "nodejs20.x",
+        "vpc": {},
+        "versionLogicalId": "ApiLambdaVersionMZCftWP8PZqHu84tS4ySLBqrV6mEsdNvvIbM1BGTJk"
+      }
+    },
+    "configValidationMode": "warn",
+    "serviceFilename": "serverless",
+    "initialServerlessConfig": {
+      "service": "veolms-api",
+      "useDotenv": true,
+      "provider": {
+        "$ref": "$[\"service\"][\"provider\"]"
+      },
+      "functions": {
+        "$ref": "$[\"service\"][\"functions\"]"
+      },
+      "package": {
+        "patterns": [
+          "src/**",
+          "node_modules/**",
+          "package.json",
+          "package-lock.json",
+          "!node_modules/.cache/**",
+          "!keys/**",
+          "!uploads/**",
+          "!*.log"
+        ],
+        "artifactsS3KeyDirname": "serverless/veolms-api/dev/code-artifacts",
+        "deploymentBucket": "serverless-framework-deployments-ap-south-1-53f605f4-d20f",
+        "artifact": "D:\\webdevelopment\\veolms-lms-platform\\server\\.serverless\\veolms-api.zip",
+        "artifactDirectoryName": "serverless/veolms-api/dev/1783068835835-2026-07-03T08:53:55.835Z"
+      }
+    },
+    "appId": null,
+    "orgId": null,
+    "layers": {},
+    "artifact": "D:\\webdevelopment\\veolms-lms-platform\\server\\.serverless\\veolms-api.zip"
+  },
+  "package": {
+    "artifactDirectoryName": "serverless/veolms-api/dev/1783068835835-2026-07-03T08:53:55.835Z",
+    "artifact": "veolms-api.zip"
+  }
+}

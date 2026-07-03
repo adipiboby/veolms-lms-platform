@@ -15,7 +15,7 @@ const normalizeCloudFrontUrl = (url = "") => {
   return `https://${cleanUrl}`;
 };
 
-const encodeS3KeyForUrl = (key = "") => {
+const encodeS3KeyForCloudFrontUrl = (key = "") => {
   return String(key)
     .split("/")
     .map((part) => encodeURIComponent(part))
@@ -34,24 +34,20 @@ export const extractS3KeyFromUrl = (url = "") => {
   }
 };
 
-export const createCloudFrontVideoSignedUrl = ({ key, expiresInSeconds }) => {
+export const createCloudFrontVideoSignedUrl = ({
+  key,
+  expiresInSeconds = 3600,
+}) => {
   const cloudFrontUrl = normalizeCloudFrontUrl(process.env.AWS_CLOUDFRONT_URL);
-
-  const publicKeyId = process.env.CLOUDFRONT_PUBLIC_KEY_ID;
-
+  const keyPairId = process.env.CLOUDFRONT_PUBLIC_KEY_ID;
   const privateKey = getCloudFrontPrivateKey();
 
-  const expirySeconds =
-    Number(expiresInSeconds) ||
-    Number(process.env.CLOUDFRONT_VIDEO_SIGNED_URL_EXPIRES_IN) ||
-    3600;
-
   if (!cloudFrontUrl) {
-    throw new Error("AWS_CLOUDFRONT_URL is missing in .env.");
+    throw new Error("AWS_CLOUDFRONT_URL is missing in env.");
   }
 
-  if (!publicKeyId) {
-    throw new Error("CLOUDFRONT_PUBLIC_KEY_ID is missing in .env.");
+  if (!keyPairId) {
+    throw new Error("CLOUDFRONT_PUBLIC_KEY_ID is missing in env.");
   }
 
   if (!privateKey) {
@@ -62,14 +58,15 @@ export const createCloudFrontVideoSignedUrl = ({ key, expiresInSeconds }) => {
     throw new Error("Video S3 key is missing.");
   }
 
-  const safeKey = encodeS3KeyForUrl(key);
-
+  const safeKey = encodeS3KeyForCloudFrontUrl(key);
   const unsignedUrl = `${cloudFrontUrl}/${safeKey}`;
 
   return getSignedUrl({
     url: unsignedUrl,
-    keyPairId: publicKeyId,
+    keyPairId,
     privateKey,
-    dateLessThan: new Date(Date.now() + expirySeconds * 1000).toISOString(),
+    dateLessThan: new Date(
+      Date.now() + Number(expiresInSeconds) * 1000,
+    ).toISOString(),
   });
 };

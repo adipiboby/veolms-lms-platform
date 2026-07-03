@@ -14,16 +14,13 @@ import {
 import { Upload } from "@aws-sdk/lib-storage";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-const region = process.env.AWS_REGION || "us-east-1";
+const region = process.env.AWS_S3_REGION || "us-east-1";
 
 export const s3Client = new S3Client({
-  region,
+  region: process.env.AWS_S3_REGION || "us-east-1",
   endpoint: `https://s3.${region}.amazonaws.com`,
   forcePathStyle: true,
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  },
+  
 });
 
 const getBucketName = () => {
@@ -89,25 +86,7 @@ export const createPresignedUploadUrl = async ({ key, contentType }) => {
   });
 };
 
-export const uploadVideoToS3 = async ({ filePath, key, contentType }) => {
-  const upload = new Upload({
-    client: s3Client,
-    params: {
-      Bucket: getBucketName(),
-      Key: key,
-      Body: fs.createReadStream(filePath),
-      ContentType: contentType,
-    },
-  });
 
-  await upload.done();
-
-  return {
-    bucket: getBucketName(),
-    key,
-    region,
-  };
-};
 
 export const initiateMultipartUpload = async ({ key, contentType }) => {
   const command = new CreateMultipartUploadCommand({

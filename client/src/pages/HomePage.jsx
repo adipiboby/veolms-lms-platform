@@ -465,7 +465,7 @@ const DashboardPreview = ({
 
             <Link
               to="/student/dashboard"
-              className="inline-flex items-center justify-center rounded-2xl border border-white/20 bg-white px-7 py-4 text-sm font-black text-slate-950 shadow-lg transition hover:bg-slate-100 dark:bg-white dark:text-slate-950"
+              className="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 px-7 py-4 text-sm font-black text-white shadow-lg shadow-blue-600/25 transition hover:scale-[1.02]"
             >
               Start Learning
             </Link>

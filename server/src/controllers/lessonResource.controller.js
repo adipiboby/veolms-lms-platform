@@ -10,16 +10,14 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { Course } from "../models/course.model.js";
 import { Enrollment } from "../models/enrollment.model.js";
 
-const AWS_REGION =
-  process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "ap-south-1";
-
+const AWS_S3_REGION = process.env.AWS_S3_REGION || "us-east-1";
 const S3_BUCKET_NAME =
   process.env.AWS_S3_BUCKET_NAME ||
   process.env.S3_BUCKET_NAME ||
   process.env.AWS_BUCKET_NAME;
 
 const s3Client = new S3Client({
-  region: AWS_REGION,
+ region: AWS_S3_REGION,
 });
 
 const isValidObjectId = (id) => {

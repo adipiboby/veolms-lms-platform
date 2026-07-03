@@ -1,5 +1,4 @@
 import crypto from "crypto";
-import fs from "fs/promises";
 
 import { Course } from "../models/course.model.js";
 import { Enrollment } from "../models/enrollment.model.js";
@@ -10,11 +9,9 @@ import {
   completeMultipartUpload,
   createPresignedPartUploadUrl,
   createPresignedUploadUrl,
-  createSignedVideoUrl,
   deleteS3Object,
   deleteS3ObjectsByPrefix,
   initiateMultipartUpload,
-  uploadVideoToS3,
 } from "../services/s3.service.js";
 
 import {
@@ -31,6 +28,11 @@ import {
   setCloudFrontCookiesOnResponse,
 } from "../services/cloudfront.service.js";
 
+import {
+  createCloudFrontVideoSignedUrl,
+  extractS3KeyFromUrl,
+} from "../utils/cloudFrontVideo.util.js";
+
 const MAX_VIDEO_SIZE_BYTES = 500 * 1024 * 1024;
 
 const allowedVideoTypes = [
@@ -41,7 +43,12 @@ const allowedVideoTypes = [
 ];
 
 const getBucketName = () => process.env.AWS_S3_BUCKET_NAME;
-const getRegion = () => process.env.AWS_REGION || "us-east-1";
+
+const getRegion = () => process.env.AWS_S3_REGION || "us-east-1";
+
+const getCloudFrontExpiresIn = () => {
+  return Number(process.env.CLOUDFRONT_VIDEO_SIGNED_URL_EXPIRES_IN) || 3600;
+};
 
 const isAdmin = (user) => user?.role === "admin";
 const isStudent = (user) => user?.role === "student";
@@ -67,12 +74,6 @@ const sanitizeS3PathSegment = (value = "", fallback = "item") => {
     .toLowerCase();
 
   return clean || fallback;
-};
-
-const uniqueValues = (values = []) => {
-  return [...new Set(values.map((value) => String(value || "").trim()))].filter(
-    Boolean,
-  );
 };
 
 const buildUniqueVideoKey = ({
@@ -138,9 +139,11 @@ const isOwnUploadKey = ({ key, user }) => {
 };
 
 const ensureVideoAssetOwner = ({ video, user }) => {
-  if (!video || !user?._id) return false;
+  const userId = user?._id || user?.id;
 
-  return video.adminId?.toString() === user._id.toString();
+  if (!video || !userId) return false;
+
+  return String(video.adminId) === String(userId);
 };
 
 const repairOldVideoAssetOwner = async ({ videoAsset, course, user }) => {
@@ -201,11 +204,11 @@ const canManageCourseForVideo = async ({ req, courseId }) => {
 
   if (isAdmin(req.user)) {
     if (!course.createdBy) {
-      course.createdBy = req.user._id;
+      course.createdBy = getUserId(req);
       await course.save();
     }
 
-    const isOwner = course.createdBy.toString() === req.user._id.toString();
+    const isOwner = String(course.createdBy) === String(getUserId(req));
 
     if (!isOwner) {
       return {
@@ -244,11 +247,11 @@ const canAccessCourseVideo = async ({ req, courseId }) => {
 
   if (isAdmin(req.user)) {
     if (!course.createdBy) {
-      course.createdBy = req.user._id;
+      course.createdBy = getUserId(req);
       await course.save();
     }
 
-    const isOwner = course.createdBy.toString() === req.user._id.toString();
+    const isOwner = String(course.createdBy) === String(getUserId(req));
 
     if (!isOwner) {
       return {
@@ -268,7 +271,7 @@ const canAccessCourseVideo = async ({ req, courseId }) => {
 
   if (isStudent(req.user)) {
     const enrollment = await Enrollment.findOne({
-      userId: req.user._id,
+      userId: getUserId(req),
       courseId: course._id,
     });
 
@@ -289,26 +292,50 @@ const canAccessCourseVideo = async ({ req, courseId }) => {
   };
 };
 
+const getLessonVideoKey = ({ lesson, videoAsset }) => {
+  return (
+    lesson?.videoKey ||
+    lesson?.videoS3Key ||
+    videoAsset?.key ||
+    videoAsset?.originalKey ||
+    extractS3KeyFromUrl(lesson?.videoUrl) ||
+    lesson?.videoUrl ||
+    ""
+  );
+};
+
+const createSignedCloudFrontPlaybackUrl = ({ key }) => {
+  return createCloudFrontVideoSignedUrl({
+    key,
+    expiresInSeconds: getCloudFrontExpiresIn(),
+  });
+};
+
+const uniqueValues = (values = []) => {
+  return [
+    ...new Set(
+      values
+        .map((value) => String(value || "").trim())
+        .filter((value) => Boolean(value)),
+    ),
+  ];
+};
+
 const getLessonVideoSnapshot = (lesson) => {
-  const videoAssetId = lesson?.videoAssetId || null;
-  const videoUrl = lesson?.videoUrl || "";
-  const videoKey = lesson?.videoKey || "";
-  const hlsManifestKey = lesson?.hlsManifestKey || "";
-  const hlsOutputPrefix = lesson?.hlsOutputPrefix || "";
+  if (!lesson) return null;
 
   return {
-    videoAssetId,
-    videoUrl,
-    videoKey,
-    hlsManifestKey,
-    hlsOutputPrefix,
-    hasVideo: Boolean(
-      videoAssetId || videoUrl || videoKey || hlsManifestKey || hlsOutputPrefix,
-    ),
+    videoUrl: lesson.videoUrl || "",
+    videoKey: lesson.videoKey || "",
+    videoAssetId: lesson.videoAssetId || null,
+    hlsManifestKey: lesson.hlsManifestKey || "",
+    hlsOutputPrefix: lesson.hlsOutputPrefix || "",
   };
 };
 
 const clearLessonVideoFields = (lesson) => {
+  if (!lesson) return;
+
   lesson.videoUrl = "";
   lesson.videoKey = "";
   lesson.videoAssetId = null;
@@ -321,222 +348,118 @@ const clearLessonVideoFields = (lesson) => {
   lesson.durationSeconds = 0;
 };
 
-const findVideoAssetForSnapshot = async ({ snapshot, adminId }) => {
-  if (!snapshot || !adminId) return null;
+const findVideoAssetForSnapshot = async (snapshot) => {
+  if (!snapshot) return null;
 
   if (snapshot.videoAssetId) {
-    const videoById = await VideoAsset.findOne({
-      _id: snapshot.videoAssetId,
-      adminId,
-    });
+    const videoById = await VideoAsset.findById(snapshot.videoAssetId);
 
     if (videoById) return videoById;
   }
 
-  const possibleKeys = uniqueValues([snapshot.videoUrl, snapshot.videoKey]);
+  const possibleKeys = uniqueValues([snapshot.videoKey, snapshot.videoUrl]);
 
-  if (!possibleKeys.length) return null;
+  if (possibleKeys.length === 0) return null;
 
   return VideoAsset.findOne({
-    adminId,
-    $or: [
-      {
-        key: {
-          $in: possibleKeys,
-        },
-      },
-      {
-        originalKey: {
-          $in: possibleKeys,
-        },
-      },
-    ],
+    key: {
+      $in: possibleKeys,
+    },
   });
 };
 
-const isVideoReferencedByAnyLesson = async ({ video, snapshot }) => {
-  const possibleAssetIds = uniqueValues([video?._id, snapshot?.videoAssetId]);
+const isVideoReferencedByAnyLesson = async ({ videoAsset, snapshot }) => {
+  if (!videoAsset && !snapshot) return false;
+
+  const possibleIds = uniqueValues([videoAsset?._id, snapshot?.videoAssetId]);
 
   const possibleKeys = uniqueValues([
-    video?.key,
-    video?.originalKey,
-    snapshot?.videoUrl,
+    videoAsset?.key,
+    videoAsset?.originalKey,
     snapshot?.videoKey,
+    snapshot?.videoUrl,
   ]);
 
-  if (!possibleAssetIds.length && !possibleKeys.length) return false;
+  const orConditions = [];
 
-  const queryParts = [];
-
-  possibleAssetIds.forEach((assetId) => {
-    queryParts.push({
-      "sections.lessons.videoAssetId": assetId,
+  if (possibleIds.length > 0) {
+    orConditions.push({
+      "sections.lessons.videoAssetId": {
+        $in: possibleIds,
+      },
     });
-  });
-
-  possibleKeys.forEach((key) => {
-    queryParts.push({
-      "sections.lessons.videoUrl": key,
-    });
-
-    queryParts.push({
-      "sections.lessons.videoKey": key,
-    });
-  });
-
-  if (!queryParts.length) return false;
-
-  const courses = await Course.find({
-    $or: queryParts,
-  }).select("sections");
-
-  for (const course of courses) {
-    for (const section of course.sections || []) {
-      for (const lesson of section.lessons || []) {
-        const lessonAssetId = lesson?.videoAssetId
-          ? String(lesson.videoAssetId)
-          : "";
-
-        const assetMatches =
-          lessonAssetId && possibleAssetIds.includes(lessonAssetId);
-
-        const keyMatches =
-          possibleKeys.includes(String(lesson?.videoUrl || "")) ||
-          possibleKeys.includes(String(lesson?.videoKey || ""));
-
-        if (assetMatches || keyMatches) {
-          return true;
-        }
-      }
-    }
   }
 
-  return false;
+  if (possibleKeys.length > 0) {
+    orConditions.push({
+      "sections.lessons.videoUrl": {
+        $in: possibleKeys,
+      },
+    });
+
+    orConditions.push({
+      "sections.lessons.videoKey": {
+        $in: possibleKeys,
+      },
+    });
+  }
+
+  if (orConditions.length === 0) return false;
+
+  const existingCourse = await Course.findOne({
+    $or: orConditions,
+  }).select("_id");
+
+  return Boolean(existingCourse);
 };
 
-const deleteVideoStorageAndAsset = async ({ video, fallbackSnapshot }) => {
-  const deletedObjects = [];
-  const deletedPrefixes = [];
-  const errors = [];
-
-  const objectKeys = uniqueValues([
-    video?.key,
-    video?.originalKey,
-    video?.hlsManifestKey,
-    fallbackSnapshot?.videoUrl,
-    fallbackSnapshot?.videoKey,
-    fallbackSnapshot?.hlsManifestKey,
+const deleteVideoStorageAndAsset = async ({ videoAsset, snapshot }) => {
+  const keysToDelete = uniqueValues([
+    videoAsset?.key,
+    videoAsset?.originalKey,
+    snapshot?.videoKey,
+    snapshot?.videoUrl,
   ]);
 
-  const hlsPrefixes = uniqueValues([
-    video?.hlsOutputPrefix,
-    fallbackSnapshot?.hlsOutputPrefix,
-    video?.hlsManifestKey ? getHlsPrefixFromManifestKey(video.hlsManifestKey) : "",
-    fallbackSnapshot?.hlsManifestKey
-      ? getHlsPrefixFromManifestKey(fallbackSnapshot.hlsManifestKey)
-      : "",
+  for (const key of keysToDelete) {
+    await deleteS3Object(key).catch((error) => {
+      console.warn("DELETE_VIDEO_OBJECT_WARNING:", key, error.message);
+    });
+  }
+
+  const prefixesToDelete = uniqueValues([
+    videoAsset?.hlsOutputPrefix,
+    snapshot?.hlsOutputPrefix,
   ]);
 
-  for (const key of objectKeys) {
-    try {
-      await deleteS3Object(key);
-      deletedObjects.push(key);
-    } catch (error) {
-      errors.push({
-        type: "object",
-        key,
-        message: error.message,
-      });
-    }
+  for (const prefix of prefixesToDelete) {
+    await deleteS3ObjectsByPrefix(prefix).catch((error) => {
+      console.warn("DELETE_HLS_PREFIX_WARNING:", prefix, error.message);
+    });
   }
 
-  for (const prefix of hlsPrefixes) {
-    try {
-      const result = await deleteS3ObjectsByPrefix(prefix);
-
-      deletedPrefixes.push({
-        prefix,
-        deletedCount: result.deletedCount || 0,
-      });
-    } catch (error) {
-      errors.push({
-        type: "prefix",
-        prefix,
-        message: error.message,
-      });
-    }
+  if (videoAsset?._id) {
+    await VideoAsset.findByIdAndDelete(videoAsset._id).catch((error) => {
+      console.warn("DELETE_VIDEO_ASSET_WARNING:", error.message);
+    });
   }
-
-  if (video?._id) {
-    try {
-      await VideoAsset.deleteOne({
-        _id: video._id,
-      });
-    } catch (error) {
-      errors.push({
-        type: "database",
-        videoId: video._id,
-        message: error.message,
-      });
-    }
-  }
-
-  return {
-    deletedObjects,
-    deletedPrefixes,
-    errors,
-  };
 };
 
-const cleanupOldLessonVideoAfterReplace = async ({
-  oldSnapshot,
-  newVideo,
-  adminId,
-}) => {
-  if (!oldSnapshot?.hasVideo) return null;
+const cleanupOldLessonVideoAfterReplace = async ({ oldSnapshot }) => {
+  if (!oldSnapshot) return;
 
-  const newVideoId = newVideo?._id ? String(newVideo._id) : "";
-  const oldVideoId = oldSnapshot?.videoAssetId
-    ? String(oldSnapshot.videoAssetId)
-    : "";
+  const oldVideoAsset = await findVideoAssetForSnapshot(oldSnapshot);
 
-  const newVideoKeys = uniqueValues([newVideo?.key, newVideo?.originalKey]);
-  const oldVideoKeys = uniqueValues([oldSnapshot.videoUrl, oldSnapshot.videoKey]);
-
-  if (oldVideoId && newVideoId && oldVideoId === newVideoId) {
-    return {
-      skipped: true,
-      reason: "Old video and new video asset are the same",
-    };
-  }
-
-  if (oldVideoKeys.some((key) => newVideoKeys.includes(key))) {
-    return {
-      skipped: true,
-      reason: "Old video and new video key are the same",
-    };
-  }
-
-  const oldVideo = await findVideoAssetForSnapshot({
-    snapshot: oldSnapshot,
-    adminId,
-  });
-
-  const isReferencedElsewhere = await isVideoReferencedByAnyLesson({
-    video: oldVideo,
+  const stillReferenced = await isVideoReferencedByAnyLesson({
+    videoAsset: oldVideoAsset,
     snapshot: oldSnapshot,
   });
 
-  if (isReferencedElsewhere) {
-    return {
-      skipped: true,
-      reason: "Old video is still referenced by another lesson",
-    };
-  }
+  if (stillReferenced) return;
 
-  return deleteVideoStorageAndAsset({
-    video: oldVideo,
-    fallbackSnapshot: oldSnapshot,
+  await deleteVideoStorageAndAsset({
+    videoAsset: oldVideoAsset,
+    snapshot: oldSnapshot,
   });
 };
 
@@ -572,18 +495,24 @@ const syncCourseLessonVideoAfterUpload = async ({
 
   if (!lesson) return;
 
-  const oldVideoSnapshot = getLessonVideoSnapshot(lesson);
+  const oldSnapshot = getLessonVideoSnapshot(lesson);
 
   lesson.videoUrl = video.key;
   lesson.videoKey = video.key;
   lesson.videoAssetId = video._id;
-  lesson.hlsManifestKey = video.hlsManifestKey || "";
-  lesson.hlsOutputPrefix = video.hlsOutputPrefix || "";
-  lesson.originalVideoName = originalName || video.originalName || "";
-  lesson.mimeType = mimeType || video.mimeType || "";
-  lesson.sizeBytes = Number(sizeBytes || video.sizeBytes || 0);
-  lesson.duration = duration || video.duration || "";
-  lesson.durationSeconds = Number(durationSeconds || video.durationSeconds || 0);
+  lesson.hlsManifestKey = video.hlsManifestKey || lesson.hlsManifestKey || "";
+  lesson.hlsOutputPrefix =
+    video.hlsOutputPrefix || lesson.hlsOutputPrefix || "";
+  lesson.originalVideoName =
+    originalName || video.originalName || lesson.originalVideoName || "";
+  lesson.mimeType = mimeType || video.mimeType || lesson.mimeType || "";
+  lesson.sizeBytes = Number(
+    sizeBytes || video.sizeBytes || lesson.sizeBytes || 0,
+  );
+  lesson.duration = duration || video.duration || lesson.duration || "";
+  lesson.durationSeconds = Number(
+    durationSeconds || video.durationSeconds || lesson.durationSeconds || 0,
+  );
 
   if (!lesson.title && displayTitle) {
     lesson.title = displayTitle;
@@ -591,15 +520,9 @@ const syncCourseLessonVideoAfterUpload = async ({
 
   await course.save();
 
-  try {
-    await cleanupOldLessonVideoAfterReplace({
-      oldSnapshot: oldVideoSnapshot,
-      newVideo: video,
-      adminId,
-    });
-  } catch (error) {
-    console.warn("OLD_VIDEO_CLEANUP_AFTER_REPLACE_FAILED:", error.message);
-  }
+  await cleanupOldLessonVideoAfterReplace({
+    oldSnapshot,
+  });
 };
 
 const startHlsProcessingForVideoAsset = async ({
@@ -688,16 +611,24 @@ export const getSignedLessonVideoUrl = async (req, res) => {
       });
     }
 
-    if (!lesson.videoUrl) {
+    if (!lesson.videoUrl && !lesson.videoKey && !lesson.videoAssetId) {
       return res.status(404).json({
         success: false,
         message: "Lesson video is not available",
       });
     }
 
-    const videoAsset = await VideoAsset.findOne({
-      key: lesson.videoUrl,
-    });
+    let videoAsset = null;
+
+    if (lesson.videoAssetId) {
+      videoAsset = await VideoAsset.findById(lesson.videoAssetId);
+    }
+
+    if (!videoAsset && (lesson.videoKey || lesson.videoUrl)) {
+      videoAsset = await VideoAsset.findOne({
+        key: lesson.videoKey || lesson.videoUrl,
+      });
+    }
 
     await repairOldVideoAssetOwner({
       videoAsset,
@@ -705,13 +636,36 @@ export const getSignedLessonVideoUrl = async (req, res) => {
       user: req.user,
     });
 
-    const videoUrl = await createSignedVideoUrl(lesson.videoUrl);
+    const videoKey = getLessonVideoKey({
+      lesson,
+      videoAsset,
+    });
+
+    if (!videoKey) {
+      return res.status(400).json({
+        success: false,
+        message: "Video key is missing for this lesson.",
+      });
+    }
+
+    const videoUrl = createSignedCloudFrontPlaybackUrl({
+      key: videoKey,
+    });
+
+    const expiresIn = getCloudFrontExpiresIn();
 
     return res.status(200).json({
       success: true,
+      message: "CloudFront signed video URL created",
       videoUrl,
+      signedUrl: videoUrl,
+      url: videoUrl,
+      key: videoKey,
+      type: "mp4",
+      source: "cloudfront",
+      sourceType: "cloudfront",
       accessType: access.accessType,
-      expiresIn: Number(process.env.S3_SIGNED_URL_EXPIRES_IN || 600),
+      expiresIn,
     });
   } catch (error) {
     console.error("SIGNED_VIDEO_URL_ERROR:", error);
@@ -973,7 +927,7 @@ export const confirmAdminVideoUpload = async (req, res) => {
 
     if (!video) {
       video = await VideoAsset.create({
-        adminId: req.user._id,
+        adminId: getUserId(req),
         key,
         originalKey: key,
         originalName,
@@ -1002,6 +956,19 @@ export const confirmAdminVideoUpload = async (req, res) => {
     }
 
     if (video.hlsStatus === "ready" || video.hlsStatus === "processing") {
+      await syncCourseLessonVideoAfterUpload({
+        req,
+        courseId,
+        lessonId,
+        video,
+        originalName,
+        mimeType,
+        sizeBytes,
+        displayTitle,
+        duration,
+        durationSeconds,
+      });
+
       return res.status(200).json({
         success: true,
         message: "Video already confirmed",
@@ -1009,16 +976,50 @@ export const confirmAdminVideoUpload = async (req, res) => {
       });
     }
 
-    video = await startHlsProcessingForVideoAsset({
-      video,
-      courseSlug,
+    let hlsStarted = false;
+    let hlsError = "";
+
+    try {
+      video = await startHlsProcessingForVideoAsset({
+        video,
+        courseSlug,
+        courseId,
+        lessonId,
+      });
+
+      hlsStarted = true;
+    } catch (error) {
+      hlsError = error.message;
+
+      video.status = "uploaded";
+      video.hlsStatus = "failed";
+      video.processingError = error.message;
+
+      await video.save();
+
+      console.warn("HLS processing skipped/failed:", error.message);
+    }
+
+    await syncCourseLessonVideoAfterUpload({
+      req,
       courseId,
       lessonId,
+      video,
+      originalName,
+      mimeType,
+      sizeBytes,
+      displayTitle,
+      duration,
+      durationSeconds,
     });
 
     return res.status(201).json({
       success: true,
-      message: "Video upload confirmed and HLS processing started",
+      message: hlsStarted
+        ? "Video upload confirmed and HLS processing started"
+        : "Video upload confirmed. HLS processing can be retried later.",
+      hlsStarted,
+      hlsError,
       video,
     });
   } catch (error) {
@@ -1026,7 +1027,7 @@ export const confirmAdminVideoUpload = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Video uploaded, but failed to start HLS processing",
+      message: "Video uploaded, but failed to confirm video",
       error: error.message,
     });
   }
@@ -1384,182 +1385,12 @@ export const abortAdminMultipartUpload = async (req, res) => {
   }
 };
 
-export const deleteAdminLessonVideo = async (req, res) => {
-  try {
-    const { courseId, lessonId } = req.params;
-
-    if (!courseId || !lessonId) {
-      return res.status(400).json({
-        success: false,
-        message: "courseId and lessonId are required",
-      });
-    }
-
-    const courseAccess = await canManageCourseForVideo({
-      req,
-      courseId,
-    });
-
-    if (!courseAccess.allowed) {
-      return res.status(courseAccess.statusCode || 403).json({
-        success: false,
-        message: courseAccess.message,
-      });
-    }
-
-    const course = courseAccess.course;
-    const lesson = findLessonById(course, lessonId);
-
-    if (!lesson) {
-      return res.status(404).json({
-        success: false,
-        message: "Lesson not found",
-      });
-    }
-
-    const snapshot = getLessonVideoSnapshot(lesson);
-
-    if (!snapshot.hasVideo) {
-      clearLessonVideoFields(lesson);
-      await course.save();
-
-      return res.status(200).json({
-        success: true,
-        message: "No video was attached to this lesson",
-        cleanup: null,
-      });
-    }
-
-    const video = await findVideoAssetForSnapshot({
-      snapshot,
-      adminId: req.user._id,
-    });
-
-    if (video && !ensureVideoAssetOwner({ video, user: req.user })) {
-      return res.status(403).json({
-        success: false,
-        message: "You can delete only videos uploaded by you",
-      });
-    }
-
-    clearLessonVideoFields(lesson);
-    await course.save();
-
-    const isReferencedElsewhere = await isVideoReferencedByAnyLesson({
-      video,
-      snapshot,
-    });
-
-    if (isReferencedElsewhere) {
-      return res.status(200).json({
-        success: true,
-        message:
-          "Video removed from this lesson. File was not deleted because another lesson still uses it.",
-        cleanup: {
-          skipped: true,
-          reason: "Video is still referenced by another lesson",
-        },
-      });
-    }
-
-    const cleanup = await deleteVideoStorageAndAsset({
-      video,
-      fallbackSnapshot: snapshot,
-    });
-
-    return res.status(200).json({
-      success: true,
-      message: "Lesson video deleted from S3 and database successfully",
-      cleanup,
-    });
-  } catch (error) {
-    console.error("DELETE_ADMIN_LESSON_VIDEO_ERROR:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to delete lesson video",
-      error: error.message,
-    });
-  }
-};
-
 export const uploadAdminVideo = async (req, res) => {
-  let filePath;
-
-  try {
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        message: "Video file is required",
-      });
-    }
-
-    const validationMessage = validateVideoMeta({
-      fileName: req.file.originalname,
-      contentType: req.file.mimetype,
-      sizeBytes: req.file.size,
-    });
-
-    if (validationMessage) {
-      return res.status(400).json({
-        success: false,
-        message: validationMessage,
-      });
-    }
-
-    filePath = req.file.path;
-
-    const adminId = getUserId(req);
-
-    const key = buildUniqueVideoKey({
-      adminId,
-      courseSlug: "course",
-      originalName: req.file.originalname,
-    });
-
-    await uploadVideoToS3({
-      filePath: req.file.path,
-      key,
-      contentType: req.file.mimetype,
-    });
-
-    let video = await VideoAsset.create({
-      adminId: req.user._id,
-      key,
-      originalKey: key,
-      originalName: req.file.originalname,
-      bucket: getBucketName(),
-      region: getRegion(),
-      mimeType: req.file.mimetype,
-      sizeBytes: req.file.size,
-      sourceType: "s3",
-      status: "uploaded",
-      hlsStatus: "not_started",
-    });
-
-    video = await startHlsProcessingForVideoAsset({
-      video,
-      courseSlug: "course",
-    });
-
-    return res.status(201).json({
-      success: true,
-      message: "Video uploaded and HLS processing started",
-      video,
-    });
-  } catch (error) {
-    console.error("UPLOAD_VIDEO_ERROR:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to upload video",
-      error: error.message,
-    });
-  } finally {
-    if (filePath) {
-      await fs.unlink(filePath).catch(() => {});
-    }
-  }
+  return res.status(410).json({
+    success: false,
+    message:
+      "Server video upload is disabled. Use direct S3 presigned multipart upload.",
+  });
 };
 
 export const startAdminHlsProcessing = async (req, res) => {
@@ -1725,7 +1556,7 @@ export const getAdminMediaConvertJobStatus = async (req, res) => {
 export const getAdminStorageOverview = async (req, res) => {
   try {
     const videos = await VideoAsset.find({
-      adminId: req.user._id,
+      adminId: getUserId(req),
       status: {
         $in: ["uploaded", "processing", "ready", "failed"],
       },
@@ -1736,7 +1567,7 @@ export const getAdminStorageOverview = async (req, res) => {
     const stats = await VideoAsset.aggregate([
       {
         $match: {
-          adminId: req.user._id,
+          adminId: getUserId(req),
           status: {
             $in: ["uploaded", "processing", "ready"],
           },
@@ -1776,6 +1607,64 @@ export const getAdminStorageOverview = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to load storage overview",
+      error: error.message,
+    });
+  }
+};
+
+export const deleteAdminLessonVideo = async (req, res) => {
+  try {
+    const { courseId, lessonId } = req.params;
+
+    if (!courseId || !lessonId) {
+      return res.status(400).json({
+        success: false,
+        message: "courseId and lessonId are required",
+      });
+    }
+
+    const courseAccess = await canManageCourseForVideo({
+      req,
+      courseId,
+    });
+
+    if (!courseAccess.allowed) {
+      return res.status(courseAccess.statusCode || 403).json({
+        success: false,
+        message: courseAccess.message,
+      });
+    }
+
+    const course = courseAccess.course;
+    const lesson = findLessonById(course, lessonId);
+
+    if (!lesson) {
+      return res.status(404).json({
+        success: false,
+        message: "Lesson not found",
+      });
+    }
+
+    const oldSnapshot = getLessonVideoSnapshot(lesson);
+
+    clearLessonVideoFields(lesson);
+
+    await course.save();
+
+    await cleanupOldLessonVideoAfterReplace({
+      oldSnapshot,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Lesson video removed successfully",
+    });
+  } catch (error) {
+    console.error("DELETE_ADMIN_LESSON_VIDEO_ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to delete lesson video",
       error: error.message,
     });
   }

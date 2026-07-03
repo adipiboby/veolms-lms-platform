@@ -3,16 +3,26 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   Award,
   BookOpen,
+  ChevronLeft,
   CheckCircle,
   Download,
   Edit3,
   FileText,
   Loader2,
+  Lock,
   MessageCircle,
   Paperclip,
+  MoreVertical,
+  Pause,
+  Play,
+  RotateCcw,
+  RotateCw,
   PlayCircle,
   Save,
   Trash2,
+  Volume2,
+  VolumeX,
+  Maximize2,
   X,
 } from "lucide-react";
 
@@ -398,6 +408,1174 @@ const LessonResources = ({ courseId, lesson }) => {
   );
 };
 
+const useMediaQuery = (query) => {
+  const getMatches = () => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia(query).matches;
+  };
+
+  const [matches, setMatches] = useState(getMatches);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const mediaQuery = window.matchMedia(query);
+
+    const handleChange = () => {
+      setMatches(mediaQuery.matches);
+    };
+
+    handleChange();
+
+    mediaQuery.addEventListener("change", handleChange);
+
+    return () => {
+      mediaQuery.removeEventListener("change", handleChange);
+    };
+  }, [query]);
+
+  return matches;
+};
+
+const MobileLearningTabButton = ({
+  active,
+  icon: Icon,
+  label,
+  badge,
+  onClick,
+}) => {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`relative flex min-w-0 flex-1 items-center justify-center gap-2 px-2 py-4 text-xs font-black transition sm:text-sm ${
+        active
+          ? "text-violet-700 dark:text-violet-300"
+          : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+      }`}
+    >
+      <Icon size={18} className="shrink-0" />
+      <span className="truncate">{label}</span>
+
+      {badge !== undefined && badge !== null && Number(badge) > 0 && (
+        <span
+          className={`rounded-full px-1.5 py-0.5 text-[10px] font-black ${
+            active
+              ? "bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-200"
+              : "bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-slate-300"
+          }`}
+        >
+          {badge}
+        </span>
+      )}
+
+      {active && (
+        <span className="absolute bottom-0 left-4 right-4 h-0.5 rounded-full bg-violet-600 dark:bg-violet-400" />
+      )}
+    </button>
+  );
+};
+
+const formatVideoTime = (seconds = 0) => {
+  const safeSeconds = Math.max(0, Math.floor(Number(seconds || 0)));
+  const minutes = Math.floor(safeSeconds / 60);
+  const remainingSeconds = safeSeconds % 60;
+
+  return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
+};
+
+const MobileVideoPlayer = ({
+  src,
+  type = "mp4",
+  title,
+  startTime = 0,
+  progressSaveIntervalSeconds = 10,
+  onProgressSave,
+  onEnded,
+  onError,
+}) => {
+  const videoRef = useRef(null);
+  const saveIntervalRef = useRef(null);
+  const hideControlsTimerRef = useRef(null);
+
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [showControls, setShowControls] = useState(true);
+  const [localError, setLocalError] = useState("");
+  const [playbackRate, setPlaybackRate] = useState(1);
+  const [qualityLabel, setQualityLabel] = useState("auto");
+  const [isMuted, setIsMuted] = useState(false);
+  const [volume, setVolume] = useState(0.8);
+
+  const speedOptions = [0.75, 1, 1.25, 1.5, 1.75, 2];
+
+  const clearHideControlsTimer = () => {
+    if (hideControlsTimerRef.current) {
+      clearTimeout(hideControlsTimerRef.current);
+      hideControlsTimerRef.current = null;
+    }
+  };
+
+  const saveCurrentProgress = (reason = "manual") => {
+    const video = videoRef.current;
+
+    if (!video || !onProgressSave) return;
+
+    onProgressSave({
+      currentTime: video.currentTime,
+      duration: video.duration,
+      reason,
+    });
+  };
+
+  const startAutoHideControls = () => {
+    clearHideControlsTimer();
+
+    const video = videoRef.current;
+
+    if (!video || video.paused) return;
+
+    hideControlsTimerRef.current = setTimeout(() => {
+      setShowControls(false);
+    }, 2600);
+  };
+
+  const revealControls = () => {
+    setShowControls(true);
+    startAutoHideControls();
+  };
+
+  const holdControlsOpen = (event) => {
+    event?.stopPropagation?.();
+    setShowControls(true);
+    clearHideControlsTimer();
+  };
+
+  const releaseControls = (event) => {
+    event?.stopPropagation?.();
+    startAutoHideControls();
+  };
+
+  const playVideo = async () => {
+    const video = videoRef.current;
+
+    if (!video) return;
+
+    try {
+      setLocalError("");
+      await video.play();
+      setShowControls(true);
+      startAutoHideControls();
+    } catch (error) {
+      console.error("MOBILE_VIDEO_PLAY_ERROR:", error);
+      setLocalError("Tap once more to start the video.");
+      onError?.("Tap once more to start the video.");
+    }
+  };
+
+  const pauseVideo = () => {
+    const video = videoRef.current;
+
+    if (!video) return;
+
+    video.pause();
+    setShowControls(true);
+    clearHideControlsTimer();
+  };
+
+  const handleVideoTap = () => {
+    const video = videoRef.current;
+
+    if (!video) return;
+
+    if (video.paused) {
+      playVideo();
+      return;
+    }
+
+    if (!showControls) {
+      revealControls();
+      return;
+    }
+
+    startAutoHideControls();
+  };
+
+  const seekToPercent = (event) => {
+    const video = videoRef.current;
+
+    if (!video || !duration) return;
+
+    event.stopPropagation();
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const clientX = event.clientX || event.touches?.[0]?.clientX || 0;
+    const clickX = clientX - rect.left;
+    const nextTime = Math.min(
+      duration,
+      Math.max(0, (clickX / rect.width) * duration),
+    );
+
+    video.currentTime = nextTime;
+    setCurrentTime(nextTime);
+    revealControls();
+    saveCurrentProgress("seek");
+  };
+
+  const seekBySeconds = (seconds, event) => {
+    event?.stopPropagation?.();
+
+    const video = videoRef.current;
+
+    if (!video) return;
+
+    const safeDuration = Number.isFinite(video.duration)
+      ? video.duration
+      : duration;
+    const nextTime = Math.min(
+      safeDuration || 0,
+      Math.max(0, Number(video.currentTime || 0) + Number(seconds || 0)),
+    );
+
+    video.currentTime = nextTime;
+    setCurrentTime(nextTime);
+    revealControls();
+    saveCurrentProgress("seek");
+  };
+
+  const handleSpeedSelect = (event) => {
+    event.stopPropagation();
+
+    const nextRate = Number(event.target.value || 1);
+    const video = videoRef.current;
+
+    if (video) {
+      video.playbackRate = nextRate;
+    }
+
+    setPlaybackRate(nextRate);
+    releaseControls(event);
+  };
+
+  const handleQualitySelect = (event) => {
+    event.stopPropagation();
+    setQualityLabel(event.target.value);
+    releaseControls(event);
+  };
+
+  const handleVolumeToggle = (event) => {
+    event.stopPropagation();
+
+    const video = videoRef.current;
+
+    if (!video) return;
+
+    const nextMuted = !video.muted;
+
+    video.muted = nextMuted;
+    setIsMuted(nextMuted);
+    revealControls();
+  };
+
+  const handleVolumeChange = (event) => {
+    event.stopPropagation();
+
+    const nextVolume = Number(event.target.value);
+    const video = videoRef.current;
+
+    if (!video) return;
+
+    video.volume = nextVolume;
+    video.muted = nextVolume === 0;
+
+    setVolume(nextVolume);
+    setIsMuted(nextVolume === 0);
+    revealControls();
+  };
+
+  const handleFullscreen = (event) => {
+    event.stopPropagation();
+
+    const container = videoRef.current?.closest("[data-mobile-video-shell]");
+
+    if (!container) return;
+
+    if (document.fullscreenElement) {
+      document.exitFullscreen?.();
+      return;
+    }
+
+    container.requestFullscreen?.();
+    revealControls();
+  };
+
+  useEffect(() => {
+    const video = videoRef.current;
+
+    if (!video) return undefined;
+
+    setIsPlaying(false);
+    setDuration(0);
+    setCurrentTime(0);
+    setShowControls(true);
+    setLocalError("");
+    clearHideControlsTimer();
+
+    video.playbackRate = playbackRate;
+    video.volume = volume;
+    video.muted = isMuted;
+
+    const handleLoadedMetadata = () => {
+      const safeDuration = Number.isFinite(video.duration) ? video.duration : 0;
+      const safeStartTime = Math.max(0, Number(startTime || 0));
+
+      setDuration(safeDuration);
+
+      if (safeStartTime > 0 && safeDuration > 0) {
+        video.currentTime = Math.min(
+          safeStartTime,
+          Math.max(0, safeDuration - 2),
+        );
+      }
+    };
+
+    const handleTimeUpdate = () => {
+      setCurrentTime(video.currentTime || 0);
+      setDuration(Number.isFinite(video.duration) ? video.duration : 0);
+    };
+
+    const handlePlay = () => {
+      setIsPlaying(true);
+      setShowControls(true);
+      startAutoHideControls();
+    };
+
+    const handlePause = () => {
+      setIsPlaying(false);
+      setShowControls(true);
+      clearHideControlsTimer();
+      saveCurrentProgress("pause");
+    };
+
+    const handleEnded = () => {
+      setIsPlaying(false);
+      setShowControls(true);
+      clearHideControlsTimer();
+      saveCurrentProgress("ended");
+      onEnded?.();
+    };
+
+    const handleError = () => {
+      const message = "Video URL or format is not supported.";
+      setLocalError(message);
+      setShowControls(true);
+      onError?.(message);
+    };
+
+    video.addEventListener("loadedmetadata", handleLoadedMetadata);
+    video.addEventListener("timeupdate", handleTimeUpdate);
+    video.addEventListener("play", handlePlay);
+    video.addEventListener("pause", handlePause);
+    video.addEventListener("ended", handleEnded);
+    video.addEventListener("error", handleError);
+
+    return () => {
+      saveCurrentProgress("unmount");
+      clearHideControlsTimer();
+      video.removeEventListener("loadedmetadata", handleLoadedMetadata);
+      video.removeEventListener("timeupdate", handleTimeUpdate);
+      video.removeEventListener("play", handlePlay);
+      video.removeEventListener("pause", handlePause);
+      video.removeEventListener("ended", handleEnded);
+      video.removeEventListener("error", handleError);
+    };
+  }, [src, startTime]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+
+    if (!video) return;
+
+    video.playbackRate = playbackRate;
+  }, [playbackRate]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+
+    if (!video) return;
+
+    video.volume = volume;
+    video.muted = isMuted;
+  }, [volume, isMuted]);
+
+  useEffect(() => {
+    if (!isPlaying || !onProgressSave) return undefined;
+
+    saveIntervalRef.current = setInterval(
+      () => {
+        saveCurrentProgress("interval");
+      },
+      Math.max(5, Number(progressSaveIntervalSeconds || 10)) * 1000,
+    );
+
+    return () => {
+      if (saveIntervalRef.current) {
+        clearInterval(saveIntervalRef.current);
+        saveIntervalRef.current = null;
+      }
+    };
+  }, [isPlaying, onProgressSave, progressSaveIntervalSeconds]);
+
+  useEffect(() => {
+    return () => {
+      clearHideControlsTimer();
+    };
+  }, []);
+
+  const progressPercent = duration
+    ? Math.min(100, Math.max(0, (currentTime / duration) * 100))
+    : 0;
+
+  return (
+    <div
+      data-mobile-video-shell
+      className="relative aspect-video w-full overflow-hidden rounded-t-3xl bg-black"
+    >
+      <button
+        type="button"
+        onClick={handleVideoTap}
+        onTouchStart={() => {
+          if (!isPlaying) return;
+          revealControls();
+        }}
+        className="absolute inset-0 z-10 block h-full w-full cursor-pointer bg-transparent text-left"
+        aria-label={isPlaying ? "Show video controls" : "Play video"}
+      >
+        <video
+          ref={videoRef}
+          src={src}
+          className="h-full w-full bg-black object-contain"
+          playsInline
+          preload="metadata"
+          controls={false}
+          controlsList="nodownload noplaybackrate nofullscreen"
+          disablePictureInPicture
+          aria-label={title || "Lesson video"}
+        />
+      </button>
+
+      {!isPlaying && (
+        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-black/10">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-black/60 text-white shadow-2xl backdrop-blur-sm">
+            <Play size={30} fill="currentColor" />
+          </div>
+        </div>
+      )}
+
+      {localError && (
+        <div className="absolute left-3 right-3 top-3 z-30 rounded-2xl border border-red-400/30 bg-red-950/85 px-4 py-3 text-center text-xs font-bold text-red-100 backdrop-blur">
+          {localError}
+        </div>
+      )}
+
+      <div
+        onMouseMove={revealControls}
+        onTouchStart={revealControls}
+        className={`absolute bottom-0 left-0 right-0 z-30 bg-gradient-to-t from-black/95 via-black/65 to-transparent px-3 pb-3 pt-10 transition-opacity duration-300 ${
+          showControls || !isPlaying
+            ? "opacity-100"
+            : "pointer-events-none opacity-0"
+        }`}
+      >
+        <button
+          type="button"
+          onClick={seekToPercent}
+          onTouchStart={holdControlsOpen}
+          onTouchEnd={releaseControls}
+          className="mb-2.5 block h-4 w-full rounded-full"
+          aria-label="Seek video"
+        >
+          <span className="relative block h-1 overflow-hidden rounded-full bg-white/35">
+            <span
+              className="block h-full rounded-full bg-blue-500"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </span>
+        </button>
+
+        <div className="flex w-full items-center justify-between gap-1.5 text-white min-[390px]:gap-2">
+          <div className="flex shrink-0 items-center gap-1 min-[390px]:gap-1.5">
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                if (isPlaying) {
+                  pauseVideo();
+                } else {
+                  playVideo();
+                }
+              }}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg shadow-blue-600/30 min-[430px]:h-9 min-[430px]:w-9"
+              aria-label={isPlaying ? "Pause video" : "Play video"}
+            >
+              {isPlaying ? (
+                <Pause size={14} fill="currentColor" />
+              ) : (
+                <Play size={15} fill="currentColor" />
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={(event) => seekBySeconds(-10, event)}
+              className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur transition hover:bg-black/70 min-[430px]:h-8 min-[430px]:w-8"
+              aria-label="Rewind 10 seconds"
+            >
+              <RotateCcw size={13} />
+              <span className="absolute text-[7px] font-black leading-none">
+                10
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={(event) => seekBySeconds(10, event)}
+              className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur transition hover:bg-black/70 min-[430px]:h-8 min-[430px]:w-8"
+              aria-label="Forward 10 seconds"
+            >
+              <RotateCw size={13} />
+              <span className="absolute text-[7px] font-black leading-none">
+                10
+              </span>
+            </button>
+
+            <p className="hidden w-[66px] shrink-0 truncate text-[10px] font-black tabular-nums text-white/95 min-[560px]:block">
+              {formatVideoTime(currentTime)} / {formatVideoTime(duration)}
+            </p>
+          </div>
+
+          <div className="flex min-w-0 flex-1 items-center justify-center gap-1 px-1 min-[390px]:gap-1.5 min-[430px]:px-2">
+            <select
+              value={String(playbackRate)}
+              onClick={(event) => event.stopPropagation()}
+              onFocus={holdControlsOpen}
+              onBlur={releaseControls}
+              onChange={handleSpeedSelect}
+              className="h-8 w-[50px] shrink-0 rounded-xl border border-white/15 bg-slate-900/95 px-1.5 text-[11px] font-black text-white outline-none backdrop-blur focus:border-blue-400 min-[430px]:w-[56px]"
+              aria-label="Playback speed"
+            >
+              {speedOptions.map((speed) => (
+                <option
+                  key={speed}
+                  value={speed}
+                  className="bg-slate-900 text-white"
+                >
+                  {speed}x
+                </option>
+              ))}
+            </select>
+
+            <button
+              type="button"
+              onClick={handleVolumeToggle}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur transition hover:bg-black/70"
+              aria-label={isMuted ? "Unmute" : "Mute"}
+            >
+              {isMuted || volume === 0 ? (
+                <VolumeX size={15} />
+              ) : (
+                <Volume2 size={15} />
+              )}
+            </button>
+
+            <div className="flex h-8 min-w-[46px] max-w-[82px] flex-1 items-center rounded-full bg-black/40 px-2 backdrop-blur min-[430px]:max-w-[96px] min-[560px]:max-w-[120px]">
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={isMuted ? 0 : volume}
+                onClick={(event) => event.stopPropagation()}
+                onTouchStart={holdControlsOpen}
+                onTouchEnd={releaseControls}
+                onMouseDown={holdControlsOpen}
+                onMouseUp={releaseControls}
+                onChange={handleVolumeChange}
+                className="h-1.5 w-full accent-blue-500"
+                aria-label="Volume"
+              />
+            </div>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-1 min-[390px]:gap-1.5">
+            <select
+              value={qualityLabel}
+              onClick={(event) => event.stopPropagation()}
+              onFocus={holdControlsOpen}
+              onBlur={releaseControls}
+              onChange={handleQualitySelect}
+              className="h-8 w-[62px] shrink-0 rounded-xl border border-white/15 bg-slate-900/95 px-1.5 text-[11px] font-black text-white outline-none backdrop-blur focus:border-blue-400 min-[430px]:w-[72px]"
+              aria-label="Video quality"
+            >
+              <option value="auto" className="bg-slate-900 text-white">
+                Auto
+              </option>
+              <option value="high" className="bg-slate-900 text-white">
+                High
+              </option>
+              <option value="medium" className="bg-slate-900 text-white">
+                Medium
+              </option>
+              <option value="low" className="bg-slate-900 text-white">
+                Low
+              </option>
+            </select>
+
+            <button
+              type="button"
+              onClick={handleFullscreen}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur transition hover:bg-black/70"
+              aria-label="Fullscreen"
+            >
+              <Maximize2 size={14} />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const MobileLessonRow = ({
+  lesson,
+  lessonNumber,
+  sectionTitle,
+  isActive,
+  isCompleted,
+  hasNote,
+  onClick,
+}) => {
+  const isLocked = Boolean(lesson?.isLocked || lesson?.locked);
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={isLocked}
+      className={`w-full rounded-2xl border px-3 py-3 text-left transition ${
+        isActive
+          ? "border-violet-200 bg-violet-50/90 shadow-sm shadow-violet-200/50 dark:border-violet-400/40 dark:bg-violet-500/15 dark:shadow-none"
+          : "border-slate-200 bg-white hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/[0.08]"
+      } ${isLocked ? "cursor-not-allowed opacity-80" : ""}`}
+    >
+      <div className="flex items-center gap-3">
+        <div
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-sm font-black ${
+            isCompleted
+              ? "bg-green-50 text-green-600 dark:bg-green-500/15 dark:text-green-300"
+              : isActive
+                ? "bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-200"
+                : "bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300"
+          }`}
+        >
+          {isCompleted ? <CheckCircle size={21} /> : lessonNumber}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-black text-slate-950 dark:text-white">
+            {lesson?.title || `Lesson ${lessonNumber}`}
+          </p>
+
+          <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-400">
+            {isActive ? (
+              <span className="inline-flex items-center gap-1 text-violet-700 dark:text-violet-300">
+                <PlayCircle size={13} />
+                Now Playing
+              </span>
+            ) : sectionTitle ? (
+              <span className="truncate">{sectionTitle}</span>
+            ) : (
+              <span>Video Lesson</span>
+            )}
+
+            {hasNote && (
+              <span className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-300">
+                <FileText size={13} />
+                Note
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-2">
+          {lesson?.duration && (
+            <span className="rounded-xl bg-slate-100 px-2.5 py-1 text-xs font-black text-slate-600 dark:bg-white/10 dark:text-slate-300">
+              {lesson.duration}
+            </span>
+          )}
+
+          {isLocked ? (
+            <Lock size={17} className="text-slate-500 dark:text-slate-400" />
+          ) : isCompleted ? (
+            <CheckCircle
+              size={18}
+              className="text-green-600 dark:text-green-300"
+            />
+          ) : isActive ? (
+            <span className="flex h-6 w-6 items-end justify-center gap-0.5 text-violet-600 dark:text-violet-300">
+              <span className="h-2 w-1 rounded-full bg-current" />
+              <span className="h-4 w-1 rounded-full bg-current" />
+              <span className="h-3 w-1 rounded-full bg-current" />
+            </span>
+          ) : null}
+        </div>
+      </div>
+    </button>
+  );
+};
+
+const MobileLearningView = ({
+  course,
+  currentLesson,
+  lessons,
+  completedLessonIds,
+  safeProgress,
+  activePanel,
+  setActivePanel,
+  videoSource,
+  videoPlaybackType,
+  videoStartTime,
+  videoLoading,
+  videoError,
+  videoExpiresIn,
+  currentLessonCompleted,
+  updatingCompletion,
+  lessonCompleteMessage,
+  lessonCompleteError,
+  certificateError,
+  isStudentLearning,
+  isAdminLearning,
+  currentLessonResourceCount,
+  notesByLessonId,
+  hasCurrentLessonNote,
+  noteTextareaRef,
+  noteContent,
+  noteLoading,
+  noteSaving,
+  noteDeleting,
+  noteMessage,
+  noteError,
+  onNoteContentChange,
+  onSaveNote,
+  onDownloadNote,
+  onDeleteNote,
+  onLessonClick,
+  onToggleLessonComplete,
+  onSaveWatchPosition,
+  onVideoEnded,
+  onVideoError,
+}) => {
+  const [mobilePanel, setMobilePanel] = useState("lessons");
+
+  const openPanel = (panel) => {
+    setMobilePanel(panel);
+
+    if (panel === "comments" || panel === "resources") {
+      setActivePanel(panel);
+    }
+  };
+
+  const allLessons = Array.isArray(lessons) ? lessons : [];
+
+  return (
+    <main className="min-h-screen bg-slate-50 pb-8 text-slate-950 transition-colors duration-300 dark:bg-slate-950 dark:text-white lg:hidden">
+      <section className="mx-auto max-w-3xl px-3 py-3 sm:px-4">
+        {isAdminLearning && (
+          <div className="mb-3 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs font-bold leading-5 text-blue-700 dark:border-blue-400/20 dark:bg-blue-500/10 dark:text-blue-200">
+            Admin preview mode: you are viewing your own course learning page.
+          </div>
+        )}
+
+        <div className="mb-4 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => window.history.back()}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-200"
+          >
+            <ChevronLeft size={22} />
+          </button>
+
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-black text-violet-700 dark:text-violet-300">
+              {course?.title || "Course"}
+            </p>
+
+            <div className="mt-1 flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                {safeProgress.progressPercentage}% complete
+              </span>
+
+              <div className="h-1.5 w-28 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
+                <div
+                  className="h-full rounded-full bg-violet-600 transition-all duration-500"
+                  style={{ width: `${safeProgress.progressPercentage}%` }}
+                />
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-200"
+          >
+            <MoreVertical size={21} />
+          </button>
+        </div>
+
+        <div className="sticky top-[76px] z-40 -mx-3 bg-slate-50/95 px-3 pb-3 pt-2 backdrop-blur-xl dark:bg-slate-950/95 sm:-mx-4 sm:px-4">
+          <article className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/70 dark:border-white/10 dark:bg-white/[0.05] dark:shadow-black/20">
+            {videoLoading ? (
+              <div className="flex aspect-video flex-col items-center justify-center bg-black text-slate-400">
+                <Loader2 className="animate-spin text-blue-400" size={34} />
+                <p className="mt-3 text-sm font-semibold">
+                  Preparing secure video...
+                </p>
+              </div>
+            ) : videoError ? (
+              <div className="flex aspect-video items-center justify-center bg-black px-4 text-center text-sm font-bold text-red-300">
+                {videoError}
+              </div>
+            ) : videoSource ? (
+              <MobileVideoPlayer
+                key={`mobile-${currentLesson?._id}-${videoPlaybackType}`}
+                src={videoSource}
+                type={videoPlaybackType}
+                startTime={videoStartTime}
+                title={currentLesson?.title}
+                progressSaveIntervalSeconds={10}
+                onProgressSave={onSaveWatchPosition}
+                onEnded={onVideoEnded}
+                onError={onVideoError}
+              />
+            ) : (
+              <div className="flex aspect-video items-center justify-center bg-black text-sm font-bold text-slate-400">
+                No video selected
+              </div>
+            )}
+          </article>
+        </div>
+
+        <article className="mt-3 rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/70 dark:border-white/10 dark:bg-white/[0.05] dark:shadow-black/20">
+          <div className="p-4">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <p className="max-w-[70%] truncate text-xs font-black uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300">
+                {currentLesson?.sectionTitle || "Current Lesson"}
+              </p>
+
+              {videoPlaybackType !== "hls" && videoExpiresIn > 0 && (
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black text-slate-500 dark:bg-white/10 dark:text-slate-400">
+                  Secure video
+                </span>
+              )}
+            </div>
+
+            <h1 className="text-xl font-black leading-tight text-slate-950 dark:text-white">
+              {currentLesson?.title || "Lesson"}
+            </h1>
+
+            <p className="mt-2 text-sm font-semibold leading-6 text-slate-600 dark:text-slate-400">
+              {isAdminLearning
+                ? "Preview your lesson, check resources, and reply to student comments."
+                : "Watch this lesson, mark it complete, and continue your learning path."}
+            </p>
+
+            {isStudentLearning && (
+              <div className="mt-4 flex gap-3">
+                <button
+                  type="button"
+                  onClick={onToggleLessonComplete}
+                  disabled={updatingCompletion}
+                  className={`inline-flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-black transition ${
+                    currentLessonCompleted
+                      ? "border-green-200 bg-green-50 text-green-700 dark:border-green-400/30 dark:bg-green-500/15 dark:text-green-200"
+                      : "border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100 dark:border-violet-400/40 dark:bg-violet-500/15 dark:text-violet-200"
+                  } disabled:cursor-not-allowed disabled:opacity-70`}
+                >
+                  {updatingCompletion ? (
+                    <Loader2 size={18} className="animate-spin" />
+                  ) : (
+                    <CheckCircle size={18} />
+                  )}
+                  {updatingCompletion
+                    ? "Updating..."
+                    : currentLessonCompleted
+                      ? "Completed"
+                      : "Mark as Complete"}
+                </button>
+              </div>
+            )}
+
+            {lessonCompleteMessage && isStudentLearning && (
+              <div className="mt-4 rounded-2xl border border-green-200 bg-green-50 p-3 text-xs font-bold text-green-700 dark:border-green-500/20 dark:bg-green-500/10 dark:text-green-200">
+                {lessonCompleteMessage}
+              </div>
+            )}
+
+            {lessonCompleteError && isStudentLearning && (
+              <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-3 text-xs font-bold text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
+                {lessonCompleteError}
+              </div>
+            )}
+
+            {certificateError && isStudentLearning && (
+              <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-3 text-xs font-bold text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
+                {certificateError}
+              </div>
+            )}
+          </div>
+        </article>
+
+        <section className="mt-4 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/70 dark:border-white/10 dark:bg-white/[0.05] dark:shadow-black/20">
+          <div
+            className={`grid border-b border-slate-200 dark:border-white/10 ${
+              isStudentLearning ? "grid-cols-4" : "grid-cols-3"
+            }`}
+          >
+            <MobileLearningTabButton
+              active={mobilePanel === "lessons"}
+              icon={BookOpen}
+              label="Lessons"
+              onClick={() => openPanel("lessons")}
+            />
+
+            <MobileLearningTabButton
+              active={mobilePanel === "comments"}
+              icon={MessageCircle}
+              label="Comments"
+              onClick={() => openPanel("comments")}
+            />
+
+            <MobileLearningTabButton
+              active={mobilePanel === "resources"}
+              icon={FileText}
+              label="Resources"
+              badge={currentLessonResourceCount}
+              onClick={() => openPanel("resources")}
+            />
+
+            {isStudentLearning && (
+              <MobileLearningTabButton
+                active={mobilePanel === "notes"}
+                icon={FileText}
+                label="Notes"
+                badge={hasCurrentLessonNote ? "•" : null}
+                onClick={() => openPanel("notes")}
+              />
+            )}
+          </div>
+
+          {mobilePanel === "lessons" && (
+            <div className="space-y-2 p-3">
+              {course?.sections?.map((section) =>
+                section.lessons?.map((lesson) => {
+                  const lessonId = String(lesson._id);
+                  const lessonNumber =
+                    allLessons.findIndex(
+                      (item) => String(item?._id) === lessonId,
+                    ) + 1;
+                  const isActive = String(currentLesson?._id) === lessonId;
+                  const isCompleted = completedLessonIds.has(lessonId);
+                  const lessonHasNote =
+                    Boolean(notesByLessonId?.[lessonId]?.trim()) ||
+                    (isActive && hasCurrentLessonNote);
+
+                  return (
+                    <MobileLessonRow
+                      key={lesson._id}
+                      lesson={lesson}
+                      lessonNumber={lessonNumber || 1}
+                      sectionTitle={section.title}
+                      isActive={isActive}
+                      isCompleted={isCompleted}
+                      hasNote={lessonHasNote}
+                      onClick={() => onLessonClick(lesson, section.title)}
+                    />
+                  );
+                }),
+              )}
+
+              <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-slate-950/60">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <h2 className="text-base font-black text-slate-950 dark:text-white">
+                    Discussion
+                  </h2>
+
+                  <button
+                    type="button"
+                    onClick={() => openPanel("comments")}
+                    className="text-sm font-black text-violet-700 dark:text-violet-300"
+                  >
+                    View all
+                  </button>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[0.04]">
+                  <div className="flex gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-600 text-sm font-black text-white">
+                      S
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-black text-slate-950 dark:text-white">
+                          Sneha Patel
+                        </p>
+
+                        <span className="text-xs font-semibold text-slate-500">
+                          2h ago
+                        </span>
+                      </div>
+
+                      <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                        Great explanation! The examples really helped me
+                        understand.
+                      </p>
+
+                      <div className="mt-2 flex gap-4 text-xs font-bold text-slate-500 dark:text-slate-400">
+                        <button type="button">Reply</button>
+                        <span>👍 12</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {mobilePanel === "comments" && course?._id && currentLesson?._id && (
+            <div className="p-3">
+              <LessonComments
+                courseId={course._id}
+                lessonId={currentLesson._id}
+              />
+            </div>
+          )}
+
+          {mobilePanel === "resources" && (
+            <div className="p-3">
+              <LessonResources courseId={course?._id} lesson={currentLesson} />
+            </div>
+          )}
+
+          {mobilePanel === "notes" && isStudentLearning && (
+            <div className="p-3">
+              <section className="rounded-3xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-slate-950/70">
+                <div className="mb-4 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-black uppercase tracking-[0.22em] text-violet-700 dark:text-violet-300">
+                      Lesson Notes
+                    </p>
+
+                    <h3 className="mt-1 break-words text-lg font-black text-slate-950 dark:text-white">
+                      {currentLesson?.title || "Current lesson"}
+                    </h3>
+
+                    <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                      Write, save, download, or delete your personal notes.
+                    </p>
+                  </div>
+
+                  {noteLoading && (
+                    <Loader2
+                      size={20}
+                      className="shrink-0 animate-spin text-violet-500"
+                    />
+                  )}
+                </div>
+
+                {noteError && (
+                  <div className="mb-3 rounded-2xl border border-red-200 bg-red-50 p-3 text-xs font-bold text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
+                    {noteError}
+                  </div>
+                )}
+
+                {noteMessage && (
+                  <div className="mb-3 rounded-2xl border border-green-200 bg-green-50 p-3 text-xs font-bold text-green-700 dark:border-green-500/30 dark:bg-green-500/10 dark:text-green-200">
+                    {noteMessage}
+                  </div>
+                )}
+
+                <textarea
+                  ref={noteTextareaRef}
+                  value={noteContent}
+                  onChange={(event) => onNoteContentChange(event.target.value)}
+                  rows={9}
+                  maxLength={5000}
+                  placeholder={`Example:
+# Main Heading
+
+💡 Important point
+• Write your lesson notes here
+❓ Doubt: Revise this topic again`}
+                  className="w-full resize-none rounded-3xl border border-slate-200 bg-white px-4 py-4 text-sm leading-7 text-slate-950 outline-none placeholder:text-slate-400 focus:border-violet-500 dark:border-white/10 dark:bg-slate-900 dark:text-white dark:placeholder:text-slate-500 dark:focus:border-violet-400/70"
+                />
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={onSaveNote}
+                    disabled={noteSaving || noteLoading}
+                    className="inline-flex items-center gap-2 rounded-2xl bg-violet-600 px-4 py-3 text-xs font-black text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {noteSaving ? (
+                      <Loader2 size={15} className="animate-spin" />
+                    ) : (
+                      <Save size={15} />
+                    )}
+                    {noteSaving ? "Saving..." : "Save"}
+                  </button>
+
+                  {noteContent.trim() && (
+                    <button
+                      type="button"
+                      onClick={onDownloadNote}
+                      className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-black text-slate-800 transition hover:bg-slate-100 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+                    >
+                      <Download size={15} />
+                      Download
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={onDeleteNote}
+                    disabled={
+                      noteDeleting || noteLoading || !noteContent.trim()
+                    }
+                    className="inline-flex items-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-black text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200 dark:hover:bg-red-500/20"
+                  >
+                    {noteDeleting ? (
+                      <Loader2 size={15} className="animate-spin" />
+                    ) : (
+                      <Trash2 size={15} />
+                    )}
+                    {noteDeleting ? "Deleting..." : "Delete"}
+                  </button>
+                </div>
+
+                <p className="mt-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                  {noteContent.length}/5000 characters
+                </p>
+              </section>
+            </div>
+          )}
+        </section>
+      </section>
+    </main>
+  );
+};
+
 const LearningPage = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
@@ -449,6 +1627,7 @@ const LearningPage = () => {
 
   const isStudentLearning = accessType === "student";
   const isAdminLearning = accessType === "adminOwner";
+  const isMobileLearningView = useMediaQuery("(max-width: 1023px)");
 
   const lessons = useMemo(() => {
     if (!Array.isArray(course?.sections)) return [];
@@ -1269,6 +2448,62 @@ ${noteContent.trim()}
           <p className="mb-6 text-slate-700 dark:text-slate-300">{error}</p>
         </div>
       </main>
+    );
+  }
+
+  if (isMobileLearningView) {
+    return (
+      <MobileLearningView
+        course={course}
+        currentLesson={currentLesson}
+        lessons={lessons}
+        completedLessonIds={completedLessonIds}
+        safeProgress={safeProgress}
+        activePanel={activePanel}
+        setActivePanel={setActivePanel}
+        videoSource={videoSource}
+        videoPlaybackType={videoPlaybackType}
+        videoStartTime={videoStartTime}
+        videoLoading={videoLoading}
+        videoError={videoError}
+        videoExpiresIn={videoExpiresIn}
+        currentLessonCompleted={currentLessonCompleted}
+        updatingCompletion={updatingCompletion}
+        lessonCompleteMessage={lessonCompleteMessage}
+        lessonCompleteError={lessonCompleteError}
+        certificateError={certificateError}
+        isStudentLearning={isStudentLearning}
+        isAdminLearning={isAdminLearning}
+        currentLessonResourceCount={currentLessonResourceCount}
+        notesByLessonId={notesByLessonId}
+        hasCurrentLessonNote={hasCurrentLessonNote}
+        noteTextareaRef={noteTextareaRef}
+        noteContent={noteContent}
+        noteLoading={noteLoading}
+        noteSaving={noteSaving}
+        noteDeleting={noteDeleting}
+        noteMessage={noteMessage}
+        noteError={noteError}
+        onNoteContentChange={(value) => {
+          setNoteContent(value);
+          setNoteMessage("");
+          setNoteError("");
+        }}
+        onSaveNote={handleSaveNote}
+        onDownloadNote={handleDownloadNote}
+        onDeleteNote={handleDeleteNote}
+        onLessonClick={handleLessonClick}
+        onToggleLessonComplete={handleToggleLessonComplete}
+        onSaveWatchPosition={saveLessonWatchPosition}
+        onVideoEnded={() => {
+          if (isStudentLearning && !currentLessonCompleted) {
+            handleToggleLessonComplete();
+          }
+        }}
+        onVideoError={(message) => {
+          console.error("VIDEO_PLAYER_ERROR:", message);
+        }}
+      />
     );
   }
 

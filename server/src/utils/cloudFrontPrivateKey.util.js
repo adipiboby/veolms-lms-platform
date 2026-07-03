@@ -17,6 +17,6 @@ export const getCloudFrontPrivateKey = () => {
   }
 
   throw new Error(
-    "Missing CloudFront private key. Set CLOUDFRONT_PRIVATE_KEY_BASE64 or CLOUDFRONT_PRIVATE_KEY_PATH.",
+    "Missing CloudFront private key. Set CLOUDFRONT_PRIVATE_KEY_BASE64 for Lambda or CLOUDFRONT_PRIVATE_KEY_PATH for local.",
   );
 };
