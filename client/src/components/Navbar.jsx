@@ -210,8 +210,8 @@ const Navbar = () => {
 
   return (
     <>
-      <header className="sticky top-0 z-50 w-full max-w-full overflow-x-hidden border-b border-slate-200 bg-white/90 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/90">
-        <nav className="mx-auto flex w-full max-w-[1600px] items-center justify-between gap-2 px-3 py-3 sm:px-4 lg:px-6">
+      <header className="sticky top-0 z-[9990] w-full max-w-full overflow-visible border-b border-slate-200 bg-white/90 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/90">
+        <nav className="relative z-[9991] mx-auto flex w-full max-w-[1600px] items-center justify-between gap-2 overflow-visible px-3 py-3 sm:px-4 lg:px-6">
           <Link
             to="/"
             className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3 md:max-w-[42%] lg:max-w-none"
@@ -296,10 +296,12 @@ const Navbar = () => {
             </div>
 
             {isAuthenticated ? (
-              <div ref={profileMenuRef} className="relative">
+              <div ref={profileMenuRef} className="relative z-[9999]">
                 <button
                   type="button"
                   onClick={handleProfileButtonClick}
+                  aria-haspopup="menu"
+                  aria-expanded={profileMenuOpen}
                   className="flex max-w-[3.5rem] shrink-0 items-center gap-2 rounded-full border border-slate-200 bg-slate-100 py-1 pl-1 pr-2 text-slate-950 transition hover:bg-slate-200 sm:max-w-[220px] sm:pr-3 dark:border-white/10 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
                 >
                   <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-gradient-to-br from-blue-500 to-purple-600">
@@ -336,7 +338,10 @@ const Navbar = () => {
                 </button>
 
                 {profileMenuOpen && (
-                  <div className="fixed right-4 top-[4.75rem] z-[80] w-[min(calc(100vw-2rem),28rem)] overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-2xl shadow-black/20 md:absolute md:right-0 md:top-14 md:z-50 md:w-72 dark:border-white/10 dark:bg-slate-950 dark:shadow-black/40">
+                  <div
+                    role="menu"
+                    className="fixed right-3 top-[4.75rem] z-[99999] w-[min(calc(100vw-1.5rem),28rem)] overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-2xl shadow-black/30 md:right-6 md:top-[4.75rem] md:w-80 dark:border-white/10 dark:bg-slate-950 dark:shadow-black/50"
+                  >
                     <div className="border-b border-slate-200 p-5 dark:border-white/10">
                       <div className="flex items-center gap-4">
                         <div className="h-16 w-16 shrink-0 overflow-hidden rounded-full bg-gradient-to-br from-blue-500 to-purple-600 shadow-lg shadow-blue-500/20 md:h-12 md:w-12">
