@@ -1,68 +1,16 @@
 import {
   CreateJobCommand,
-  DescribeEndpointsCommand,
   GetJobCommand,
   MediaConvertClient,
 } from "@aws-sdk/client-mediaconvert";
-const region = process.env.AWS_REGION || "us-east-1";
 
-let cachedEndpoint = "";
+const mediaConvertRegion =
+  process.env.MEDIACONVERT_REGION || process.env.AWS_S3_REGION || "us-east-1";
+
 let cachedMediaConvertClient = null;
 
-const getBucketName = () => {
-  const bucket = process.env.AWS_S3_BUCKET_NAME;
-
-  if (!bucket) {
-    throw new Error("AWS_S3_BUCKET_NAME is missing in .env");
-  }
-
-  return bucket;
-};
-
-const getMediaConvertRoleArn = () => {
-  const roleArn = process.env.MEDIACONVERT_ROLE_ARN;
-
-  if (!roleArn) {
-    throw new Error("MEDIACONVERT_ROLE_ARN is missing in .env");
-  }
-
-  return roleArn;
-};
-
-const getAwsCredentials = () => {
-  if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) {
-    return undefined;
-  }
-
-  return {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  };
-};
-
-export const getMediaConvertJobStatus = async (jobId) => {
-  if (!jobId) {
-    throw new Error("MediaConvert jobId is required");
-  }
-
-  const client = await getMediaConvertClient();
-
-  const result = await client.send(
-    new GetJobCommand({
-      Id: jobId,
-    })
-  );
-
-  return {
-    jobId: result.Job?.Id,
-    status: result.Job?.Status,
-    errorCode: result.Job?.ErrorCode,
-    errorMessage: result.Job?.ErrorMessage,
-  };
-};
-
 const normalizeKey = (key = "") => {
-  return key.replace(/^\/+/, "");
+  return String(key || "").replace(/^\/+/, "");
 };
 
 const ensureTrailingSlash = (value = "") => {
@@ -75,55 +23,94 @@ const ensureTrailingSlash = (value = "") => {
   return clean.endsWith("/") ? clean : `${clean}/`;
 };
 
-const getBaseMediaConvertClient = () => {
-  return new MediaConvertClient({
-    region,
-    credentials: getAwsCredentials(),
-  });
+const normalizeEndpoint = (endpoint = "") => {
+  return String(endpoint || "")
+    .trim()
+    .replace(/\/+$/, "");
 };
 
-const getMediaConvertEndpoint = async () => {
-  if (process.env.MEDIACONVERT_ENDPOINT) {
-    return process.env.MEDIACONVERT_ENDPOINT;
+const getBucketName = () => {
+  const bucket = process.env.AWS_S3_BUCKET_NAME;
+
+  if (!bucket) {
+    throw new Error("AWS_S3_BUCKET_NAME is missing in environment variables.");
   }
 
-  if (cachedEndpoint) {
-    return cachedEndpoint;
+  return bucket;
+};
+
+const getMediaConvertRoleArn = () => {
+  const roleArn = process.env.MEDIACONVERT_ROLE_ARN;
+
+  console.log("MEDIACONVERT_ROLE_ENV_CHECK", {
+    hasRoleArn: Boolean(roleArn),
+    roleArn,
+    envKeys: Object.keys(process.env).filter((key) =>
+      key.includes("MEDIACONVERT"),
+    ),
+  });
+
+  if (!roleArn) {
+    throw new Error(
+      "MEDIACONVERT_ROLE_ARN is missing in environment variables.",
+    );
   }
 
-  const baseClient = getBaseMediaConvertClient();
+  return roleArn;
+};
 
-  const result = await baseClient.send(
-    new DescribeEndpointsCommand({
-      MaxResults: 1,
-    })
-  );
-
-  const endpoint = result.Endpoints?.[0]?.Url;
+const getMediaConvertEndpoint = () => {
+  const endpoint = normalizeEndpoint(process.env.MEDIACONVERT_ENDPOINT);
 
   if (!endpoint) {
-    throw new Error("Could not discover MediaConvert endpoint");
+    throw new Error(
+      "MEDIACONVERT_ENDPOINT is missing. Set the exact MediaConvert endpoint for your account/region.",
+    );
   }
-
-  cachedEndpoint = endpoint;
 
   return endpoint;
 };
 
-export const getMediaConvertClient = async () => {
+export const getMediaConvertClient = () => {
   if (cachedMediaConvertClient) {
     return cachedMediaConvertClient;
   }
 
-  const endpoint = await getMediaConvertEndpoint();
+  const endpoint = getMediaConvertEndpoint();
+
+  console.log("MEDIACONVERT_CLIENT_CREATE", {
+    region: mediaConvertRegion,
+    endpoint,
+    credentialMode: "default-provider-chain",
+  });
 
   cachedMediaConvertClient = new MediaConvertClient({
-    region,
+    region: mediaConvertRegion,
     endpoint,
-    credentials: getAwsCredentials(),
   });
 
   return cachedMediaConvertClient;
+};
+
+export const getMediaConvertJobStatus = async (jobId) => {
+  if (!jobId) {
+    throw new Error("MediaConvert jobId is required.");
+  }
+
+  const client = getMediaConvertClient();
+
+  const result = await client.send(
+    new GetJobCommand({
+      Id: jobId,
+    }),
+  );
+
+  return {
+    jobId: result.Job?.Id || "",
+    status: result.Job?.Status || "",
+    errorCode: result.Job?.ErrorCode || "",
+    errorMessage: result.Job?.ErrorMessage || "",
+  };
 };
 
 export const buildHlsOutputPrefix = ({ courseSlug, videoAssetId }) => {
@@ -143,6 +130,69 @@ export const buildHlsManifestKey = (hlsOutputPrefix) => {
   return `${cleanPrefix}master.m3u8`;
 };
 
+const createHlsOutput = ({
+  nameModifier,
+  width,
+  height,
+  maxBitrate,
+  audioBitrate,
+}) => {
+  return {
+    NameModifier: nameModifier,
+
+    ContainerSettings: {
+      Container: "M3U8",
+      M3u8Settings: {},
+    },
+
+    VideoDescription: {
+      Width: width,
+      Height: height,
+      ScalingBehavior: "DEFAULT",
+      Sharpness: 50,
+
+      CodecSettings: {
+        Codec: "H_264",
+
+        H264Settings: {
+          RateControlMode: "QVBR",
+          MaxBitrate: maxBitrate,
+          QvbrSettings: {
+            QvbrQualityLevel: 7,
+          },
+          QualityTuningLevel: "SINGLE_PASS_HQ",
+          CodecProfile: "MAIN",
+          CodecLevel: "AUTO",
+          GopSize: 2,
+          GopSizeUnits: "SECONDS",
+          GopClosedCadence: 1,
+          NumberBFramesBetweenReferenceFrames: 2,
+          FramerateControl: "INITIALIZE_FROM_SOURCE",
+          SceneChangeDetect: "TRANSITION_DETECTION",
+        },
+      },
+    },
+
+    AudioDescriptions: [
+      {
+        AudioSourceName: "Audio Selector 1",
+
+        CodecSettings: {
+          Codec: "AAC",
+
+          AacSettings: {
+            Bitrate: audioBitrate,
+            CodingMode: "CODING_MODE_2_0",
+            SampleRate: 48000,
+            CodecProfile: "LC",
+            RateControlMode: "CBR",
+          },
+        },
+      },
+    ],
+  };
+};
+
 export const createHlsMediaConvertJob = async ({
   inputKey,
   hlsOutputPrefix,
@@ -151,31 +201,36 @@ export const createHlsMediaConvertJob = async ({
   lessonId,
 }) => {
   if (!inputKey) {
-    throw new Error("inputKey is required for MediaConvert job");
+    throw new Error("inputKey is required for MediaConvert job.");
   }
 
   if (!hlsOutputPrefix) {
-    throw new Error("hlsOutputPrefix is required for MediaConvert job");
+    throw new Error("hlsOutputPrefix is required for MediaConvert job.");
   }
 
   const bucket = getBucketName();
   const roleArn = getMediaConvertRoleArn();
-  const client = await getMediaConvertClient();
+  const client = getMediaConvertClient();
 
   const cleanInputKey = normalizeKey(inputKey);
   const cleanOutputPrefix = ensureTrailingSlash(hlsOutputPrefix);
 
   const inputS3Url = `s3://${bucket}/${cleanInputKey}`;
-
-  /**
-   * Important:
-   * Destination is WITHOUT .m3u8 extension.
-   * MediaConvert will create:
-   * courses/hls/.../master.m3u8
-   */
   const hlsDestination = `s3://${bucket}/${cleanOutputPrefix}master`;
-
   const expectedManifestKey = buildHlsManifestKey(cleanOutputPrefix);
+
+  console.log("MEDIACONVERT_CREATE_JOB_START", {
+    region: mediaConvertRegion,
+    bucket,
+    roleArn,
+    inputS3Url,
+    hlsDestination,
+    videoAssetId: String(videoAssetId || ""),
+    courseId: String(courseId || ""),
+    lessonId: String(lessonId || ""),
+    hlsManifestKey: expectedManifestKey,
+    hlsOutputPrefix: cleanOutputPrefix,
+  });
 
   const command = new CreateJobCommand({
     Role: roleArn,
@@ -187,6 +242,7 @@ export const createHlsMediaConvertJob = async ({
       lessonId: String(lessonId || ""),
       inputKey: cleanInputKey,
       hlsManifestKey: expectedManifestKey,
+      hlsOutputPrefix: cleanOutputPrefix,
     },
 
     Settings: {
@@ -229,115 +285,29 @@ export const createHlsMediaConvertJob = async ({
           },
 
           Outputs: [
-            {
-              NameModifier: "_720p",
+            createHlsOutput({
+              nameModifier: "_720p",
+              width: 1280,
+              height: 720,
+              maxBitrate: 3000000,
+              audioBitrate: 128000,
+            }),
 
-              ContainerSettings: {
-                Container: "M3U8",
-                M3u8Settings: {},
-              },
+            createHlsOutput({
+              nameModifier: "_480p",
+              width: 854,
+              height: 480,
+              maxBitrate: 1200000,
+              audioBitrate: 96000,
+            }),
 
-              VideoDescription: {
-                Width: 1280,
-                Height: 720,
-                ScalingBehavior: "DEFAULT",
-                Sharpness: 50,
-
-                CodecSettings: {
-                  Codec: "H_264",
-
-                  H264Settings: {
-                    RateControlMode: "QVBR",
-                    MaxBitrate: 3000000,
-                    QvbrSettings: {
-                      QvbrQualityLevel: 7,
-                    },
-                    QualityTuningLevel: "SINGLE_PASS_HQ",
-                    CodecProfile: "MAIN",
-                    CodecLevel: "AUTO",
-                    GopSize: 2,
-                    GopSizeUnits: "SECONDS",
-                    GopClosedCadence: 1,
-                    NumberBFramesBetweenReferenceFrames: 2,
-                    FramerateControl: "INITIALIZE_FROM_SOURCE",
-                    SceneChangeDetect: "TRANSITION_DETECTION",
-                  },
-                },
-              },
-
-              AudioDescriptions: [
-                {
-                  AudioSourceName: "Audio Selector 1",
-
-                  CodecSettings: {
-                    Codec: "AAC",
-
-                    AacSettings: {
-                      Bitrate: 128000,
-                      CodingMode: "CODING_MODE_2_0",
-                      SampleRate: 48000,
-                      CodecProfile: "LC",
-                      RateControlMode: "CBR",
-                    },
-                  },
-                },
-              ],
-            },
-
-            {
-              NameModifier: "_480p",
-
-              ContainerSettings: {
-                Container: "M3U8",
-                M3u8Settings: {},
-              },
-
-              VideoDescription: {
-                Width: 854,
-                Height: 480,
-                ScalingBehavior: "DEFAULT",
-                Sharpness: 50,
-
-                CodecSettings: {
-                  Codec: "H_264",
-
-                  H264Settings: {
-                    RateControlMode: "QVBR",
-                    MaxBitrate: 1200000,
-                    QvbrSettings: {
-                      QvbrQualityLevel: 7,
-                    },
-                    QualityTuningLevel: "SINGLE_PASS_HQ",
-                    CodecProfile: "MAIN",
-                    CodecLevel: "AUTO",
-                    GopSize: 2,
-                    GopSizeUnits: "SECONDS",
-                    GopClosedCadence: 1,
-                    NumberBFramesBetweenReferenceFrames: 2,
-                    FramerateControl: "INITIALIZE_FROM_SOURCE",
-                    SceneChangeDetect: "TRANSITION_DETECTION",
-                  },
-                },
-              },
-
-              AudioDescriptions: [
-                {
-                  AudioSourceName: "Audio Selector 1",
-
-                  CodecSettings: {
-                    Codec: "AAC",
-
-                    AacSettings: {
-                      Bitrate: 96000,
-                      CodingMode: "CODING_MODE_2_0",
-                      SampleRate: 48000,
-                      CodecProfile: "LC",
-                      RateControlMode: "CBR",
-                    },
-                  },
-                },
-              ],
-            },
+            createHlsOutput({
+              nameModifier: "_360p",
+              width: 640,
+              height: 360,
+              maxBitrate: 700000,
+              audioBitrate: 64000,
+            }),
           ],
         },
       ],
@@ -346,9 +316,21 @@ export const createHlsMediaConvertJob = async ({
 
   const result = await client.send(command);
 
-  return {
+  console.log("MEDIACONVERT_JOB_CREATED", {
+    region: mediaConvertRegion,
     jobId: result.Job?.Id,
     jobStatus: result.Job?.Status,
+    videoAssetId: String(videoAssetId || ""),
+    courseId: String(courseId || ""),
+    lessonId: String(lessonId || ""),
+    inputKey: cleanInputKey,
+    hlsOutputPrefix: cleanOutputPrefix,
+    hlsManifestKey: expectedManifestKey,
+  });
+
+  return {
+    jobId: result.Job?.Id || "",
+    jobStatus: result.Job?.Status || "",
     inputKey: cleanInputKey,
     hlsOutputPrefix: cleanOutputPrefix,
     hlsManifestKey: expectedManifestKey,

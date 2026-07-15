@@ -24,10 +24,10 @@ import {
 import {
   buildCloudFrontVideoUrl,
   createCloudFrontHlsSignedCookies,
+  getCloudFrontHlsMode,
   getHlsPrefixFromManifestKey,
   setCloudFrontCookiesOnResponse,
 } from "../services/cloudfront.service.js";
-
 import {
   createCloudFrontVideoSignedUrl,
   extractS3KeyFromUrl,
@@ -678,6 +678,10 @@ export const getSignedLessonVideoUrl = async (req, res) => {
   }
 };
 
+// Replace only the existing getHlsLessonAccess function in:
+// server/src/controllers/video.controller.js
+// Keep your existing imports and helper functions.
+
 export const getHlsLessonAccess = async (req, res) => {
   try {
     const { courseId, lessonId } = req.body;
@@ -697,8 +701,7 @@ export const getHlsLessonAccess = async (req, res) => {
     if (!access.allowed) {
       return res.status(access.statusCode || 403).json({
         success: false,
-        message:
-          access.message || "You are not allowed to access this HLS video",
+        message: access.message || "You are not allowed to access this video",
       });
     }
 
@@ -712,61 +715,89 @@ export const getHlsLessonAccess = async (req, res) => {
       });
     }
 
-    let hlsManifestKey =
-      lesson.hlsManifestKey || lesson.videoHlsManifestKey || "";
+    let videoAsset = null;
 
-    let hlsOutputPrefix = lesson.hlsOutputPrefix || "";
+    if (lesson.videoAssetId) {
+      videoAsset = await VideoAsset.findById(lesson.videoAssetId);
+    }
 
-    if (!hlsManifestKey && lesson.videoUrl) {
-      const videoAsset = await VideoAsset.findOne({
-        key: lesson.videoUrl,
+    if (!videoAsset && (lesson.videoKey || lesson.videoUrl)) {
+      videoAsset = await VideoAsset.findOne({
+        key: lesson.videoKey || lesson.videoUrl,
+      });
+    }
+
+    await repairOldVideoAssetOwner({
+      videoAsset,
+      course,
+      user: req.user,
+    });
+
+    const fallbackToMp4 = ({ reason = "HLS is not ready yet" } = {}) => {
+      const videoKey = getLessonVideoKey({
+        lesson,
+        videoAsset,
       });
 
-      if (!videoAsset) {
+      if (!videoKey) {
         return res.status(404).json({
           success: false,
-          message: "Video asset not found for this lesson",
+          message: "Lesson video is not available",
+          reason,
         });
       }
 
-      await repairOldVideoAssetOwner({
-        videoAsset,
-        course,
-        user: req.user,
+      const videoUrl = createSignedCloudFrontPlaybackUrl({
+        key: videoKey,
       });
 
-      if (videoAsset.hlsStatus === "failed") {
-        return res.status(409).json({
-          success: false,
-          message: "Video processing failed",
-          error: videoAsset.processingError || "",
-        });
-      }
+      const expiresIn = getCloudFrontExpiresIn();
 
-      if (videoAsset.hlsStatus !== "ready") {
-        return res.status(202).json({
-          success: false,
-          message: "Video is still processing. Please try again shortly.",
-          status: videoAsset.hlsStatus,
-          mediaConvertJobStatus: videoAsset.mediaConvertJobStatus,
-        });
-      }
-
-      hlsManifestKey = videoAsset.hlsManifestKey;
-      hlsOutputPrefix = videoAsset.hlsOutputPrefix;
-    }
-
-    if (!hlsManifestKey) {
-      return res.status(404).json({
-        success: false,
-        message: "Lesson HLS video is not available",
+      return res.status(200).json({
+        success: true,
+        message: "MP4 fallback video access granted",
+        playbackMode: "fallback",
+        type: "mp4",
+        source: "cloudfront",
+        sourceType: "cloudfront",
+        fallback: true,
+        reason,
+        videoUrl,
+        signedUrl: videoUrl,
+        url: videoUrl,
+        key: videoKey,
+        hlsStatus: videoAsset?.hlsStatus || "not_started",
+        mediaConvertJobStatus: videoAsset?.mediaConvertJobStatus || "",
+        accessType: access.accessType,
+        expiresIn,
       });
-    }
+    };
 
-    if (!hlsManifestKey.endsWith(".m3u8")) {
-      return res.status(409).json({
-        success: false,
-        message: "Video is not converted to HLS yet",
+    let hlsManifestKey =
+      videoAsset?.hlsManifestKey ||
+      lesson.hlsManifestKey ||
+      lesson.videoHlsManifestKey ||
+      "";
+
+    let hlsOutputPrefix =
+      videoAsset?.hlsOutputPrefix || lesson.hlsOutputPrefix || "";
+
+    const isHlsReady =
+      Boolean(hlsManifestKey) &&
+      hlsManifestKey.endsWith(".m3u8") &&
+      (!videoAsset || videoAsset.hlsStatus === "ready");
+
+    if (!isHlsReady) {
+      const hlsStatus = videoAsset?.hlsStatus || "not_started";
+
+      if (hlsStatus === "failed") {
+        return fallbackToMp4({
+          reason: videoAsset?.processingError || "HLS processing failed",
+        });
+      }
+
+      return fallbackToMp4({
+        reason: `HLS ${hlsStatus}. Playing original MP4 until HLS is ready.`,
       });
     }
 
@@ -774,31 +805,70 @@ export const getHlsLessonAccess = async (req, res) => {
       hlsOutputPrefix = getHlsPrefixFromManifestKey(hlsManifestKey);
     }
 
-    const signedCookieData = createCloudFrontHlsSignedCookies({
-      hlsOutputPrefix,
-    });
-
-    setCloudFrontCookiesOnResponse({
-      res,
-      cookies: signedCookieData.cookies,
-      maxAgeMs: signedCookieData.maxAgeMs,
-    });
-
     const manifestUrl = buildCloudFrontVideoUrl(hlsManifestKey);
+    const hlsAccessMode = getCloudFrontHlsMode();
+    const shouldUseSignedCookies = hlsAccessMode !== "local-dev-public-hls";
+
+    let signedCookieData = null;
+
+    if (shouldUseSignedCookies) {
+      signedCookieData = createCloudFrontHlsSignedCookies({
+        hlsOutputPrefix,
+      });
+
+      setCloudFrontCookiesOnResponse({
+        res,
+        cookies: signedCookieData.cookies,
+        maxAgeMs: signedCookieData.maxAgeMs,
+      });
+    } else {
+      console.log("HLS_LOCAL_DEV_PUBLIC_MODE_ACTIVE", {
+        hlsManifestKey,
+        hlsOutputPrefix,
+        manifestUrl,
+      });
+    }
 
     return res.status(200).json({
       success: true,
-      message: "HLS access granted",
+      message: shouldUseSignedCookies
+        ? "HLS access granted with CloudFront signed cookies"
+        : "HLS access granted in local dev public mode",
+      playbackMode: "hls",
+      type: "hls",
+      source: "cloudfront",
+      sourceType: "cloudfront-hls",
+      fallback: false,
+
+      hlsAccessMode,
+      requiresSignedCookies: shouldUseSignedCookies,
+      signedCookiesSet: shouldUseSignedCookies,
+
       manifestUrl,
+      videoUrl: manifestUrl,
+      url: manifestUrl,
+
+      hlsManifestKey,
+      hlsOutputPrefix,
+      hlsStatus: videoAsset?.hlsStatus || "ready",
+      mediaConvertJobStatus: videoAsset?.mediaConvertJobStatus || "COMPLETE",
+
+      qualities: [
+        { label: "Auto", value: "auto" },
+        { label: "720p", value: "720p" },
+        { label: "480p", value: "480p" },
+        { label: "360p", value: "360p" },
+      ],
+
       accessType: access.accessType,
-      expiresAt: signedCookieData.expiresAt,
+      expiresAt: signedCookieData?.expiresAt || null,
     });
   } catch (error) {
     console.error("GET_HLS_LESSON_ACCESS_ERROR:", error);
 
     return res.status(500).json({
       success: false,
-      message: "Failed to create HLS video access",
+      message: "Failed to create video access",
       error: error.message,
     });
   }

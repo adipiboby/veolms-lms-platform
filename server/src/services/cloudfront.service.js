@@ -5,6 +5,14 @@ const normalizeKey = (key = "") => {
   return String(key || "").replace(/^\/+/, "");
 };
 
+const normalizeBoolean = (value) => {
+  return String(value || "").toLowerCase() === "true";
+};
+
+const isLocalDevHlsPublic = () => {
+  return normalizeBoolean(process.env.CLOUDFRONT_HLS_LOCAL_DEV_PUBLIC);
+};
+
 const normalizeCloudFrontDomain = () => {
   const rawDomain =
     process.env.CLOUDFRONT_VIDEO_DOMAIN || process.env.AWS_CLOUDFRONT_URL || "";
@@ -89,6 +97,11 @@ export const createCloudFrontHlsSignedCookies = ({ hlsOutputPrefix }) => {
 };
 
 export const setCloudFrontCookiesOnResponse = ({ res, cookies, maxAgeMs }) => {
+  if (isLocalDevHlsPublic()) {
+    console.log("CLOUDFRONT_HLS_COOKIE_SKIPPED_LOCAL_DEV_PUBLIC_MODE");
+    return;
+  }
+
   const cookieDomain = process.env.CLOUDFRONT_COOKIE_DOMAIN || undefined;
 
   const cookieOptions = {
@@ -129,4 +142,12 @@ export const clearCloudFrontCookies = (res) => {
   res.clearCookie("CloudFront-Policy", cookieOptions);
   res.clearCookie("CloudFront-Signature", cookieOptions);
   res.clearCookie("CloudFront-Key-Pair-Id", cookieOptions);
+};
+
+export const getCloudFrontHlsMode = () => {
+  if (isLocalDevHlsPublic()) {
+    return "local-dev-public-hls";
+  }
+
+  return "signed-cookie-hls";
 };

@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import Hls from "hls.js";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   Award,
   BookOpen,
   ChevronLeft,
+  ChevronDown,
+  ChevronRight,
   CheckCircle,
   Download,
   Edit3,
@@ -58,6 +61,22 @@ const getSignedVideoRefreshDelayMs = (expiresInSeconds) => {
   return refreshAfterSeconds * 1000;
 };
 
+const getAccessExpiresInSeconds = (accessData = {}) => {
+  const directExpiresIn = Number(
+    accessData?.expiresIn || accessData?.cookieExpiresIn || 0,
+  );
+
+  if (directExpiresIn > 0) return directExpiresIn;
+
+  if (!accessData?.expiresAt) return 0;
+
+  const expiresAtMs = new Date(accessData.expiresAt).getTime();
+
+  if (!Number.isFinite(expiresAtMs)) return 0;
+
+  return Math.max(0, Math.floor((expiresAtMs - Date.now()) / 1000));
+};
+
 const getSafeCompletedLessonIds = (lessonProgress = []) => {
   if (!Array.isArray(lessonProgress)) return new Set();
 
@@ -100,6 +119,267 @@ const getSafeProgressValues = ({ progress, completedLessonIds, lessons }) => {
     completedLessons,
     progressPercentage,
   };
+};
+
+const clampPercentage = (value) => {
+  const numberValue = Number(value || 0);
+
+  if (!Number.isFinite(numberValue)) return 0;
+
+  return Math.min(100, Math.max(0, Math.round(numberValue)));
+};
+
+const getProgressLessonId = (item = {}) => {
+  return String(
+    item?.lessonId?._id ||
+      item?.lessonId ||
+      item?.lesson?._id ||
+      item?.lesson ||
+      "",
+  );
+};
+
+const getLessonProgressItem = ({ lessonProgress = [], lessonId }) => {
+  const safeLessonId = String(lessonId || "");
+
+  if (!safeLessonId || !Array.isArray(lessonProgress)) return null;
+
+  return (
+    lessonProgress.find((item) => getProgressLessonId(item) === safeLessonId) ||
+    null
+  );
+};
+
+const getLessonProgressPercentage = ({
+  lesson,
+  lessonProgress = [],
+  isCompleted = false,
+}) => {
+  if (isCompleted) return 100;
+
+  const lessonId = String(lesson?._id || lesson?.id || "");
+  const progressItem = getLessonProgressItem({
+    lessonProgress,
+    lessonId,
+  });
+
+  if (!progressItem) return 0;
+
+  const directPercentage =
+    progressItem.progressPercentage ??
+    progressItem.watchPercentage ??
+    progressItem.percentage ??
+    progressItem.completedPercentage;
+
+  if (directPercentage !== undefined && directPercentage !== null) {
+    return clampPercentage(directPercentage);
+  }
+
+  const watchedSeconds = Number(
+    progressItem.watchPositionSeconds ||
+      progressItem.currentTime ||
+      progressItem.currentTimeSeconds ||
+      progressItem.watchedSeconds ||
+      progressItem.watchTime ||
+      progressItem.lastPosition ||
+      progressItem.lastWatchedSecond ||
+      0,
+  );
+
+  const totalSeconds = Number(
+    progressItem.durationSeconds ||
+      progressItem.duration ||
+      lesson?.durationSeconds ||
+      0,
+  );
+
+  if (watchedSeconds > 0 && totalSeconds > 0) {
+    return clampPercentage((watchedSeconds / totalSeconds) * 100);
+  }
+
+  return 0;
+};
+
+const getSectionProgressPercentage = ({
+  section,
+  lessonProgress = [],
+  completedLessonIds,
+}) => {
+  const sectionLessons = Array.isArray(section?.lessons) ? section.lessons : [];
+
+  if (!sectionLessons.length) return 0;
+
+  const totalPercentage = sectionLessons.reduce((total, lesson) => {
+    const lessonId = String(lesson?._id || "");
+    const isCompleted = completedLessonIds?.has(lessonId);
+
+    return (
+      total +
+      getLessonProgressPercentage({
+        lesson,
+        lessonProgress,
+        isCompleted,
+      })
+    );
+  }, 0);
+
+  return clampPercentage(totalPercentage / sectionLessons.length);
+};
+
+const getSectionKey = (section, index) => {
+  return String(section?._id || section?.title || `section-${index}`);
+};
+
+const getInitialOpenSectionKey = ({ sections = [], currentLesson }) => {
+  const safeSections = Array.isArray(sections) ? sections : [];
+  const currentLessonId = String(currentLesson?._id || "");
+
+  if (!safeSections.length) return "";
+
+  if (!currentLessonId) {
+    return getSectionKey(safeSections[0], 0);
+  }
+
+  const activeSectionIndex = safeSections.findIndex((section) => {
+    return Array.isArray(section?.lessons)
+      ? section.lessons.some(
+          (lesson) => String(lesson?._id || "") === currentLessonId,
+        )
+      : false;
+  });
+
+  if (activeSectionIndex >= 0) {
+    return getSectionKey(safeSections[activeSectionIndex], activeSectionIndex);
+  }
+
+  return getSectionKey(safeSections[0], 0);
+};
+
+const getInitialOpenSectionKeys = ({ sections = [], currentLesson }) => {
+  const firstOpenKey = getInitialOpenSectionKey({ sections, currentLesson });
+
+  return firstOpenKey ? [firstOpenKey] : [];
+};
+
+const toggleSectionKeyInList = (currentKeys = [], sectionKey) => {
+  const safeKeys = Array.isArray(currentKeys) ? currentKeys : [];
+
+  if (!sectionKey) return safeKeys;
+
+  if (safeKeys.includes(sectionKey)) {
+    return safeKeys.filter((key) => key !== sectionKey);
+  }
+
+  return [...safeKeys, sectionKey];
+};
+
+const ProgressCircle = ({
+  percentage = 0,
+  isCompleted = false,
+  isActive = false,
+  size = 54,
+}) => {
+  const safePercentage = clampPercentage(percentage);
+  const radius = 20;
+  const strokeWidth = 4;
+  const circumference = 2 * Math.PI * radius;
+  const dashOffset = circumference - (safePercentage / 100) * circumference;
+
+  return (
+    <div
+      className="relative flex shrink-0 items-center justify-center"
+      style={{ width: size, height: size }}
+      title={`${safePercentage}% completed`}
+      aria-label={`${safePercentage}% completed`}
+    >
+      <svg
+        viewBox="0 0 48 48"
+        className="h-full w-full -rotate-90"
+        aria-hidden="true"
+      >
+        <circle
+          cx="24"
+          cy="24"
+          r={radius}
+          fill="none"
+          strokeWidth={strokeWidth}
+          className="stroke-slate-200 dark:stroke-white/10"
+        />
+
+        <circle
+          cx="24"
+          cy="24"
+          r={radius}
+          fill="none"
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={dashOffset}
+          className={
+            isCompleted
+              ? "stroke-green-500"
+              : isActive
+                ? "stroke-violet-500"
+                : "stroke-blue-500"
+          }
+        />
+      </svg>
+
+      <div
+        className={`absolute inset-1 flex items-center justify-center rounded-full text-[10px] font-black ${
+          isCompleted
+            ? "bg-green-50 text-green-700 dark:bg-green-500/10 dark:text-green-300"
+            : isActive
+              ? "bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300"
+              : "bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300"
+        }`}
+      >
+        {isCompleted ? <CheckCircle size={15} /> : `${safePercentage}%`}
+      </div>
+    </div>
+  );
+};
+
+const CourseProgressCompact = ({ safeProgress }) => {
+  const percentage = clampPercentage(safeProgress?.progressPercentage || 0);
+  const completedLessons = Number(safeProgress?.completedLessons || 0);
+  const totalLessons = Number(safeProgress?.totalLessons || 0);
+
+  return (
+    <div className="border-b border-slate-200 bg-slate-50/80 p-4 dark:border-white/10 dark:bg-slate-950/70">
+      <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 dark:border-white/10 dark:bg-white/[0.04]">
+        <ProgressCircle
+          percentage={percentage}
+          isCompleted={totalLessons > 0 && completedLessons === totalLessons}
+          isActive
+          size={50}
+        />
+
+        <div className="min-w-0 flex-1">
+          <div className="mb-1 flex items-center justify-between gap-3">
+            <p className="truncate text-sm font-black text-slate-950 dark:text-white">
+              Entire video progress
+            </p>
+
+            <span className="shrink-0 text-xs font-black text-violet-700 dark:text-violet-300">
+              {percentage}%
+            </span>
+          </div>
+
+          <div className="h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
+            <div
+              className="h-full rounded-full bg-violet-600 transition-all duration-500"
+              style={{ width: `${percentage}%` }}
+            />
+          </div>
+
+          <p className="mt-1 text-[11px] font-bold text-slate-500 dark:text-slate-400">
+            {completedLessons}/{totalLessons} lessons completed
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 const sanitizeFileName = (value) => {
@@ -484,6 +764,30 @@ const formatVideoTime = (seconds = 0) => {
   return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
 };
 
+const getUniqueHlsQualityLevels = (levels = []) => {
+  const bestLevelByHeight = new Map();
+
+  levels.forEach((level, index) => {
+    const height = Number(level?.height || 0);
+    const bitrate = Number(level?.bitrate || 0);
+
+    if (!height) return;
+
+    const existingLevel = bestLevelByHeight.get(height);
+
+    if (!existingLevel || bitrate > existingLevel.bitrate) {
+      bestLevelByHeight.set(height, {
+        index,
+        height,
+        bitrate,
+        label: `${height}p`,
+      });
+    }
+  });
+
+  return [...bestLevelByHeight.values()].sort((a, b) => b.height - a.height);
+};
+
 const MobileVideoPlayer = ({
   src,
   type = "mp4",
@@ -495,6 +799,7 @@ const MobileVideoPlayer = ({
   onError,
 }) => {
   const videoRef = useRef(null);
+  const hlsRef = useRef(null);
   const saveIntervalRef = useRef(null);
   const hideControlsTimerRef = useRef(null);
 
@@ -504,9 +809,17 @@ const MobileVideoPlayer = ({
   const [showControls, setShowControls] = useState(true);
   const [localError, setLocalError] = useState("");
   const [playbackRate, setPlaybackRate] = useState(1);
-  const [qualityLabel, setQualityLabel] = useState("auto");
+  const [selectedQuality, setSelectedQuality] = useState("auto");
+  const [qualityLevels, setQualityLevels] = useState([]);
+  const [activeAutoQuality, setActiveAutoQuality] = useState("");
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(0.8);
+
+  const isHlsSource =
+    type === "hls" ||
+    String(src || "")
+      .toLowerCase()
+      .includes(".m3u8");
 
   const speedOptions = [0.75, 1, 1.25, 1.5, 1.75, 2];
 
@@ -660,7 +973,26 @@ const MobileVideoPlayer = ({
 
   const handleQualitySelect = (event) => {
     event.stopPropagation();
-    setQualityLabel(event.target.value);
+
+    const value = event.target.value;
+    setSelectedQuality(value);
+
+    const hls = hlsRef.current;
+
+    if (hls) {
+      if (value === "auto") {
+        hls.currentLevel = -1;
+        hls.loadLevel = -1;
+      } else {
+        const levelIndex = Number(value);
+
+        if (Number.isFinite(levelIndex)) {
+          hls.currentLevel = levelIndex;
+          hls.loadLevel = levelIndex;
+        }
+      }
+    }
+
     releaseControls(event);
   };
 
@@ -713,20 +1045,31 @@ const MobileVideoPlayer = ({
   useEffect(() => {
     const video = videoRef.current;
 
-    if (!video) return undefined;
+    if (!video || !src) return undefined;
 
     setIsPlaying(false);
     setDuration(0);
     setCurrentTime(0);
     setShowControls(true);
     setLocalError("");
+    setQualityLevels([]);
+    setSelectedQuality("auto");
+    setActiveAutoQuality("");
     clearHideControlsTimer();
 
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
+    }
+
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
     video.playbackRate = playbackRate;
     video.volume = volume;
     video.muted = isMuted;
 
-    const handleLoadedMetadata = () => {
+    const applyStartTime = () => {
       const safeDuration = Number.isFinite(video.duration) ? video.duration : 0;
       const safeStartTime = Math.max(0, Number(startTime || 0));
 
@@ -738,6 +1081,10 @@ const MobileVideoPlayer = ({
           Math.max(0, safeDuration - 2),
         );
       }
+    };
+
+    const handleLoadedMetadata = () => {
+      applyStartTime();
     };
 
     const handleTimeUpdate = () => {
@@ -780,6 +1127,76 @@ const MobileVideoPlayer = ({
     video.addEventListener("ended", handleEnded);
     video.addEventListener("error", handleError);
 
+    if (isHlsSource) {
+      video.crossOrigin = "use-credentials";
+
+      if (Hls.isSupported()) {
+        const hls = new Hls({
+          enableWorker: true,
+          lowLatencyMode: false,
+          backBufferLength: 90,
+          xhrSetup: (xhr) => {
+            xhr.withCredentials = true;
+          },
+        });
+
+        hlsRef.current = hls;
+        hls.loadSource(src);
+        hls.attachMedia(video);
+
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          const levels = getUniqueHlsQualityLevels(hls.levels || []);
+
+          console.log("MOBILE_HLS_LEVELS_READY:", levels);
+
+          setQualityLevels(levels);
+          setSelectedQuality("auto");
+          applyStartTime();
+        });
+
+        hls.on(Hls.Events.LEVEL_SWITCHED, (_, data) => {
+          const activeLevel = hls.levels?.[data.level];
+
+          if (activeLevel?.height) {
+            setActiveAutoQuality(`${activeLevel.height}p`);
+          }
+        });
+
+        hls.on(Hls.Events.ERROR, (_, data) => {
+          console.error("MOBILE_HLS_PLAYER_ERROR:", data);
+
+          if (!data?.fatal) return;
+
+          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+            hls.startLoad();
+            return;
+          }
+
+          if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+            hls.recoverMediaError();
+            return;
+          }
+
+          const message = data?.details || "Unable to play HLS video.";
+          setLocalError(message);
+          setShowControls(true);
+          onError?.(message);
+          hls.destroy();
+        });
+      } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+        video.src = src;
+        video.load();
+      } else {
+        const message = "This browser does not support HLS playback.";
+        setLocalError(message);
+        onError?.(message);
+      }
+    } else {
+      video.removeAttribute("crossorigin");
+      video.src = src;
+      video.load();
+    }
+
     return () => {
       saveCurrentProgress("unmount");
       clearHideControlsTimer();
@@ -789,8 +1206,13 @@ const MobileVideoPlayer = ({
       video.removeEventListener("pause", handlePause);
       video.removeEventListener("ended", handleEnded);
       video.removeEventListener("error", handleError);
+
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
     };
-  }, [src, startTime]);
+  }, [src, type, startTime]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -830,6 +1252,11 @@ const MobileVideoPlayer = ({
   useEffect(() => {
     return () => {
       clearHideControlsTimer();
+
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
     };
   }, []);
 
@@ -854,7 +1281,6 @@ const MobileVideoPlayer = ({
       >
         <video
           ref={videoRef}
-          src={src}
           className="h-full w-full bg-black object-contain"
           playsInline
           preload="metadata"
@@ -862,6 +1288,7 @@ const MobileVideoPlayer = ({
           controlsList="nodownload noplaybackrate nofullscreen"
           disablePictureInPicture
           aria-label={title || "Lesson video"}
+          crossOrigin={isHlsSource ? "use-credentials" : undefined}
         />
       </button>
 
@@ -1010,7 +1437,7 @@ const MobileVideoPlayer = ({
 
           <div className="flex shrink-0 items-center gap-1 min-[390px]:gap-1.5">
             <select
-              value={qualityLabel}
+              value={selectedQuality}
               onClick={(event) => event.stopPropagation()}
               onFocus={holdControlsOpen}
               onBlur={releaseControls}
@@ -1019,17 +1446,18 @@ const MobileVideoPlayer = ({
               aria-label="Video quality"
             >
               <option value="auto" className="bg-slate-900 text-white">
-                Auto
+                {activeAutoQuality ? `Auto ${activeAutoQuality}` : "Auto"}
               </option>
-              <option value="high" className="bg-slate-900 text-white">
-                High
-              </option>
-              <option value="medium" className="bg-slate-900 text-white">
-                Medium
-              </option>
-              <option value="low" className="bg-slate-900 text-white">
-                Low
-              </option>
+
+              {qualityLevels.map((level) => (
+                <option
+                  key={`${level.index}-${level.label}`}
+                  value={String(level.index)}
+                  className="bg-slate-900 text-white"
+                >
+                  {level.label}
+                </option>
+              ))}
             </select>
 
             <button
@@ -1054,9 +1482,11 @@ const MobileLessonRow = ({
   isActive,
   isCompleted,
   hasNote,
+  progressPercentage = 0,
   onClick,
 }) => {
   const isLocked = Boolean(lesson?.isLocked || lesson?.locked);
+  const safeProgress = clampPercentage(progressPercentage);
 
   return (
     <button
@@ -1079,7 +1509,7 @@ const MobileLessonRow = ({
                 : "bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300"
           }`}
         >
-          {isCompleted ? <CheckCircle size={21} /> : lessonNumber}
+          {lessonNumber}
         </div>
 
         <div className="min-w-0 flex-1">
@@ -1106,9 +1536,37 @@ const MobileLessonRow = ({
               </span>
             )}
           </div>
+
+          <div className="mt-3 flex items-center gap-3">
+            <ProgressCircle
+              percentage={safeProgress}
+              isCompleted={isCompleted}
+              isActive={isActive}
+              size={46}
+            />
+
+            <div className="min-w-0 flex-1">
+              <div className="h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    isCompleted
+                      ? "bg-green-500"
+                      : isActive
+                        ? "bg-violet-500"
+                        : "bg-blue-500"
+                  }`}
+                  style={{ width: `${safeProgress}%` }}
+                />
+              </div>
+
+              <p className="mt-1 text-[11px] font-black text-slate-500 dark:text-slate-400">
+                {safeProgress}% completed
+              </p>
+            </div>
+          </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 flex-col items-end gap-2">
           {lesson?.duration && (
             <span className="rounded-xl bg-slate-100 px-2.5 py-1 text-xs font-black text-slate-600 dark:bg-white/10 dark:text-slate-300">
               {lesson.duration}
@@ -1140,6 +1598,7 @@ const MobileLearningView = ({
   currentLesson,
   lessons,
   completedLessonIds,
+  lessonProgress,
   safeProgress,
   activePanel,
   setActivePanel,
@@ -1187,6 +1646,34 @@ const MobileLearningView = ({
   };
 
   const allLessons = Array.isArray(lessons) ? lessons : [];
+
+  const [openSectionKeys, setOpenSectionKeys] = useState(() => {
+    return getInitialOpenSectionKeys({
+      sections: course?.sections,
+      currentLesson,
+    });
+  });
+
+  useEffect(() => {
+    setOpenSectionKeys((currentKeys) => {
+      if (Array.isArray(currentKeys) && currentKeys.length > 0) {
+        return currentKeys;
+      }
+
+      return getInitialOpenSectionKeys({
+        sections: course?.sections,
+        currentLesson,
+      });
+    });
+  }, [course?._id, currentLesson?._id]);
+
+  const toggleSection = (section, sectionIndex) => {
+    const sectionKey = getSectionKey(section, sectionIndex);
+
+    setOpenSectionKeys((currentKeys) => {
+      return toggleSectionKeyInList(currentKeys, sectionKey);
+    });
+  };
 
   return (
     <main className="min-h-screen bg-slate-50 pb-8 text-slate-950 transition-colors duration-300 dark:bg-slate-950 dark:text-white lg:hidden">
@@ -1376,34 +1863,118 @@ const MobileLearningView = ({
           </div>
 
           {mobilePanel === "lessons" && (
-            <div className="space-y-2 p-3">
-              {course?.sections?.map((section) =>
-                section.lessons?.map((lesson) => {
-                  const lessonId = String(lesson._id);
-                  const lessonNumber =
-                    allLessons.findIndex(
-                      (item) => String(item?._id) === lessonId,
-                    ) + 1;
-                  const isActive = String(currentLesson?._id) === lessonId;
-                  const isCompleted = completedLessonIds.has(lessonId);
-                  const lessonHasNote =
-                    Boolean(notesByLessonId?.[lessonId]?.trim()) ||
-                    (isActive && hasCurrentLessonNote);
+            <div className="space-y-3 p-3">
+              {course?.sections?.map((section, sectionIndex) => {
+                const sectionKey = getSectionKey(section, sectionIndex);
+                const isOpen = openSectionKeys.includes(sectionKey);
+                const sectionLessons = Array.isArray(section?.lessons)
+                  ? section.lessons
+                  : [];
+                const sectionPercentage = getSectionProgressPercentage({
+                  section,
+                  lessonProgress,
+                  completedLessonIds,
+                });
+                const completedInSection = sectionLessons.filter((lesson) =>
+                  completedLessonIds.has(String(lesson?._id || "")),
+                ).length;
 
-                  return (
-                    <MobileLessonRow
-                      key={lesson._id}
-                      lesson={lesson}
-                      lessonNumber={lessonNumber || 1}
-                      sectionTitle={section.title}
-                      isActive={isActive}
-                      isCompleted={isCompleted}
-                      hasNote={lessonHasNote}
-                      onClick={() => onLessonClick(lesson, section.title)}
-                    />
-                  );
-                }),
-              )}
+                return (
+                  <article
+                    key={sectionKey}
+                    className="overflow-hidden rounded-3xl border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-slate-950/60"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => toggleSection(section, sectionIndex)}
+                      className="flex w-full items-center gap-3 px-4 py-4 text-left transition hover:bg-slate-100 dark:hover:bg-white/[0.04]"
+                    >
+                      <ProgressCircle
+                        percentage={sectionPercentage}
+                        isCompleted={
+                          sectionLessons.length > 0 &&
+                          completedInSection === sectionLessons.length
+                        }
+                        isActive={sectionLessons.some(
+                          (lesson) =>
+                            String(lesson?._id || "") ===
+                            String(currentLesson?._id || ""),
+                        )}
+                        size={48}
+                      />
+
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-black uppercase tracking-[0.16em] text-violet-700 dark:text-violet-300">
+                          {`Section ${sectionIndex + 1}: ${section?.title || "Untitled"}`}
+                        </p>
+
+                        <p className="mt-1 text-xs font-bold text-slate-500 dark:text-slate-400">
+                          {completedInSection}/{sectionLessons.length} lessons •{" "}
+                          {sectionPercentage}% completed
+                        </p>
+                      </div>
+
+                      <div className="flex shrink-0 items-center gap-2">
+                        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-black text-slate-600 dark:bg-white/10 dark:text-slate-300">
+                          {sectionLessons.length}
+                        </span>
+
+                        {isOpen ? (
+                          <ChevronDown
+                            size={20}
+                            className="text-slate-500 dark:text-slate-300"
+                          />
+                        ) : (
+                          <ChevronRight
+                            size={20}
+                            className="text-slate-500 dark:text-slate-300"
+                          />
+                        )}
+                      </div>
+                    </button>
+
+                    {isOpen && (
+                      <div className="space-y-2 border-t border-slate-200 p-3 dark:border-white/10">
+                        {sectionLessons.map((lesson) => {
+                          const lessonId = String(lesson._id);
+                          const lessonNumber =
+                            allLessons.findIndex(
+                              (item) => String(item?._id) === lessonId,
+                            ) + 1;
+                          const isActive =
+                            String(currentLesson?._id) === lessonId;
+                          const isCompleted = completedLessonIds.has(lessonId);
+                          const lessonHasNote =
+                            Boolean(notesByLessonId?.[lessonId]?.trim()) ||
+                            (isActive && hasCurrentLessonNote);
+                          const lessonProgressPercentage =
+                            getLessonProgressPercentage({
+                              lesson,
+                              lessonProgress,
+                              isCompleted,
+                            });
+
+                          return (
+                            <MobileLessonRow
+                              key={lesson._id}
+                              lesson={lesson}
+                              lessonNumber={lessonNumber || 1}
+                              sectionTitle={section.title}
+                              isActive={isActive}
+                              isCompleted={isCompleted}
+                              hasNote={lessonHasNote}
+                              progressPercentage={lessonProgressPercentage}
+                              onClick={() =>
+                                onLessonClick(lesson, section.title)
+                              }
+                            />
+                          );
+                        })}
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
 
               <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-slate-950/60">
                 <div className="mb-3 flex items-center justify-between gap-3">
@@ -1666,6 +2237,29 @@ const LearningPage = () => {
 
   const isCourseCompleted =
     safeProgress.totalLessons > 0 && safeProgress.progressPercentage === 100;
+
+  const [openDesktopSectionKeys, setOpenDesktopSectionKeys] = useState([]);
+
+  useEffect(() => {
+    setOpenDesktopSectionKeys((currentKeys) => {
+      if (Array.isArray(currentKeys) && currentKeys.length > 0) {
+        return currentKeys;
+      }
+
+      return getInitialOpenSectionKeys({
+        sections: course?.sections,
+        currentLesson,
+      });
+    });
+  }, [course?._id, currentLesson?._id]);
+
+  const toggleDesktopSection = (section, sectionIndex) => {
+    const sectionKey = getSectionKey(section, sectionIndex);
+
+    setOpenDesktopSectionKeys((currentKeys) => {
+      return toggleSectionKeyInList(currentKeys, sectionKey);
+    });
+  };
 
   const clearVideoRefreshTimer = () => {
     if (videoRefreshTimerRef.current) {
@@ -1930,6 +2524,36 @@ ${noteContent.trim()}
     const requestId = activeVideoRequestIdRef.current + 1;
     activeVideoRequestIdRef.current = requestId;
 
+    const isLatestRequest = () => activeVideoRequestIdRef.current === requestId;
+
+    const applyVideoAccess = ({
+      source,
+      playbackType,
+      expiresIn = 0,
+      debugLabel = "",
+    }) => {
+      if (!isLatestRequest()) return;
+
+      setVideoSource(source);
+      setVideoPlaybackType(playbackType);
+      setVideoExpiresIn(Number(expiresIn || 0));
+
+      if (debugLabel) {
+        console.log(debugLabel, {
+          source,
+          playbackType,
+          expiresIn,
+        });
+      }
+
+      if (expiresIn > 0) {
+        scheduleSignedVideoRefresh({
+          lesson,
+          expiresIn,
+        });
+      }
+    };
+
     try {
       clearVideoRefreshTimer();
 
@@ -1945,9 +2569,7 @@ ${noteContent.trim()}
         await loadLessonWatchPosition(lesson);
       }
 
-      const shouldTryHls = ENABLE_HLS_PLAYBACK && hasReadyHls(lesson);
-
-      if (shouldTryHls) {
+      if (ENABLE_HLS_PLAYBACK) {
         try {
           const hlsRes = await api.post(
             "/videos/hls-access",
@@ -1960,23 +2582,55 @@ ${noteContent.trim()}
             },
           );
 
-          if (activeVideoRequestIdRef.current !== requestId) return;
+          const hlsData = hlsRes.data || {};
+          const manifestUrl =
+            hlsData.manifestUrl ||
+            hlsData.videoUrl ||
+            hlsData.signedUrl ||
+            hlsData.url ||
+            "";
 
-          const manifestUrl = hlsRes.data.manifestUrl || "";
+          const isRealHls =
+            hlsData.success === true &&
+            hlsData.playbackMode === "hls" &&
+            hlsData.fallback === false &&
+            Boolean(manifestUrl);
 
-          if (manifestUrl) {
-            setVideoSource(manifestUrl);
-            setVideoPlaybackType("hls");
-            setVideoExpiresIn(Number(hlsRes.data.expiresIn || 0));
+          if (isRealHls) {
+            const hlsExpiresIn = getAccessExpiresInSeconds(hlsData);
+
+            applyVideoAccess({
+              source: manifestUrl,
+              playbackType: "hls",
+              expiresIn: hlsExpiresIn,
+              debugLabel: "HLS_SELECTED_FOR_PLAYBACK",
+            });
+
             return;
           }
-        } catch (hlsError) {
-          if (import.meta.env.DEV) {
-            console.warn("HLS unavailable, falling back to MP4:", {
-              status: hlsError?.response?.status,
-              message: hlsError?.response?.data?.message,
+
+          const fallbackMp4Url =
+            hlsData.videoUrl || hlsData.signedUrl || hlsData.url || "";
+
+          if (fallbackMp4Url) {
+            const fallbackExpiresIn = getAccessExpiresInSeconds(hlsData);
+
+            applyVideoAccess({
+              source: fallbackMp4Url,
+              playbackType: "mp4",
+              expiresIn: fallbackExpiresIn,
+              debugLabel: "HLS_ROUTE_RETURNED_MP4_FALLBACK",
             });
+
+            return;
           }
+
+          console.warn("HLS_ACCESS_NO_PLAYABLE_URL:", hlsData);
+        } catch (hlsError) {
+          console.warn(
+            "HLS_ACCESS_FAILED_TRYING_MP4:",
+            hlsError?.response?.data || hlsError?.message || hlsError,
+          );
         }
       }
 
@@ -1985,24 +2639,21 @@ ${noteContent.trim()}
         lessonId: lesson._id,
       });
 
-      if (activeVideoRequestIdRef.current !== requestId) return;
-
+      const mp4Data = mp4Res.data || {};
       const secureVideoUrl =
-        mp4Res.data.videoUrl || mp4Res.data.signedUrl || mp4Res.data.url || "";
-
-      const expiresIn = Number(mp4Res.data.expiresIn || 0);
+        mp4Data.videoUrl || mp4Data.signedUrl || mp4Data.url || "";
 
       if (!secureVideoUrl) {
         throw new Error("Secure video URL not received.");
       }
 
-      setVideoSource(secureVideoUrl);
-      setVideoPlaybackType(mp4Res.data.playbackType || "mp4");
-      setVideoExpiresIn(expiresIn);
+      const expiresIn = getAccessExpiresInSeconds(mp4Data);
 
-      scheduleSignedVideoRefresh({
-        lesson,
+      applyVideoAccess({
+        source: secureVideoUrl,
+        playbackType: mp4Data.playbackType || "mp4",
         expiresIn,
+        debugLabel: "MP4_SELECTED_FOR_PLAYBACK",
       });
 
       if (isSilentRefresh && import.meta.env.DEV) {
@@ -2012,7 +2663,7 @@ ${noteContent.trim()}
         });
       }
     } catch (error) {
-      if (activeVideoRequestIdRef.current !== requestId) return;
+      if (!isLatestRequest()) return;
 
       console.error("Failed to load secure video:", error);
 
@@ -2034,7 +2685,7 @@ ${noteContent.trim()}
         });
       }
     } finally {
-      if (activeVideoRequestIdRef.current === requestId && !isSilentRefresh) {
+      if (isLatestRequest() && !isSilentRefresh) {
         setVideoLoading(false);
       }
     }
@@ -2458,6 +3109,7 @@ ${noteContent.trim()}
         currentLesson={currentLesson}
         lessons={lessons}
         completedLessonIds={completedLessonIds}
+        lessonProgress={progress.lessonProgress}
         safeProgress={safeProgress}
         activePanel={activePanel}
         setActivePanel={setActivePanel}
@@ -2721,7 +3373,7 @@ ${noteContent.trim()}
             </div>
           </div>
 
-          <aside className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/70 dark:border-white/10 dark:bg-white/5 dark:shadow-black/20">
+          <aside className="self-start overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/70 lg:sticky lg:top-24 dark:border-white/10 dark:bg-white/5 dark:shadow-black/20">
             <div className="border-b border-slate-200 p-5 dark:border-white/10">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
@@ -2760,6 +3412,8 @@ ${noteContent.trim()}
                 )}
               </div>
             </div>
+
+            <CourseProgressCompact safeProgress={safeProgress} />
 
             {isStudentLearning && notesOpen && (
               <div className="border-b border-slate-200 bg-slate-50 p-5 dark:border-white/10 dark:bg-slate-950/80">
@@ -2983,80 +3637,188 @@ React components help split UI into reusable parts.
               </div>
             )}
 
-            <div className="max-h-[720px] overflow-y-auto">
-              {course?.sections?.map((section) => (
-                <div
-                  key={section._id}
-                  className="border-b border-slate-200 dark:border-white/10"
-                >
-                  <div className="bg-slate-50 px-5 py-4 dark:bg-slate-950/60">
-                    <h4 className="text-lg font-black text-slate-950 dark:text-white">
-                      {section.title}
-                    </h4>
-                  </div>
+            <div className="max-h-[calc(100vh-17rem)] overflow-y-auto">
+              {course?.sections?.map((section, sectionIndex) => {
+                const sectionKey = getSectionKey(section, sectionIndex);
+                const sectionLessons = Array.isArray(section?.lessons)
+                  ? section.lessons
+                  : [];
+                const isOpen = openDesktopSectionKeys.includes(sectionKey);
+                const completedInSection = sectionLessons.filter((lesson) =>
+                  completedLessonIds.has(String(lesson?._id || "")),
+                ).length;
+                const sectionPercentage = getSectionProgressPercentage({
+                  section,
+                  lessonProgress: progress.lessonProgress,
+                  completedLessonIds,
+                });
+                const sectionHasCurrentLesson = sectionLessons.some(
+                  (lesson) =>
+                    String(lesson?._id || "") ===
+                    String(currentLesson?._id || ""),
+                );
 
-                  <div className="space-y-3 p-4">
-                    {section.lessons.map((lesson) => {
-                      const lessonId = String(lesson._id);
-                      const isActive = String(currentLesson?._id) === lessonId;
-                      const isCompleted = completedLessonIds.has(lessonId);
-                      const lessonHasNote =
-                        Boolean(notesByLessonId[lessonId]?.trim()) ||
-                        (isActive && hasCurrentLessonNote);
+                return (
+                  <div
+                    key={sectionKey}
+                    className="border-b border-slate-200 dark:border-white/10"
+                  >
+                    <button
+                      type="button"
+                      onClick={() =>
+                        toggleDesktopSection(section, sectionIndex)
+                      }
+                      className="flex w-full items-center gap-4 bg-slate-50 px-5 py-4 text-left transition hover:bg-slate-100 dark:bg-slate-950/60 dark:hover:bg-white/[0.04]"
+                    >
+                      <ProgressCircle
+                        percentage={sectionPercentage}
+                        isCompleted={
+                          sectionLessons.length > 0 &&
+                          completedInSection === sectionLessons.length
+                        }
+                        isActive={sectionHasCurrentLesson}
+                        size={52}
+                      />
 
-                      return (
-                        <button
-                          key={lesson._id}
-                          type="button"
-                          onClick={() =>
-                            handleLessonClick(lesson, section.title)
-                          }
-                          className={`w-full rounded-2xl border p-4 text-left transition ${
-                            isActive
-                              ? "border-blue-500 bg-blue-50 dark:border-blue-500/70 dark:bg-blue-600/20"
-                              : "border-slate-200 bg-slate-50 hover:bg-slate-100 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"
-                          }`}
-                        >
-                          <div className="flex items-start gap-3">
-                            <div
-                              className={`mt-1 shrink-0 ${
-                                isStudentLearning && isCompleted
-                                  ? "text-green-700 dark:text-green-300"
-                                  : isActive
-                                    ? "text-blue-700 dark:text-blue-300"
-                                    : "text-slate-500 dark:text-slate-400"
+                      <div className="min-w-0 flex-1">
+                        <h4 className="truncate text-lg font-black text-slate-950 dark:text-white">
+                          {`Section ${sectionIndex + 1}: ${section?.title || "Untitled"}`}
+                        </h4>
+
+                        <p className="mt-1 text-xs font-bold text-slate-500 dark:text-slate-400">
+                          {completedInSection}/{sectionLessons.length} lessons •{" "}
+                          {sectionPercentage}% completed
+                        </p>
+                      </div>
+
+                      <div className="flex shrink-0 items-center gap-2">
+                        <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-black text-slate-600 dark:border-white/10 dark:bg-white/10 dark:text-slate-300">
+                          {sectionLessons.length}
+                        </span>
+
+                        {isOpen ? (
+                          <ChevronDown
+                            size={22}
+                            className="text-slate-500 dark:text-slate-300"
+                          />
+                        ) : (
+                          <ChevronRight
+                            size={22}
+                            className="text-slate-500 dark:text-slate-300"
+                          />
+                        )}
+                      </div>
+                    </button>
+
+                    {isOpen && (
+                      <div className="space-y-3 p-4">
+                        {sectionLessons.map((lesson) => {
+                          const lessonId = String(lesson._id);
+                          const isActive =
+                            String(currentLesson?._id) === lessonId;
+                          const isCompleted = completedLessonIds.has(lessonId);
+                          const lessonHasNote =
+                            Boolean(notesByLessonId[lessonId]?.trim()) ||
+                            (isActive && hasCurrentLessonNote);
+                          const lessonProgressPercentage =
+                            getLessonProgressPercentage({
+                              lesson,
+                              lessonProgress: progress.lessonProgress,
+                              isCompleted: isStudentLearning && isCompleted,
+                            });
+
+                          return (
+                            <button
+                              key={lesson._id}
+                              type="button"
+                              onClick={() =>
+                                handleLessonClick(lesson, section.title)
+                              }
+                              className={`w-full rounded-2xl border p-4 text-left transition ${
+                                isActive
+                                  ? "border-blue-500 bg-blue-50 dark:border-blue-500/70 dark:bg-blue-600/20"
+                                  : "border-slate-200 bg-slate-50 hover:bg-slate-100 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"
                               }`}
                             >
-                              {isStudentLearning && isCompleted ? (
-                                <CheckCircle size={18} />
-                              ) : (
-                                <PlayCircle size={18} />
-                              )}
-                            </div>
+                              <div className="flex items-start gap-3">
+                                <div
+                                  className={`mt-1 shrink-0 ${
+                                    isStudentLearning && isCompleted
+                                      ? "text-green-700 dark:text-green-300"
+                                      : isActive
+                                        ? "text-blue-700 dark:text-blue-300"
+                                        : "text-slate-500 dark:text-slate-400"
+                                  }`}
+                                >
+                                  {isStudentLearning && isCompleted ? (
+                                    <CheckCircle size={18} />
+                                  ) : (
+                                    <PlayCircle size={18} />
+                                  )}
+                                </div>
 
-                            <div className="min-w-0 flex-1">
-                              <p className="text-base font-black leading-6 text-slate-950 dark:text-white">
-                                {lesson.title}
-                              </p>
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-base font-black leading-6 text-slate-950 dark:text-white">
+                                    {lesson.title}
+                                  </p>
 
-                              <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-                                {lesson.duration}
-                              </p>
-                            </div>
+                                  <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+                                    {lesson.duration}
+                                  </p>
 
-                            {isStudentLearning && lessonHasNote && (
-                              <FileText
-                                size={18}
-                                className="mt-1 shrink-0 text-blue-700 dark:text-blue-300"
-                              />
-                            )}
-                          </div>
-                        </button>
-                      );
-                    })}
+                                  {isStudentLearning && (
+                                    <div className="mt-3 flex items-center gap-3">
+                                      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
+                                        <div
+                                          className={`h-full rounded-full transition-all duration-500 ${
+                                            isCompleted
+                                              ? "bg-green-500"
+                                              : isActive
+                                                ? "bg-blue-500"
+                                                : "bg-violet-500"
+                                          }`}
+                                          style={{
+                                            width: `${clampPercentage(
+                                              lessonProgressPercentage,
+                                            )}%`,
+                                          }}
+                                        />
+                                      </div>
+
+                                      <span className="text-xs font-black text-slate-500 dark:text-slate-400">
+                                        {clampPercentage(
+                                          lessonProgressPercentage,
+                                        )}
+                                        %
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {isStudentLearning && (
+                                  <ProgressCircle
+                                    percentage={lessonProgressPercentage}
+                                    isCompleted={isCompleted}
+                                    isActive={isActive}
+                                    size={54}
+                                  />
+                                )}
+
+                                {isStudentLearning && lessonHasNote && (
+                                  <FileText
+                                    size={18}
+                                    className="mt-1 shrink-0 text-blue-700 dark:text-blue-300"
+                                  />
+                                )}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </aside>
         </div>

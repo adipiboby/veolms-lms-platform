@@ -156,6 +156,82 @@ const getEnrollmentProgress = (enrollment) => {
   };
 };
 
+const TypewriterHeroTitle = () => {
+  const phrases = useMemo(
+    () => [
+      {
+        text: "Learn skills.",
+        className: "text-slate-950 dark:text-white",
+      },
+      {
+        text: "Track progress.",
+        className:
+          "bg-gradient-to-r from-blue-500 via-cyan-500 to-purple-500 bg-clip-text text-transparent dark:from-blue-400 dark:via-cyan-300 dark:to-purple-400",
+      },
+      {
+        text: "Grow faster.",
+        className: "text-slate-950 dark:text-white",
+      },
+    ],
+    [],
+  );
+
+  const [phraseIndex, setPhraseIndex] = useState(0);
+  const [typedText, setTypedText] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const activePhrase = phrases[phraseIndex];
+
+  useEffect(() => {
+    const typeSpeed = 75;
+    const deleteSpeed = 36;
+    const pauseAfterTyping = 1350;
+    const pauseBeforeNext = 350;
+
+    let timer;
+
+    if (!isDeleting && typedText === activePhrase.text) {
+      timer = setTimeout(() => {
+        setIsDeleting(true);
+      }, pauseAfterTyping);
+    } else if (isDeleting && typedText === "") {
+      timer = setTimeout(() => {
+        setIsDeleting(false);
+        setPhraseIndex((currentIndex) => (currentIndex + 1) % phrases.length);
+      }, pauseBeforeNext);
+    } else {
+      timer = setTimeout(
+        () => {
+          setTypedText((currentText) => {
+            if (isDeleting) {
+              return activePhrase.text.slice(
+                0,
+                Math.max(currentText.length - 1, 0),
+              );
+            }
+
+            return activePhrase.text.slice(0, currentText.length + 1);
+          });
+        },
+        isDeleting ? deleteSpeed : typeSpeed,
+      );
+    }
+
+    return () => clearTimeout(timer);
+  }, [activePhrase.text, isDeleting, phrases.length, typedText]);
+
+  return (
+    <h1 className="max-w-4xl break-words text-5xl font-black leading-[1.05] text-slate-950 md:text-7xl dark:text-white">
+      <span className={`block min-h-[1.15em] ${activePhrase.className}`}>
+        {typedText}
+        <span className="ml-1 inline-block animate-pulse text-blue-500 dark:text-blue-300">
+          |
+        </span>
+      </span>
+    </h1>
+  );
+};
+
 const StatBox = ({ value, label }) => {
   return (
     <div className="rounded-[1.4rem] border border-slate-200 bg-white p-5 shadow-xl shadow-slate-200/60 dark:border-white/10 dark:bg-white/[0.05] dark:shadow-black/20">
@@ -334,6 +410,9 @@ const DashboardPreview = ({
   stats,
   progress,
   isRealStudent,
+  isAuthenticated,
+  dashboardPath,
+  dashboardLabel,
   progressError,
 }) => {
   const hasCourse = Boolean(course?._id || course?.slug || course?.title);
@@ -458,17 +537,38 @@ const DashboardPreview = ({
           <div className="flex flex-col gap-4 sm:flex-row">
             <Link
               to="/courses"
-              className="inline-flex items-center justify-center rounded-2xl border border-white/25 bg-white/10 px-7 py-4 text-sm font-black text-white shadow-lg backdrop-blur transition hover:bg-white/20"
+              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-7 py-4 text-sm font-black text-slate-950 shadow-lg shadow-slate-200/70 transition hover:-translate-y-0.5 hover:bg-slate-100 dark:border-white/10 dark:bg-white/5 dark:text-white dark:shadow-none dark:hover:bg-white/10"
             >
               Explore Courses
+              <ArrowRight size={16} />
             </Link>
 
-            <Link
-              to="/student/dashboard"
-              className="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 px-7 py-4 text-sm font-black text-white shadow-lg shadow-blue-600/25 transition hover:scale-[1.02]"
-            >
-              Start Learning
-            </Link>
+            {isAuthenticated ? (
+              <Link
+                to={dashboardPath}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 px-7 py-4 text-sm font-black text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:shadow-blue-600/35"
+              >
+                {dashboardLabel}
+                <ArrowRight size={16} />
+              </Link>
+            ) : (
+              <>
+                <Link
+                  to="/register"
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 px-7 py-4 text-sm font-black text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:shadow-blue-600/35"
+                >
+                  Join Free
+                  <ArrowRight size={16} />
+                </Link>
+
+                <Link
+                  to="/login"
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white px-7 py-4 text-sm font-black text-slate-950 shadow-lg shadow-slate-200/70 transition hover:-translate-y-0.5 hover:bg-slate-100 sm:hidden dark:border-white/10 dark:bg-white/5 dark:text-white dark:shadow-none dark:hover:bg-white/10"
+                >
+                  Login
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -615,8 +715,13 @@ const HomePage = () => {
 
   const heroStats = isStudent ? studentStats : publicStats;
 
-  const startLearningPath =
-    isStudent && enrolledCourses.length > 0 ? "/student/dashboard" : "/courses";
+  const dashboardPath =
+    user?.role === "admin" ? "/admin/dashboard" : "/student/dashboard";
+
+  const dashboardLabel =
+    user?.role === "admin" ? "Admin Dashboard" : "Open Dashboard";
+
+  const startLearningPath = isAuthenticated ? dashboardPath : "/courses";
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-slate-50 text-slate-950 transition-colors duration-300 dark:bg-slate-950 dark:text-white">
@@ -636,13 +741,7 @@ const HomePage = () => {
                 : "Production-like LMS for modern learners"}
             </div>
 
-            <h1 className="max-w-4xl break-words text-5xl font-black leading-[1.05] text-slate-950 md:text-7xl dark:text-white">
-              Learn skills.
-              <span className="block bg-gradient-to-r from-blue-500 via-cyan-500 to-purple-500 bg-clip-text text-transparent dark:from-blue-400 dark:via-cyan-300 dark:to-purple-400">
-                Track progress.
-              </span>
-              Grow faster.
-            </h1>
+            <TypewriterHeroTitle />
 
             <p className="mt-7 max-w-3xl text-lg leading-8 text-slate-700 md:text-xl md:leading-9 dark:text-slate-300">
               {isStudent
@@ -650,10 +749,47 @@ const HomePage = () => {
                 : "Discover structured web development courses, preview lessons, enroll securely, take lesson notes, complete progress, and earn certificates from one professional learning platform."}
             </p>
 
-            <div className="mt-8 flex flex-wrap gap-4">
+            <div className="mt-8 grid gap-4 sm:hidden">
               <Link
                 to="/courses"
-                className="inline-flex items-center justify-center gap-3 rounded-2xl border border-white/20 !bg-slate-950 px-7 py-4 font-black !text-white shadow-xl shadow-black/30 hover:!bg-slate-900"
+                className="inline-flex w-full items-center justify-center gap-3 rounded-2xl bg-blue-600 px-7 py-4 font-black text-white shadow-xl shadow-blue-600/25 transition hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700"
+              >
+                Explore Courses
+                <ArrowRight size={18} />
+              </Link>
+
+              {isAuthenticated ? (
+                <Link
+                  to={dashboardPath}
+                  className="inline-flex w-full items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 px-7 py-4 font-black text-white shadow-xl shadow-blue-600/25 transition hover:shadow-blue-600/35 dark:shadow-black/20"
+                >
+                  {dashboardLabel}
+                  <ArrowRight size={18} />
+                </Link>
+              ) : (
+                <>
+                  <Link
+                    to="/register"
+                    className="inline-flex w-full items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 px-7 py-4 font-black text-white shadow-xl shadow-blue-600/25 transition hover:shadow-blue-600/35 dark:shadow-black/20"
+                  >
+                    Join Free
+                    <ArrowRight size={18} />
+                  </Link>
+
+                  <Link
+                    to="/login"
+                    className="inline-flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-300 bg-white px-7 py-4 font-black text-slate-950 shadow-xl shadow-slate-300/40 transition hover:bg-slate-100 dark:border-white/20 dark:bg-white/10 dark:text-white dark:shadow-none dark:hover:bg-white/15"
+                  >
+                    Login
+                  </Link>
+                </>
+              )}
+            </div>
+
+            <div className="mt-8 hidden flex-wrap gap-4 sm:flex">
+              <Link
+                to="/courses"
+                className="inline-flex items-center justify-center gap-3 rounded-2xl bg-blue-600 px-7 py-4 font-black text-white shadow-xl shadow-blue-600/25 transition hover:-translate-y-0.5 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700"
               >
                 Explore Courses
                 <ArrowRight size={18} />
@@ -661,11 +797,10 @@ const HomePage = () => {
 
               <Link
                 to={startLearningPath}
-                className="inline-flex items-center justify-center gap-3 rounded-2xl border border-slate-300 bg-slate-950 px-7 py-4 font-black text-white shadow-xl shadow-slate-300/40 hover:bg-slate-800 dark:border-white/20 dark:bg-white/10 dark:shadow-none dark:hover:bg-white/15"
+                className="inline-flex items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 px-7 py-4 font-black text-white shadow-xl shadow-blue-600/25 transition hover:-translate-y-0.5 hover:shadow-blue-600/35 dark:shadow-black/20"
               >
-                {isStudent && enrolledCourses.length > 0
-                  ? "Open Dashboard"
-                  : "Start Learning"}
+                {isAuthenticated ? dashboardLabel : "Start Learning"}
+                <ArrowRight size={18} />
               </Link>
             </div>
             <div className="mt-10 grid gap-4 sm:grid-cols-3">
@@ -701,6 +836,9 @@ const HomePage = () => {
                 stats={heroStats}
                 progress={previewProgress}
                 isRealStudent={isStudent}
+                isAuthenticated={isAuthenticated}
+                dashboardPath={dashboardPath}
+                dashboardLabel={dashboardLabel}
                 progressError={progressError}
               />
             )}
@@ -914,11 +1052,9 @@ const HomePage = () => {
 
               <Link
                 to={startLearningPath}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-6 py-4 font-black text-white transition hover:bg-white/15"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/25 bg-slate-950/20 px-6 py-4 font-black text-white shadow-lg shadow-black/10 backdrop-blur transition hover:bg-slate-950/30"
               >
-                {isStudent && enrolledCourses.length > 0
-                  ? "Dashboard"
-                  : "Start Learning"}
+                {isAuthenticated ? dashboardLabel : "Start Learning"}
               </Link>
             </div>
           </div>

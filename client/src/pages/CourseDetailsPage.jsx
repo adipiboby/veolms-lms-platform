@@ -47,6 +47,131 @@ const getCourseImage = (course) => {
   );
 };
 
+const getPreviewVideoUrl = (course) => {
+  return (
+    course?.trailer ||
+    course?.trailerUrl ||
+    course?.trailerVideoUrl ||
+    course?.previewUrl ||
+    course?.previewVideoUrl ||
+    ""
+  );
+};
+
+const getYouTubeEmbedUrl = (url = "") => {
+  if (!url) return "";
+
+  try {
+    const parsedUrl = new URL(url);
+    const hostname = parsedUrl.hostname.replace("www.", "");
+
+    if (hostname.includes("youtube.com")) {
+      const videoId = parsedUrl.searchParams.get("v");
+
+      if (videoId) {
+        return `https://www.youtube.com/embed/${videoId}`;
+      }
+
+      if (parsedUrl.pathname.startsWith("/shorts/")) {
+        const videoId = parsedUrl.pathname.split("/shorts/")[1]?.split("/")[0];
+
+        if (videoId) {
+          return `https://www.youtube.com/embed/${videoId}`;
+        }
+      }
+
+      if (parsedUrl.pathname.startsWith("/embed/")) {
+        const videoId = parsedUrl.pathname.split("/embed/")[1]?.split("/")[0];
+
+        if (videoId) {
+          return `https://www.youtube.com/embed/${videoId}`;
+        }
+      }
+    }
+
+    if (hostname.includes("youtu.be")) {
+      const videoId = parsedUrl.pathname.replace("/", "").split("?")[0];
+
+      if (videoId) {
+        return `https://www.youtube.com/embed/${videoId}`;
+      }
+    }
+
+    return "";
+  } catch {
+    return "";
+  }
+};
+
+const isDirectVideoUrl = (url = "") => {
+  return /\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(url);
+};
+
+const CoursePreviewPlayer = ({ course }) => {
+  const previewUrl = getPreviewVideoUrl(course);
+  const poster = getCourseImage(course);
+
+  if (!previewUrl) {
+    return (
+      <div className="relative aspect-video overflow-hidden">
+        <img
+          src={poster}
+          alt={course?.title || "Course preview"}
+          className="h-full w-full object-cover"
+        />
+
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur md:h-20 md:w-20">
+            <PlayCircle size={38} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const youtubeEmbedUrl = getYouTubeEmbedUrl(previewUrl);
+
+  if (youtubeEmbedUrl) {
+    return (
+      <iframe
+        src={youtubeEmbedUrl}
+        title={course?.title || "Course preview"}
+        className="aspect-video w-full bg-black"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        referrerPolicy="strict-origin-when-cross-origin"
+        allowFullScreen
+      />
+    );
+  }
+
+  if (isDirectVideoUrl(previewUrl)) {
+    return (
+      <video
+        controls
+        className="aspect-video w-full bg-black object-cover"
+        poster={poster}
+        src={previewUrl}
+      />
+    );
+  }
+
+  return (
+    <div className="flex aspect-video items-center justify-center bg-black px-6 text-center">
+      <div>
+        <PlayCircle size={42} className="mx-auto text-slate-500" />
+
+        <p className="mt-4 text-lg font-black text-white">
+          Preview video link is not playable
+        </p>
+
+        <p className="mt-2 text-sm text-slate-400">
+          Use a YouTube link or a direct MP4/WebM video URL.
+        </p>
+      </div>
+    </div>
+  );
+};
+
 const getCourseRating = (course) => {
   return Number(
     course?.averageRating ||
@@ -473,8 +598,10 @@ const EnrolledMobileCourseView = ({
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300">
                 <BookOpen size={21} />
               </div>
+
               <div>
                 <p className="text-lg font-black">{lessons.length}</p>
+
                 <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
                   Lessons
                 </p>
@@ -485,10 +612,12 @@ const EnrolledMobileCourseView = ({
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300">
                 <Clock size={21} />
               </div>
+
               <div>
                 <p className="text-lg font-black">
                   {getCourseDuration(course)}
                 </p>
+
                 <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
                   Duration
                 </p>
@@ -499,8 +628,10 @@ const EnrolledMobileCourseView = ({
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300">
                 <Award size={21} />
               </div>
+
               <div>
                 <p className="text-lg font-black">Certificate</p>
+
                 <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
                   Included
                 </p>
@@ -511,8 +642,10 @@ const EnrolledMobileCourseView = ({
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300">
                 <ShieldCheck size={21} />
               </div>
+
               <div>
                 <p className="text-lg font-black">Secure</p>
+
                 <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
                   Videos
                 </p>
@@ -527,6 +660,7 @@ const EnrolledMobileCourseView = ({
           <h2 className="text-2xl font-black text-slate-950 dark:text-white">
             Course Content
           </h2>
+
           <span className="text-sm font-black text-violet-700 dark:text-violet-300">
             Expand all
           </span>
@@ -605,7 +739,9 @@ const EnrolledMobileCourseView = ({
                           <Video size={16} />
                           Video Lesson
                         </span>
+
                         <span>•</span>
+
                         <span>{lesson.duration || "Video lesson"}</span>
                       </div>
 
@@ -618,6 +754,7 @@ const EnrolledMobileCourseView = ({
                               </span>
                               Continue where you left off
                             </span>
+
                             <span>{progressPercentage}%</span>
                           </div>
 
@@ -1075,8 +1212,6 @@ const CourseDetailsPage = () => {
             {isAdmin && (
               <div className="mb-5 rounded-2xl border border-blue-200 bg-blue-50 px-5 py-4 text-sm font-bold leading-6 text-blue-700 dark:border-blue-400/20 dark:bg-blue-500/10 dark:text-blue-200">
                 Admin mode: you can open the learning page without buying.
-                Backend will allow access only for courses created by your admin
-                account.
               </div>
             )}
 
@@ -1160,36 +1295,7 @@ const CourseDetailsPage = () => {
 
             <div className="mt-8 grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start">
               <div className="min-w-0 overflow-hidden rounded-[1.7rem] border border-slate-200 bg-white shadow-xl shadow-slate-200/70 dark:border-white/10 dark:bg-black/30 dark:shadow-none">
-                {course?.trailer ||
-                course?.trailerUrl ||
-                course?.trailerVideoUrl ||
-                course?.previewUrl ? (
-                  <video
-                    controls
-                    className="aspect-video w-full bg-black object-cover"
-                    poster={getCourseImage(course)}
-                    src={
-                      course.trailer ||
-                      course.trailerUrl ||
-                      course.trailerVideoUrl ||
-                      course.previewUrl
-                    }
-                  />
-                ) : (
-                  <div className="relative aspect-video overflow-hidden">
-                    <img
-                      src={getCourseImage(course)}
-                      alt={course?.title}
-                      className="h-full w-full object-cover"
-                    />
-
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                      <div className="flex h-16 w-16 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur md:h-20 md:w-20">
-                        <PlayCircle size={38} />
-                      </div>
-                    </div>
-                  </div>
-                )}
+                <CoursePreviewPlayer course={course} />
               </div>
 
               <aside className="hidden lg:block">

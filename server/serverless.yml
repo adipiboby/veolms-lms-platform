@@ -30,13 +30,22 @@ provider:
     AWS_S3_BUCKET_NAME: ${env:AWS_S3_BUCKET_NAME}
 
     AWS_CLOUDFRONT_URL: ${env:AWS_CLOUDFRONT_URL}
+    CLOUDFRONT_VIDEO_DOMAIN: ${env:CLOUDFRONT_VIDEO_DOMAIN, ''}
+    CLOUDFRONT_COOKIE_DOMAIN: ${env:CLOUDFRONT_COOKIE_DOMAIN, ''}
+
     CLOUDFRONT_PUBLIC_KEY_ID: ${env:CLOUDFRONT_PUBLIC_KEY_ID}
     CLOUDFRONT_PRIVATE_KEY: ${env:CLOUDFRONT_PRIVATE_KEY, ''}
-   
     CLOUDFRONT_PRIVATE_KEY_BASE64: ${env:CLOUDFRONT_PRIVATE_KEY_BASE64, ''}
-    CLOUDFRONT_VIDEO_SIGNED_URL_EXPIRES_IN: ${env:CLOUDFRONT_VIDEO_SIGNED_URL_EXPIRES_IN, '3600'}
 
-    S3_SIGNED_URL_EXPIRES_IN: ${env:S3_SIGNED_URL_EXPIRES_IN, '600'}
+    CLOUDFRONT_VIDEO_SIGNED_URL_EXPIRES_IN: ${env:CLOUDFRONT_VIDEO_SIGNED_URL_EXPIRES_IN, '3600'}
+    CLOUDFRONT_HLS_COOKIE_EXPIRES_IN: ${env:CLOUDFRONT_HLS_COOKIE_EXPIRES_IN, '3600'}
+    CLOUDFRONT_HLS_LOCAL_DEV_PUBLIC: ${env:CLOUDFRONT_HLS_LOCAL_DEV_PUBLIC, 'false'}
+
+    S3_SIGNED_URL_EXPIRES_IN: ${env:S3_SIGNED_URL_EXPIRES_IN, '3600'}
+
+    MEDIACONVERT_REGION: ${env:MEDIACONVERT_REGION, 'us-east-1'}
+    MEDIACONVERT_ROLE_ARN: ${env:MEDIACONVERT_ROLE_ARN}
+    MEDIACONVERT_ENDPOINT: ${env:MEDIACONVERT_ENDPOINT, ''}
 
   iam:
     role:
@@ -48,9 +57,8 @@ provider:
             - s3:DeleteObject
             - s3:ListBucket
             - s3:AbortMultipartUpload
-            - s3:CreateMultipartUpload
-            - s3:CompleteMultipartUpload
-            - s3:UploadPart
+            - s3:ListMultipartUploadParts
+            - s3:ListBucketMultipartUploads
           Resource:
             - arn:aws:s3:::${env:AWS_S3_BUCKET_NAME}
             - arn:aws:s3:::${env:AWS_S3_BUCKET_NAME}/*
@@ -61,6 +69,12 @@ provider:
             - mediaconvert:GetJob
             - mediaconvert:DescribeEndpoints
           Resource: "*"
+
+        - Effect: Allow
+          Action:
+            - iam:PassRole
+          Resource:
+            - arn:aws:iam::063409901120:role/MediaConvert_VeoLMS_Role
 
 functions:
   api:

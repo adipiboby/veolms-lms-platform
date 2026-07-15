@@ -1,6 +1,6 @@
 {
   "D:\\webdevelopment\\veolms-lms-platform\\server\\serverless.yml": {
-    "versionFramework": "4.38.1",
+    "versionFramework": "4.39.0",
     "servicePath": "D:\\webdevelopment\\veolms-lms-platform\\server\\serverless.yml",
     "serviceConfigFileName": "serverless.yml",
     "service": {
@@ -26,12 +26,19 @@
           "RAZORPAY_KEY_SECRET": "<REDACTED>",
           "AWS_S3_REGION": "us-east-1",
           "AWS_S3_BUCKET_NAME": "veolms-s3-video-bucket",
-          "AWS_CLOUDFRONT_URL": "https://d2kctv1eaxhj90.cloudfront.net",
+          "AWS_CLOUDFRONT_URL": "https://video.lms.adipi.in",
+          "CLOUDFRONT_VIDEO_DOMAIN": "video.lms.adipi.in",
+          "CLOUDFRONT_COOKIE_DOMAIN": ".lms.adipi.in",
           "CLOUDFRONT_PUBLIC_KEY_ID": "K1GG9L5HPMPSUB",
           "CLOUDFRONT_PRIVATE_KEY": "<REDACTED>",
           "CLOUDFRONT_PRIVATE_KEY_BASE64": "<REDACTED>",
           "CLOUDFRONT_VIDEO_SIGNED_URL_EXPIRES_IN": "3600",
-          "S3_SIGNED_URL_EXPIRES_IN": "600"
+          "CLOUDFRONT_HLS_COOKIE_EXPIRES_IN": "3600",
+          "CLOUDFRONT_HLS_LOCAL_DEV_PUBLIC": "false",
+          "S3_SIGNED_URL_EXPIRES_IN": "600",
+          "MEDIACONVERT_REGION": "us-east-1",
+          "MEDIACONVERT_ROLE_ARN": "arn:aws:iam::063409901120:role/MediaConvert_VeoLMS_Role",
+          "MEDIACONVERT_ENDPOINT": "https://mediaconvert.us-east-1.amazonaws.com"
         },
         "iam": {
           "role": {
@@ -44,9 +51,8 @@
                   "s3:DeleteObject",
                   "s3:ListBucket",
                   "s3:AbortMultipartUpload",
-                  "s3:CreateMultipartUpload",
-                  "s3:CompleteMultipartUpload",
-                  "s3:UploadPart"
+                  "s3:ListMultipartUploadParts",
+                  "s3:ListBucketMultipartUploads"
                 ],
                 "Resource": [
                   "arn:aws:s3:::veolms-s3-video-bucket",
@@ -61,6 +67,13 @@
                   "mediaconvert:DescribeEndpoints"
                 ],
                 "Resource": "*"
+              },
+              {
+                "Effect": "Allow",
+                "Action": [
+                  "iam:PassRole"
+                ],
+                "Resource": "arn:aws:iam::063409901120:role/MediaConvert_VeoLMS_Role"
               }
             ]
           }
@@ -142,9 +155,8 @@
                             "s3:DeleteObject",
                             "s3:ListBucket",
                             "s3:AbortMultipartUpload",
-                            "s3:CreateMultipartUpload",
-                            "s3:CompleteMultipartUpload",
-                            "s3:UploadPart"
+                            "s3:ListMultipartUploadParts",
+                            "s3:ListBucketMultipartUploads"
                           ],
                           "Resource": [
                             "arn:aws:s3:::veolms-s3-video-bucket",
@@ -159,6 +171,13 @@
                             "mediaconvert:DescribeEndpoints"
                           ],
                           "Resource": "*"
+                        },
+                        {
+                          "Effect": "Allow",
+                          "Action": [
+                            "iam:PassRole"
+                          ],
+                          "Resource": "arn:aws:iam::063409901120:role/MediaConvert_VeoLMS_Role"
                         }
                       ]
                     }
@@ -185,7 +204,7 @@
               "Properties": {
                 "Code": {
                   "S3Bucket": "serverless-framework-deployments-ap-south-1-53f605f4-d20f",
-                  "S3Key": "serverless/veolms-api/dev/1783068835835-2026-07-03T08:53:55.835Z/veolms-api.zip"
+                  "S3Key": "serverless/veolms-api/dev/1784079118999-2026-07-15T01:31:58.999Z/veolms-api.zip"
                 },
                 "Handler": "src/lambda.handler",
                 "Runtime": "nodejs20.x",
@@ -206,12 +225,19 @@
                     "RAZORPAY_KEY_SECRET": "<REDACTED>",
                     "AWS_S3_REGION": "us-east-1",
                     "AWS_S3_BUCKET_NAME": "veolms-s3-video-bucket",
-                    "AWS_CLOUDFRONT_URL": "https://d2kctv1eaxhj90.cloudfront.net",
+                    "AWS_CLOUDFRONT_URL": "https://video.lms.adipi.in",
+                    "CLOUDFRONT_VIDEO_DOMAIN": "video.lms.adipi.in",
+                    "CLOUDFRONT_COOKIE_DOMAIN": ".lms.adipi.in",
                     "CLOUDFRONT_PUBLIC_KEY_ID": "K1GG9L5HPMPSUB",
                     "CLOUDFRONT_PRIVATE_KEY": "<REDACTED>",
                     "CLOUDFRONT_PRIVATE_KEY_BASE64": "<REDACTED>",
                     "CLOUDFRONT_VIDEO_SIGNED_URL_EXPIRES_IN": "3600",
-                    "S3_SIGNED_URL_EXPIRES_IN": "600"
+                    "CLOUDFRONT_HLS_COOKIE_EXPIRES_IN": "3600",
+                    "CLOUDFRONT_HLS_LOCAL_DEV_PUBLIC": "false",
+                    "S3_SIGNED_URL_EXPIRES_IN": "600",
+                    "MEDIACONVERT_REGION": "us-east-1",
+                    "MEDIACONVERT_ROLE_ARN": "arn:aws:iam::063409901120:role/MediaConvert_VeoLMS_Role",
+                    "MEDIACONVERT_ENDPOINT": "https://mediaconvert.us-east-1.amazonaws.com"
                   }
                 },
                 "Role": {
@@ -225,14 +251,14 @@
                 "ApiLogGroup"
               ]
             },
-            "ApiLambdaVersionMZCftWP8PZqHu84tS4ySLBqrV6mEsdNvvIbM1BGTJk": {
+            "ApiLambdaVersionveidKjciNXsDWjwX7KDzFJ3Ouzu51RZhcjKUzEuoVZo": {
               "Type": "AWS::Lambda::Version",
               "DeletionPolicy": "Retain",
               "Properties": {
                 "FunctionName": {
                   "Ref": "ApiLambdaFunction"
                 },
-                "CodeSha256": "gQM1RzsHWinNHogfYZKDOFtOXyYZyMc/ctYQNdlVVfs="
+                "CodeSha256": "/saIhLKNDo5SYxGgBKMdp2f/dL3Gd7nU2sE84DJMEPM="
               }
             },
             "HttpApi": {
@@ -362,7 +388,7 @@
             "ApiLambdaFunctionQualifiedArn": {
               "Description": "Current Lambda function version",
               "Value": {
-                "Ref": "ApiLambdaVersionMZCftWP8PZqHu84tS4ySLBqrV6mEsdNvvIbM1BGTJk"
+                "Ref": "ApiLambdaVersionveidKjciNXsDWjwX7KDzFJ3Ouzu51RZhcjKUzEuoVZo"
               },
               "Export": {
                 "Name": "sls-veolms-api-dev-ApiLambdaFunctionQualifiedArn"
@@ -433,7 +459,7 @@
           "timeout": 30,
           "runtime": "nodejs20.x",
           "vpc": {},
-          "versionLogicalId": "ApiLambdaVersionMZCftWP8PZqHu84tS4ySLBqrV6mEsdNvvIbM1BGTJk"
+          "versionLogicalId": "ApiLambdaVersionveidKjciNXsDWjwX7KDzFJ3Ouzu51RZhcjKUzEuoVZo"
         }
       },
       "package": {
@@ -450,7 +476,7 @@
         "artifactsS3KeyDirname": "serverless/veolms-api/dev/code-artifacts",
         "deploymentBucket": "serverless-framework-deployments-ap-south-1-53f605f4-d20f",
         "artifact": "D:\\webdevelopment\\veolms-lms-platform\\server\\.serverless\\veolms-api.zip",
-        "artifactDirectoryName": "serverless/veolms-api/dev/1783068835835-2026-07-03T08:53:55.835Z"
+        "artifactDirectoryName": "serverless/veolms-api/dev/1784079118999-2026-07-15T01:31:58.999Z"
       }
     },
     "provider": {
@@ -473,12 +499,19 @@
         "RAZORPAY_KEY_SECRET": "<REDACTED>",
         "AWS_S3_REGION": "us-east-1",
         "AWS_S3_BUCKET_NAME": "veolms-s3-video-bucket",
-        "AWS_CLOUDFRONT_URL": "https://d2kctv1eaxhj90.cloudfront.net",
+        "AWS_CLOUDFRONT_URL": "https://video.lms.adipi.in",
+        "CLOUDFRONT_VIDEO_DOMAIN": "video.lms.adipi.in",
+        "CLOUDFRONT_COOKIE_DOMAIN": ".lms.adipi.in",
         "CLOUDFRONT_PUBLIC_KEY_ID": "K1GG9L5HPMPSUB",
         "CLOUDFRONT_PRIVATE_KEY": "<REDACTED>",
         "CLOUDFRONT_PRIVATE_KEY_BASE64": "<REDACTED>",
         "CLOUDFRONT_VIDEO_SIGNED_URL_EXPIRES_IN": "3600",
-        "S3_SIGNED_URL_EXPIRES_IN": "600"
+        "CLOUDFRONT_HLS_COOKIE_EXPIRES_IN": "3600",
+        "CLOUDFRONT_HLS_LOCAL_DEV_PUBLIC": "false",
+        "S3_SIGNED_URL_EXPIRES_IN": "600",
+        "MEDIACONVERT_REGION": "us-east-1",
+        "MEDIACONVERT_ROLE_ARN": "arn:aws:iam::063409901120:role/MediaConvert_VeoLMS_Role",
+        "MEDIACONVERT_ENDPOINT": "https://mediaconvert.us-east-1.amazonaws.com"
       },
       "iam": {
         "role": {
@@ -491,9 +524,8 @@
                 "s3:DeleteObject",
                 "s3:ListBucket",
                 "s3:AbortMultipartUpload",
-                "s3:CreateMultipartUpload",
-                "s3:CompleteMultipartUpload",
-                "s3:UploadPart"
+                "s3:ListMultipartUploadParts",
+                "s3:ListBucketMultipartUploads"
               ],
               "Resource": [
                 "arn:aws:s3:::veolms-s3-video-bucket",
@@ -508,6 +540,13 @@
                 "mediaconvert:DescribeEndpoints"
               ],
               "Resource": "*"
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "iam:PassRole"
+              ],
+              "Resource": "arn:aws:iam::063409901120:role/MediaConvert_VeoLMS_Role"
             }
           ]
         }
@@ -589,9 +628,8 @@
                           "s3:DeleteObject",
                           "s3:ListBucket",
                           "s3:AbortMultipartUpload",
-                          "s3:CreateMultipartUpload",
-                          "s3:CompleteMultipartUpload",
-                          "s3:UploadPart"
+                          "s3:ListMultipartUploadParts",
+                          "s3:ListBucketMultipartUploads"
                         ],
                         "Resource": [
                           "arn:aws:s3:::veolms-s3-video-bucket",
@@ -606,6 +644,13 @@
                           "mediaconvert:DescribeEndpoints"
                         ],
                         "Resource": "*"
+                      },
+                      {
+                        "Effect": "Allow",
+                        "Action": [
+                          "iam:PassRole"
+                        ],
+                        "Resource": "arn:aws:iam::063409901120:role/MediaConvert_VeoLMS_Role"
                       }
                     ]
                   }
@@ -632,7 +677,7 @@
             "Properties": {
               "Code": {
                 "S3Bucket": "serverless-framework-deployments-ap-south-1-53f605f4-d20f",
-                "S3Key": "serverless/veolms-api/dev/1783068835835-2026-07-03T08:53:55.835Z/veolms-api.zip"
+                "S3Key": "serverless/veolms-api/dev/1784079118999-2026-07-15T01:31:58.999Z/veolms-api.zip"
               },
               "Handler": "src/lambda.handler",
               "Runtime": "nodejs20.x",
@@ -653,12 +698,19 @@
                   "RAZORPAY_KEY_SECRET": "<REDACTED>",
                   "AWS_S3_REGION": "us-east-1",
                   "AWS_S3_BUCKET_NAME": "veolms-s3-video-bucket",
-                  "AWS_CLOUDFRONT_URL": "https://d2kctv1eaxhj90.cloudfront.net",
+                  "AWS_CLOUDFRONT_URL": "https://video.lms.adipi.in",
+                  "CLOUDFRONT_VIDEO_DOMAIN": "video.lms.adipi.in",
+                  "CLOUDFRONT_COOKIE_DOMAIN": ".lms.adipi.in",
                   "CLOUDFRONT_PUBLIC_KEY_ID": "K1GG9L5HPMPSUB",
                   "CLOUDFRONT_PRIVATE_KEY": "<REDACTED>",
                   "CLOUDFRONT_PRIVATE_KEY_BASE64": "<REDACTED>",
                   "CLOUDFRONT_VIDEO_SIGNED_URL_EXPIRES_IN": "3600",
-                  "S3_SIGNED_URL_EXPIRES_IN": "600"
+                  "CLOUDFRONT_HLS_COOKIE_EXPIRES_IN": "3600",
+                  "CLOUDFRONT_HLS_LOCAL_DEV_PUBLIC": "false",
+                  "S3_SIGNED_URL_EXPIRES_IN": "600",
+                  "MEDIACONVERT_REGION": "us-east-1",
+                  "MEDIACONVERT_ROLE_ARN": "arn:aws:iam::063409901120:role/MediaConvert_VeoLMS_Role",
+                  "MEDIACONVERT_ENDPOINT": "https://mediaconvert.us-east-1.amazonaws.com"
                 }
               },
               "Role": {
@@ -672,14 +724,14 @@
               "ApiLogGroup"
             ]
           },
-          "ApiLambdaVersionMZCftWP8PZqHu84tS4ySLBqrV6mEsdNvvIbM1BGTJk": {
+          "ApiLambdaVersionveidKjciNXsDWjwX7KDzFJ3Ouzu51RZhcjKUzEuoVZo": {
             "Type": "AWS::Lambda::Version",
             "DeletionPolicy": "Retain",
             "Properties": {
               "FunctionName": {
                 "Ref": "ApiLambdaFunction"
               },
-              "CodeSha256": "gQM1RzsHWinNHogfYZKDOFtOXyYZyMc/ctYQNdlVVfs="
+              "CodeSha256": "/saIhLKNDo5SYxGgBKMdp2f/dL3Gd7nU2sE84DJMEPM="
             }
           },
           "HttpApi": {
@@ -809,7 +861,7 @@
           "ApiLambdaFunctionQualifiedArn": {
             "Description": "Current Lambda function version",
             "Value": {
-              "Ref": "ApiLambdaVersionMZCftWP8PZqHu84tS4ySLBqrV6mEsdNvvIbM1BGTJk"
+              "Ref": "ApiLambdaVersionveidKjciNXsDWjwX7KDzFJ3Ouzu51RZhcjKUzEuoVZo"
             },
             "Export": {
               "Name": "sls-veolms-api-dev-ApiLambdaFunctionQualifiedArn"
@@ -862,12 +914,15 @@
       "serviceProvider": null,
       "instanceParameters": null
     },
-    "serviceRawFile": "service: veolms-api\r\n\r\nuseDotenv: true\r\n\r\nprovider:\r\n  name: aws\r\n  runtime: nodejs20.x\r\n  region: ap-south-1\r\n  stage: ${opt:stage, 'dev'}\r\n  memorySize: 1024\r\n  timeout: 30\r\n\r\n  environment:\r\n    NODE_ENV: production\r\n\r\n    MONGO_URI: ${env:MONGO_URI}\r\n    JWT_SECRET: ${env:JWT_SECRET}\r\n    JWT_EXPIRES_IN: ${env:JWT_EXPIRES_IN, '7d'}\r\n\r\n    CLIENT_URL: ${env:CLIENT_URL}\r\n    FRONTEND_URL: ${env:FRONTEND_URL, ''}\r\n    CORS_ORIGINS: ${env:CORS_ORIGINS, ''}\r\n\r\n    GOOGLE_CLIENT_ID: ${env:GOOGLE_CLIENT_ID}\r\n\r\n    RAZORPAY_KEY_ID: ${env:RAZORPAY_KEY_ID, ''}\r\n    RAZORPAY_KEY_SECRET: ${env:RAZORPAY_KEY_SECRET, ''}\r\n\r\n    AWS_S3_REGION: ${env:AWS_S3_REGION, 'us-east-1'}\r\n    AWS_S3_BUCKET_NAME: ${env:AWS_S3_BUCKET_NAME}\r\n\r\n    AWS_CLOUDFRONT_URL: ${env:AWS_CLOUDFRONT_URL}\r\n    CLOUDFRONT_PUBLIC_KEY_ID: ${env:CLOUDFRONT_PUBLIC_KEY_ID}\r\n    CLOUDFRONT_PRIVATE_KEY: ${env:CLOUDFRONT_PRIVATE_KEY, ''}\r\n   \r\n    CLOUDFRONT_PRIVATE_KEY_BASE64: ${env:CLOUDFRONT_PRIVATE_KEY_BASE64, ''}\r\n    CLOUDFRONT_VIDEO_SIGNED_URL_EXPIRES_IN: ${env:CLOUDFRONT_VIDEO_SIGNED_URL_EXPIRES_IN, '3600'}\r\n\r\n    S3_SIGNED_URL_EXPIRES_IN: ${env:S3_SIGNED_URL_EXPIRES_IN, '600'}\r\n\r\n  iam:\r\n    role:\r\n      statements:\r\n        - Effect: Allow\r\n          Action:\r\n            - s3:GetObject\r\n            - s3:PutObject\r\n            - s3:DeleteObject\r\n            - s3:ListBucket\r\n            - s3:AbortMultipartUpload\r\n            - s3:CreateMultipartUpload\r\n            - s3:CompleteMultipartUpload\r\n            - s3:UploadPart\r\n          Resource:\r\n            - arn:aws:s3:::${env:AWS_S3_BUCKET_NAME}\r\n            - arn:aws:s3:::${env:AWS_S3_BUCKET_NAME}/*\r\n\r\n        - Effect: Allow\r\n          Action:\r\n            - mediaconvert:CreateJob\r\n            - mediaconvert:GetJob\r\n            - mediaconvert:DescribeEndpoints\r\n          Resource: \"*\"\r\n\r\nfunctions:\r\n  api:\r\n    handler: src/lambda.handler\r\n    events:\r\n      - httpApi:\r\n          path: /\r\n          method: ANY\r\n      - httpApi:\r\n          path: /{proxy+}\r\n          method: ANY\r\n\r\npackage:\r\n  patterns:\r\n    - \"src/**\"\r\n    - \"node_modules/**\"\r\n    - \"package.json\"\r\n    - \"package-lock.json\"\r\n    - \"!node_modules/.cache/**\"\r\n    - \"!keys/**\"\r\n    - \"!uploads/**\"\r\n    - \"!*.log\"\r\n",
+    "serviceRawFile": "service: veolms-api\r\n\r\nuseDotenv: true\r\n\r\nprovider:\r\n  name: aws\r\n  runtime: nodejs20.x\r\n  region: ap-south-1\r\n  stage: ${opt:stage, 'dev'}\r\n  memorySize: 1024\r\n  timeout: 30\r\n\r\n  environment:\r\n    NODE_ENV: production\r\n\r\n    MONGO_URI: ${env:MONGO_URI}\r\n    JWT_SECRET: ${env:JWT_SECRET}\r\n    JWT_EXPIRES_IN: ${env:JWT_EXPIRES_IN, '7d'}\r\n\r\n    CLIENT_URL: ${env:CLIENT_URL}\r\n    FRONTEND_URL: ${env:FRONTEND_URL, ''}\r\n    CORS_ORIGINS: ${env:CORS_ORIGINS, ''}\r\n\r\n    GOOGLE_CLIENT_ID: ${env:GOOGLE_CLIENT_ID}\r\n\r\n    RAZORPAY_KEY_ID: ${env:RAZORPAY_KEY_ID, ''}\r\n    RAZORPAY_KEY_SECRET: ${env:RAZORPAY_KEY_SECRET, ''}\r\n\r\n    AWS_S3_REGION: ${env:AWS_S3_REGION, 'us-east-1'}\r\n    AWS_S3_BUCKET_NAME: ${env:AWS_S3_BUCKET_NAME}\r\n\r\n    AWS_CLOUDFRONT_URL: ${env:AWS_CLOUDFRONT_URL}\r\n    CLOUDFRONT_VIDEO_DOMAIN: ${env:CLOUDFRONT_VIDEO_DOMAIN, ''}\r\n    CLOUDFRONT_COOKIE_DOMAIN: ${env:CLOUDFRONT_COOKIE_DOMAIN, ''}\r\n\r\n    CLOUDFRONT_PUBLIC_KEY_ID: ${env:CLOUDFRONT_PUBLIC_KEY_ID}\r\n    CLOUDFRONT_PRIVATE_KEY: ${env:CLOUDFRONT_PRIVATE_KEY, ''}\r\n    CLOUDFRONT_PRIVATE_KEY_BASE64: ${env:CLOUDFRONT_PRIVATE_KEY_BASE64, ''}\r\n\r\n    CLOUDFRONT_VIDEO_SIGNED_URL_EXPIRES_IN: ${env:CLOUDFRONT_VIDEO_SIGNED_URL_EXPIRES_IN, '3600'}\r\n    CLOUDFRONT_HLS_COOKIE_EXPIRES_IN: ${env:CLOUDFRONT_HLS_COOKIE_EXPIRES_IN, '3600'}\r\n    CLOUDFRONT_HLS_LOCAL_DEV_PUBLIC: ${env:CLOUDFRONT_HLS_LOCAL_DEV_PUBLIC, 'false'}\r\n\r\n    S3_SIGNED_URL_EXPIRES_IN: ${env:S3_SIGNED_URL_EXPIRES_IN, '3600'}\r\n\r\n    MEDIACONVERT_REGION: ${env:MEDIACONVERT_REGION, 'us-east-1'}\r\n    MEDIACONVERT_ROLE_ARN: ${env:MEDIACONVERT_ROLE_ARN}\r\n    MEDIACONVERT_ENDPOINT: ${env:MEDIACONVERT_ENDPOINT, ''}\r\n\r\n  iam:\r\n    role:\r\n      statements:\r\n        - Effect: Allow\r\n          Action:\r\n            - s3:GetObject\r\n            - s3:PutObject\r\n            - s3:DeleteObject\r\n            - s3:ListBucket\r\n            - s3:AbortMultipartUpload\r\n            - s3:ListMultipartUploadParts\r\n            - s3:ListBucketMultipartUploads\r\n          Resource:\r\n            - arn:aws:s3:::${env:AWS_S3_BUCKET_NAME}\r\n            - arn:aws:s3:::${env:AWS_S3_BUCKET_NAME}/*\r\n\r\n        - Effect: Allow\r\n          Action:\r\n            - mediaconvert:CreateJob\r\n            - mediaconvert:GetJob\r\n            - mediaconvert:DescribeEndpoints\r\n          Resource: \"*\"\r\n\r\n        - Effect: Allow\r\n          Action:\r\n            - iam:PassRole\r\n          Resource:\r\n            - arn:aws:iam::063409901120:role/MediaConvert_VeoLMS_Role\r\n\r\nfunctions:\r\n  api:\r\n    handler: src/lambda.handler\r\n    events:\r\n      - httpApi:\r\n          path: /\r\n          method: ANY\r\n      - httpApi:\r\n          path: /{proxy+}\r\n          method: ANY\r\n\r\npackage:\r\n  patterns:\r\n    - \"src/**\"\r\n    - \"node_modules/**\"\r\n    - \"package.json\"\r\n    - \"package-lock.json\"\r\n    - \"!node_modules/.cache/**\"\r\n    - \"!keys/**\"\r\n    - \"!uploads/**\"\r\n    - \"!*.log\"\r\n",
     "command": [
       "deploy"
     ],
     "options": {
+      "config": "serverless.yml",
       "aws-profile": "veolms",
+      "stage": "dev",
+      "region": "ap-south-1",
       "force": true
     },
     "orgId": "60b72c57-db84-4166-a96f-b387c4a9fd20",
@@ -878,12 +933,12 @@
     "serviceProviderAwsCfStackName": "veolms-api-dev",
     "serviceProviderAwsCfStackId": "arn:aws:cloudformation:ap-south-1:063409901120:stack/veolms-api-dev/3e3243d0-760d-11f1-8450-0676103144a7",
     "serviceProviderAwsCfStackCreated": "2026-07-02T11:57:48.228Z",
-    "serviceProviderAwsCfStackUpdated": "2026-07-02T15:37:24.930Z",
+    "serviceProviderAwsCfStackUpdated": "2026-07-15T01:25:41.359Z",
     "serviceProviderAwsCfStackStatus": "UPDATE_COMPLETE",
     "serviceProviderAwsCfStackOutputs": [
       {
         "OutputKey": "ApiLambdaFunctionQualifiedArn",
-        "OutputValue": "arn:aws:lambda:ap-south-1:063409901120:function:veolms-api-dev-api:11",
+        "OutputValue": "arn:aws:lambda:ap-south-1:063409901120:function:veolms-api-dev-api:17",
         "Description": "Current Lambda function version",
         "ExportName": "sls-veolms-api-dev-ApiLambdaFunctionQualifiedArn"
       },
@@ -981,9 +1036,8 @@
                         "s3:DeleteObject",
                         "s3:ListBucket",
                         "s3:AbortMultipartUpload",
-                        "s3:CreateMultipartUpload",
-                        "s3:CompleteMultipartUpload",
-                        "s3:UploadPart"
+                        "s3:ListMultipartUploadParts",
+                        "s3:ListBucketMultipartUploads"
                       ],
                       "Resource": [
                         "arn:aws:s3:::veolms-s3-video-bucket",
@@ -998,6 +1052,13 @@
                         "mediaconvert:DescribeEndpoints"
                       ],
                       "Resource": "*"
+                    },
+                    {
+                      "Effect": "Allow",
+                      "Action": [
+                        "iam:PassRole"
+                      ],
+                      "Resource": "arn:aws:iam::063409901120:role/MediaConvert_VeoLMS_Role"
                     }
                   ]
                 }
@@ -1024,7 +1085,7 @@
           "Properties": {
             "Code": {
               "S3Bucket": "serverless-framework-deployments-ap-south-1-53f605f4-d20f",
-              "S3Key": "serverless/veolms-api/dev/1783068835835-2026-07-03T08:53:55.835Z/veolms-api.zip"
+              "S3Key": "serverless/veolms-api/dev/1784079118999-2026-07-15T01:31:58.999Z/veolms-api.zip"
             },
             "Handler": "src/lambda.handler",
             "Runtime": "nodejs20.x",
@@ -1045,12 +1106,19 @@
                 "RAZORPAY_KEY_SECRET": "<REDACTED>",
                 "AWS_S3_REGION": "us-east-1",
                 "AWS_S3_BUCKET_NAME": "veolms-s3-video-bucket",
-                "AWS_CLOUDFRONT_URL": "https://d2kctv1eaxhj90.cloudfront.net",
+                "AWS_CLOUDFRONT_URL": "https://video.lms.adipi.in",
+                "CLOUDFRONT_VIDEO_DOMAIN": "video.lms.adipi.in",
+                "CLOUDFRONT_COOKIE_DOMAIN": ".lms.adipi.in",
                 "CLOUDFRONT_PUBLIC_KEY_ID": "K1GG9L5HPMPSUB",
                 "CLOUDFRONT_PRIVATE_KEY": "<REDACTED>",
                 "CLOUDFRONT_PRIVATE_KEY_BASE64": "<REDACTED>",
                 "CLOUDFRONT_VIDEO_SIGNED_URL_EXPIRES_IN": "3600",
-                "S3_SIGNED_URL_EXPIRES_IN": "600"
+                "CLOUDFRONT_HLS_COOKIE_EXPIRES_IN": "3600",
+                "CLOUDFRONT_HLS_LOCAL_DEV_PUBLIC": "false",
+                "S3_SIGNED_URL_EXPIRES_IN": "600",
+                "MEDIACONVERT_REGION": "us-east-1",
+                "MEDIACONVERT_ROLE_ARN": "arn:aws:iam::063409901120:role/MediaConvert_VeoLMS_Role",
+                "MEDIACONVERT_ENDPOINT": "https://mediaconvert.us-east-1.amazonaws.com"
               }
             },
             "Role": {
@@ -1064,14 +1132,14 @@
             "ApiLogGroup"
           ]
         },
-        "ApiLambdaVersionMZCftWP8PZqHu84tS4ySLBqrV6mEsdNvvIbM1BGTJk": {
+        "ApiLambdaVersionveidKjciNXsDWjwX7KDzFJ3Ouzu51RZhcjKUzEuoVZo": {
           "Type": "AWS::Lambda::Version",
           "DeletionPolicy": "Retain",
           "Properties": {
             "FunctionName": {
               "Ref": "ApiLambdaFunction"
             },
-            "CodeSha256": "gQM1RzsHWinNHogfYZKDOFtOXyYZyMc/ctYQNdlVVfs="
+            "CodeSha256": "/saIhLKNDo5SYxGgBKMdp2f/dL3Gd7nU2sE84DJMEPM="
           }
         },
         "HttpApi": {
@@ -1201,7 +1269,7 @@
         "ApiLambdaFunctionQualifiedArn": {
           "Description": "Current Lambda function version",
           "Value": {
-            "Ref": "ApiLambdaVersionMZCftWP8PZqHu84tS4ySLBqrV6mEsdNvvIbM1BGTJk"
+            "Ref": "ApiLambdaVersionveidKjciNXsDWjwX7KDzFJ3Ouzu51RZhcjKUzEuoVZo"
           },
           "Export": {
             "Name": "sls-veolms-api-dev-ApiLambdaFunctionQualifiedArn"

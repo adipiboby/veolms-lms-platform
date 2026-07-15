@@ -1,0 +1,43 @@
+service: veolms-mediaconvert-events
+
+useDotenv: true
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: ${env:MEDIACONVERT_REGION, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+  memorySize: 512
+  timeout: 30
+
+  environment:
+    NODE_ENV: production
+    MONGO_URI: ${env:MONGO_URI}
+
+functions:
+  mediaConvertStatus:
+    handler: src/lambdas/mediaConvertStatus.handler
+    events:
+      - eventBridge:
+          eventBus: default
+          pattern:
+            source:
+              - aws.mediaconvert
+            detail-type:
+              - MediaConvert Job State Change
+            detail:
+              status:
+                - COMPLETE
+                - ERROR
+                - CANCELED
+
+package:
+  patterns:
+    - "src/**"
+    - "node_modules/**"
+    - "package.json"
+    - "package-lock.json"
+    - "!node_modules/.cache/**"
+    - "!keys/**"
+    - "!uploads/**"
+    - "!*.log"

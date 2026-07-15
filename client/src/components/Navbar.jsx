@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
+  BookOpen,
   ChevronDown,
   GraduationCap,
+  Home,
+  LayoutDashboard,
   LogOut,
-  Menu,
+  Rss,
   UserCircle,
-  X,
 } from "lucide-react";
 
 import { api } from "../services/api";
@@ -47,6 +49,29 @@ const FeedBadge = ({ count }) => {
   );
 };
 
+const MobileBottomNavItem = ({ to, label, icon: Icon, badge }) => {
+  return (
+    <NavLink
+      to={to}
+      className={({ isActive }) =>
+        `relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2.5 text-[11px] font-bold transition ${
+          isActive
+            ? "bg-blue-600/20 text-blue-600 ring-1 ring-blue-500/40 dark:bg-blue-500/20 dark:text-blue-300 dark:ring-blue-400/30"
+            : "text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white"
+        }`
+      }
+    >
+      <span className="relative">
+        <Icon size={22} strokeWidth={2.2} />
+        {badge ? (
+          <span className="absolute -right-3 -top-2">{badge}</span>
+        ) : null}
+      </span>
+      <span className="truncate">{label}</span>
+    </NavLink>
+  );
+};
+
 const Navbar = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -58,7 +83,6 @@ const Navbar = () => {
   const isFeedPage = location.pathname.startsWith("/feed");
 
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [feedUnreadCount, setFeedUnreadCount] = useState(0);
 
   const [learningCourseTitle, setLearningCourseTitle] = useState(() => {
@@ -98,7 +122,6 @@ const Navbar = () => {
   }, [isLearningPage, location.pathname]);
 
   useEffect(() => {
-    setMobileMenuOpen(false);
     setProfileMenuOpen(false);
   }, [location.pathname]);
 
@@ -115,7 +138,6 @@ const Navbar = () => {
     const handleEscape = (event) => {
       if (event.key === "Escape") {
         setProfileMenuOpen(false);
-        setMobileMenuOpen(false);
       }
     };
 
@@ -176,240 +198,58 @@ const Navbar = () => {
       : "border border-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white";
   };
 
-  const mobileLinkClass = ({ isActive }) => {
-    return isActive
-      ? "border border-blue-200 bg-blue-50 text-blue-700 dark:border-white/10 dark:bg-white/10 dark:text-white"
-      : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-950 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10 dark:hover:text-white";
+  const handleProfileButtonClick = () => {
+    setProfileMenuOpen((value) => !value);
   };
 
   const handleLogout = async () => {
     setProfileMenuOpen(false);
-    setMobileMenuOpen(false);
     await logout();
     navigate("/");
   };
 
   return (
-    <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/90 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/90">
-      <nav className="mx-auto flex max-w-[1600px] items-center justify-between px-4 py-3">
-        <Link to="/" className="flex min-w-0 items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 shadow-lg shadow-blue-500/20">
-            <GraduationCap size={22} className="text-white" />
-          </div>
-
-          <div className="min-w-0">
-            {isLearningPage ? (
-              <>
-                <h1 className="max-w-[520px] truncate text-lg font-black tracking-tight text-slate-950 dark:text-white">
-                  {learningCourseTitle || "Learning"}
-                </h1>
-
-                <p className="-mt-1 text-xs text-slate-500 dark:text-slate-400">
-                  VeoLMS Learning Mode
-                </p>
-              </>
-            ) : (
-              <>
-                <h1 className="text-xl font-black tracking-tight text-slate-950 dark:text-white">
-                  VeoLMS
-                </h1>
-
-                <p className="-mt-1 text-xs text-slate-500 dark:text-slate-400">
-                  Learning Platform
-                </p>
-              </>
-            )}
-          </div>
-        </Link>
-
-        <div className="hidden items-center gap-2 rounded-2xl border border-slate-200 bg-slate-100 p-1 md:flex dark:border-white/10 dark:bg-white/5">
-          <NavLink
+    <>
+      <header className="sticky top-0 z-50 w-full max-w-full overflow-x-hidden border-b border-slate-200 bg-white/90 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/90">
+        <nav className="mx-auto flex w-full max-w-[1600px] items-center justify-between gap-2 px-3 py-3 sm:px-4 lg:px-6">
+          <Link
             to="/"
-            className={({ isActive }) =>
-              `${linkClass({ isActive })} rounded-xl px-4 py-2 text-sm font-medium`
-            }
+            className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3 md:max-w-[42%] lg:max-w-none"
           >
-            Home
-          </NavLink>
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 shadow-lg shadow-blue-500/20">
+              <GraduationCap size={22} className="text-white" />
+            </div>
 
-          <NavLink
-            to="/courses"
-            className={({ isActive }) =>
-              `${linkClass({ isActive })} rounded-xl px-4 py-2 text-sm font-medium`
-            }
-          >
-            Courses
-          </NavLink>
+            <div className="min-w-0">
+              {isLearningPage ? (
+                <>
+                  <h1 className="max-w-[42vw] truncate text-base font-black tracking-tight text-slate-950 sm:max-w-[320px] sm:text-lg lg:max-w-[520px] dark:text-white">
+                    {learningCourseTitle || "Learning"}
+                  </h1>
 
-          {isAuthenticated && (
-            <NavLink
-              to="/feed"
-              className={({ isActive }) =>
-                `${linkClass({ isActive })} rounded-xl px-4 py-2 text-sm font-medium`
-              }
-            >
-              <span className="inline-flex items-center gap-2">
-                Feed
-                {!isFeedPage && <FeedBadge count={feedUnreadCount} />}
-              </span>
-            </NavLink>
-          )}
-
-          {isAuthenticated && (
-            <NavLink
-              to={dashboardPath}
-              className={({ isActive }) =>
-                `${linkClass({ isActive })} rounded-xl px-4 py-2 text-sm font-medium`
-              }
-            >
-              Dashboard
-            </NavLink>
-          )}
-        </div>
-
-        <div className="flex items-center gap-3">
-          <div className="hidden sm:block">
-            <ThemeToggle compact />
-          </div>
-
-          {isAuthenticated ? (
-            <div ref={profileMenuRef} className="relative">
-              <button
-                type="button"
-                onClick={() => setProfileMenuOpen((value) => !value)}
-                className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-100 py-1 pl-1 pr-3 text-slate-950 transition hover:bg-slate-200 dark:border-white/10 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
-              >
-                <div className="h-10 w-10 overflow-hidden rounded-full bg-gradient-to-br from-blue-500 to-purple-600">
-                  {profileImage ? (
-                    <img
-                      src={profileImage}
-                      alt={userName}
-                      className="h-full w-full object-cover"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-sm font-black text-white">
-                      {getInitial(userName)}
-                    </div>
-                  )}
-                </div>
-
-                <div className="hidden text-left sm:block">
-                  <p className="max-w-[130px] truncate text-sm font-bold text-slate-950 dark:text-white">
-                    {userName}
+                  <p className="-mt-1 hidden text-xs text-slate-500 sm:block dark:text-slate-400">
+                    VeoLMS Learning Mode
                   </p>
+                </>
+              ) : (
+                <>
+                  <h1 className="truncate text-lg font-black tracking-tight text-slate-950 sm:text-xl dark:text-white">
+                    VeoLMS
+                  </h1>
 
-                  <p className="-mt-0.5 text-xs capitalize text-slate-500 dark:text-slate-400">
-                    {user?.role}
+                  <p className="-mt-1 hidden text-xs text-slate-500 sm:block dark:text-slate-400">
+                    Learning Platform
                   </p>
-                </div>
-
-                <ChevronDown
-                  size={16}
-                  className={`text-slate-500 transition dark:text-slate-300 ${
-                    profileMenuOpen ? "rotate-180" : ""
-                  }`}
-                />
-              </button>
-
-              {profileMenuOpen && (
-                <div className="absolute right-0 top-14 z-50 w-72 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-black/10 dark:border-white/10 dark:bg-slate-950 dark:shadow-black/40">
-                  <div className="border-b border-slate-200 p-4 dark:border-white/10">
-                    <div className="flex items-center gap-3">
-                      <div className="h-12 w-12 overflow-hidden rounded-full bg-gradient-to-br from-blue-500 to-purple-600">
-                        {profileImage ? (
-                          <img
-                            src={profileImage}
-                            alt={userName}
-                            className="h-full w-full object-cover"
-                            referrerPolicy="no-referrer"
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center text-base font-black text-white">
-                            {getInitial(userName)}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-black text-slate-950 dark:text-white">
-                          {userName}
-                        </p>
-
-                        <p className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">
-                          {user?.email}
-                        </p>
-
-                        {user?.role && (
-                          <span className="mt-2 inline-flex rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-bold capitalize text-blue-700 dark:border-blue-400/20 dark:bg-blue-500/10 dark:text-blue-300">
-                            {user.role}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-2">
-                    <div className="mb-2 sm:hidden">
-                      <ThemeToggle />
-                    </div>
-
-                    <Link
-                      to="/my-account"
-                      onClick={() => setProfileMenuOpen(false)}
-                      className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-200 dark:hover:bg-white/10 dark:hover:text-white"
-                    >
-                      <UserCircle size={18} />
-                      My Account
-                    </Link>
-
-                    <button
-                      type="button"
-                      onClick={handleLogout}
-                      className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold text-red-600 transition hover:bg-red-50 hover:text-red-700 dark:text-red-300 dark:hover:bg-red-500/10 dark:hover:text-red-200"
-                    >
-                      <LogOut size={18} />
-                      Logout
-                    </button>
-                  </div>
-                </div>
+                </>
               )}
             </div>
-          ) : (
-            <>
-              <Link
-                to="/login"
-                className="hidden px-4 py-2 text-slate-600 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white sm:inline-flex"
-              >
-                Login
-              </Link>
+          </Link>
 
-              <Link
-                to="/register"
-                className="rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 px-5 py-2.5 font-bold text-white shadow-lg shadow-blue-500/20 hover:scale-[1.02]"
-              >
-                Join Free
-              </Link>
-            </>
-          )}
-
-          <button
-            type="button"
-            onClick={() => setMobileMenuOpen((value) => !value)}
-            className="rounded-xl border border-slate-200 bg-slate-100 p-2 text-slate-800 md:hidden dark:border-white/10 dark:bg-white/10 dark:text-white"
-          >
-            {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
-          </button>
-        </div>
-      </nav>
-
-      {mobileMenuOpen && (
-        <div className="border-t border-slate-200 bg-white px-4 py-4 shadow-xl md:hidden dark:border-white/10 dark:bg-slate-950">
-          <div className="mx-auto flex max-w-[1600px] flex-col gap-2">
+          <div className="hidden shrink-0 items-center gap-1 rounded-2xl border border-slate-200 bg-slate-100 p-1 md:flex lg:gap-2 dark:border-white/10 dark:bg-white/5">
             <NavLink
               to="/"
               className={({ isActive }) =>
-                `${mobileLinkClass({ isActive })} rounded-2xl px-4 py-3 text-sm font-black`
+                `${linkClass({ isActive })} rounded-xl px-3 py-2 text-sm font-medium lg:px-4`
               }
             >
               Home
@@ -418,7 +258,7 @@ const Navbar = () => {
             <NavLink
               to="/courses"
               className={({ isActive }) =>
-                `${mobileLinkClass({ isActive })} rounded-2xl px-4 py-3 text-sm font-black`
+                `${linkClass({ isActive })} rounded-xl px-3 py-2 text-sm font-medium lg:px-4`
               }
             >
               Courses
@@ -428,11 +268,11 @@ const Navbar = () => {
               <NavLink
                 to="/feed"
                 className={({ isActive }) =>
-                  `${mobileLinkClass({ isActive })} rounded-2xl px-4 py-3 text-sm font-black`
+                  `${linkClass({ isActive })} rounded-xl px-3 py-2 text-sm font-medium lg:px-4`
                 }
               >
-                <span className="inline-flex w-full items-center justify-between gap-3">
-                  <span>Feed</span>
+                <span className="inline-flex items-center gap-2">
+                  Feed
                   {!isFeedPage && <FeedBadge count={feedUnreadCount} />}
                 </span>
               </NavLink>
@@ -442,48 +282,185 @@ const Navbar = () => {
               <NavLink
                 to={dashboardPath}
                 className={({ isActive }) =>
-                  `${mobileLinkClass({ isActive })} rounded-2xl px-4 py-3 text-sm font-black`
+                  `${linkClass({ isActive })} rounded-xl px-3 py-2 text-sm font-medium lg:px-4`
                 }
               >
                 Dashboard
               </NavLink>
             )}
+          </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-white/5">
-              <ThemeToggle />
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+            <div className="hidden md:block">
+              <ThemeToggle compact />
             </div>
 
-            {!isAuthenticated && (
-              <div className="grid gap-2 pt-2">
+            {isAuthenticated ? (
+              <div ref={profileMenuRef} className="relative">
+                <button
+                  type="button"
+                  onClick={handleProfileButtonClick}
+                  className="flex max-w-[3.5rem] shrink-0 items-center gap-2 rounded-full border border-slate-200 bg-slate-100 py-1 pl-1 pr-2 text-slate-950 transition hover:bg-slate-200 sm:max-w-[220px] sm:pr-3 dark:border-white/10 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
+                >
+                  <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-gradient-to-br from-blue-500 to-purple-600">
+                    {profileImage ? (
+                      <img
+                        src={profileImage}
+                        alt={userName}
+                        className="h-full w-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-sm font-black text-white">
+                        {getInitial(userName)}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="hidden min-w-0 text-left sm:block">
+                    <p className="max-w-[130px] truncate text-sm font-bold text-slate-950 dark:text-white">
+                      {userName}
+                    </p>
+
+                    <p className="-mt-0.5 text-xs capitalize text-slate-500 dark:text-slate-400">
+                      {user?.role}
+                    </p>
+                  </div>
+
+                  <ChevronDown
+                    size={16}
+                    className={`text-slate-500 transition dark:text-slate-300 ${
+                      profileMenuOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+
+                {profileMenuOpen && (
+                  <div className="fixed right-4 top-[4.75rem] z-[80] w-[min(calc(100vw-2rem),28rem)] overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-2xl shadow-black/20 md:absolute md:right-0 md:top-14 md:z-50 md:w-72 dark:border-white/10 dark:bg-slate-950 dark:shadow-black/40">
+                    <div className="border-b border-slate-200 p-5 dark:border-white/10">
+                      <div className="flex items-center gap-4">
+                        <div className="h-16 w-16 shrink-0 overflow-hidden rounded-full bg-gradient-to-br from-blue-500 to-purple-600 shadow-lg shadow-blue-500/20 md:h-12 md:w-12">
+                          {profileImage ? (
+                            <img
+                              src={profileImage}
+                              alt={userName}
+                              className="h-full w-full object-cover"
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-xl font-black text-white md:text-base">
+                              {getInitial(userName)}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="min-w-0">
+                          <p className="truncate text-lg font-black text-slate-950 md:text-sm dark:text-white">
+                            {userName}
+                          </p>
+
+                          <p className="mt-1 truncate text-sm text-slate-500 md:text-xs dark:text-slate-400">
+                            {user?.email}
+                          </p>
+
+                          {user?.role && (
+                            <span className="mt-3 inline-flex rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-bold capitalize text-blue-700 dark:border-blue-400/20 dark:bg-blue-500/10 dark:text-blue-300">
+                              {user.role}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-2 p-3">
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2 dark:border-white/10 dark:bg-white/5">
+                        <ThemeToggle />
+                      </div>
+
+                      <Link
+                        to="/my-account"
+                        onClick={() => setProfileMenuOpen(false)}
+                        className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-black text-slate-800 transition hover:bg-slate-100 hover:text-slate-950 dark:text-white dark:hover:bg-white/10"
+                      >
+                        <UserCircle size={20} />
+                        My Account
+                      </Link>
+
+                      <button
+                        type="button"
+                        onClick={handleLogout}
+                        className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-black text-red-600 transition hover:bg-red-50 hover:text-red-700 dark:text-red-300 dark:hover:bg-red-500/10 dark:hover:text-red-200"
+                      >
+                        <LogOut size={20} />
+                        Logout
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="hidden items-center gap-3 sm:flex">
                 <Link
                   to="/login"
-                  className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-center text-sm font-black text-slate-700 hover:bg-slate-100 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+                  className="px-4 py-2 text-slate-600 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white"
                 >
                   Login
                 </Link>
 
                 <Link
                   to="/register"
-                  className="rounded-2xl bg-gradient-to-r from-blue-600 to-purple-600 px-4 py-3 text-center text-sm font-black text-white"
+                  className="rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 px-5 py-2.5 font-bold text-white shadow-lg shadow-blue-500/20 hover:scale-[1.02]"
                 >
                   Join Free
                 </Link>
               </div>
             )}
+          </div>
+        </nav>
+      </header>
+
+      {!isLearningPage && (
+        <nav className="fixed inset-x-3 bottom-3 z-40 rounded-[1.45rem] border border-slate-200 bg-white/90 p-1.5 shadow-2xl shadow-black/15 backdrop-blur-xl md:hidden dark:border-white/10 dark:bg-slate-950/90 dark:shadow-black/40">
+          <div
+            className={`grid gap-1 ${
+              isAuthenticated ? "grid-cols-5" : "grid-cols-2"
+            }`}
+          >
+            <MobileBottomNavItem to="/" label="Home" icon={Home} />
+            <MobileBottomNavItem
+              to="/courses"
+              label="Courses"
+              icon={BookOpen}
+            />
 
             {isAuthenticated && (
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-left text-sm font-black text-red-600 hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-500/20"
-              >
-                Logout
-              </button>
+              <>
+                <MobileBottomNavItem
+                  to="/feed"
+                  label="Feed"
+                  icon={Rss}
+                  badge={
+                    !isFeedPage ? <FeedBadge count={feedUnreadCount} /> : null
+                  }
+                />
+
+                <MobileBottomNavItem
+                  to={dashboardPath}
+                  label="Dashboard"
+                  icon={LayoutDashboard}
+                />
+
+                <MobileBottomNavItem
+                  to="/my-account"
+                  label="Account"
+                  icon={UserCircle}
+                />
+              </>
             )}
           </div>
-        </div>
+        </nav>
       )}
-    </header>
+    </>
   );
 };
 

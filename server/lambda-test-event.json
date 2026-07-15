@@ -1,0 +1,13 @@
+{
+    "detail":  {
+                   "jobId":  "1784004503105-psryik",
+                   "status":  "COMPLETE",
+                   "userMetadata":  {
+                                        "hlsManifestKey":  "courses/hls/reactjs-complete-couses/6a55bf064bc02eb2201ee664/master.m3u8",
+                                        "lessonId":  "6a55bef44bc02eb2201ee629",
+                                        "videoAssetId":  "6a55bf064bc02eb2201ee664",
+                                        "hlsOutputPrefix":  "courses/hls/reactjs-complete-couses/6a55bf064bc02eb2201ee664/",
+                                        "courseId":  "6a3d25b200913dab9b038ee3"
+                                    }
+               }
+}

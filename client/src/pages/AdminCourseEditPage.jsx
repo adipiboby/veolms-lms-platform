@@ -29,6 +29,10 @@ const createTempId = () => {
   return `temp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 };
 
+const createClientId = () => {
+  return `client_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+};
+
 const normalizeArray = (value) => {
   return Array.isArray(value) ? value : [];
 };
@@ -43,15 +47,42 @@ const normalizeObjectId = (value) => {
   return String(value);
 };
 
+const getTitleFromFileName = (value = "") => {
+  const cleanName = String(value || "")
+    .split("/")
+    .pop()
+    .replace(/\.[^/.]+$/, "")
+    .replace(/[-_]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return cleanName;
+};
+
+const getAutoSectionTitle = (sectionIndex) => {
+  return `Section ${Number(sectionIndex || 0) + 1}`;
+};
+
+const getAutoLessonTitle = (metadata = {}, lessonIndex = 0) => {
+  return (
+    metadata?.title?.trim?.() ||
+    metadata?.displayTitle?.trim?.() ||
+    getTitleFromFileName(metadata?.originalVideoName || metadata?.fileName) ||
+    `Lesson ${Number(lessonIndex || 0) + 1}`
+  );
+};
+
 const normalizeCourse = (courseData) => {
   const sections = normalizeArray(courseData?.sections).map(
     (section, sectionIndex) => ({
       ...section,
+      clientId: section?.clientId || createClientId(),
       _id: section?._id || createTempId(),
       title: section?.title || "",
       order: Number(section?.order ?? sectionIndex + 1),
       lessons: normalizeArray(section?.lessons).map((lesson, lessonIndex) => ({
         ...lesson,
+        clientId: lesson?.clientId || createClientId(),
         _id: lesson?._id || createTempId(),
         title: lesson?.title || "",
         duration: lesson?.duration || "",
@@ -100,6 +131,10 @@ const removeTempIds = (value) => {
     const cleaned = {};
 
     Object.entries(value).forEach(([key, itemValue]) => {
+      if (key === "clientId") {
+        return;
+      }
+
       if (key === "_id" && String(itemValue).startsWith("temp_")) {
         return;
       }
@@ -131,11 +166,11 @@ const buildCoursePayload = (course) => {
     isPublished: Boolean(course.isPublished),
     sections: normalizeArray(course.sections).map((section, sectionIndex) => ({
       ...section,
-      title: section.title,
+      title: section.title?.trim() || getAutoSectionTitle(sectionIndex),
       order: Number(section.order || sectionIndex + 1),
       lessons: normalizeArray(section.lessons).map((lesson, lessonIndex) => ({
         ...lesson,
-        title: lesson.title,
+        title: lesson.title?.trim() || `Lesson ${lessonIndex + 1}`,
         videoUrl: lesson.videoUrl,
         videoKey: lesson.videoKey || lesson.videoUrl || "",
         videoAssetId: normalizeObjectId(lesson.videoAssetId),
@@ -165,6 +200,38 @@ const getCourseFromResponse = (response) => {
     response?.data ||
     null
   );
+};
+
+const preserveClientIdsAfterSave = ({ previousCourse, savedCourse }) => {
+  const normalizedSavedCourse = normalizeCourse(savedCourse);
+
+  return {
+    ...normalizedSavedCourse,
+    sections: normalizeArray(normalizedSavedCourse.sections).map(
+      (section, sectionIndex) => {
+        const previousSection = previousCourse?.sections?.[sectionIndex];
+
+        return {
+          ...section,
+          clientId:
+            previousSection?.clientId || section?.clientId || createClientId(),
+          lessons: normalizeArray(section.lessons).map(
+            (lesson, lessonIndex) => {
+              const previousLesson = previousSection?.lessons?.[lessonIndex];
+
+              return {
+                ...lesson,
+                clientId:
+                  previousLesson?.clientId ||
+                  lesson?.clientId ||
+                  createClientId(),
+              };
+            },
+          ),
+        };
+      },
+    ),
+  };
 };
 
 const tryGetCourse = async (identifier) => {
@@ -360,6 +427,7 @@ const AdminCourseEditPage = () => {
 
         return {
           ...section,
+          title: section.title?.trim() || getAutoSectionTitle(sectionIndex),
           lessons: section.lessons.map((lesson, currentLessonIndex) => {
             if (currentLessonIndex !== lessonIndex) return lesson;
 
@@ -389,6 +457,7 @@ const AdminCourseEditPage = () => {
 
         return {
           ...section,
+          title: section.title?.trim() || getAutoSectionTitle(sectionIndex),
           lessons: section.lessons.map((lesson, currentLessonIndex) => {
             if (currentLessonIndex !== lessonIndex) return lesson;
 
@@ -396,7 +465,7 @@ const AdminCourseEditPage = () => {
               ...lesson,
               title: lesson.title?.trim()
                 ? lesson.title
-                : metadata.title || lesson.title,
+                : getAutoLessonTitle(metadata, lessonIndex),
               duration: metadata.duration || lesson.duration,
               durationSeconds:
                 metadata.durationSeconds || lesson.durationSeconds || 0,
@@ -420,6 +489,140 @@ const AdminCourseEditPage = () => {
 
     setMessage("");
     setError("");
+  };
+
+  const applyLessonVideoMetadataToCourse = (
+    courseValue,
+    sectionIndex,
+    lessonIndex,
+    metadata,
+  ) => {
+    return {
+      ...courseValue,
+      sections: courseValue.sections.map((section, currentSectionIndex) => {
+        if (currentSectionIndex !== sectionIndex) return section;
+
+        return {
+          ...section,
+          title: section.title?.trim() || getAutoSectionTitle(sectionIndex),
+          lessons: section.lessons.map((lesson, currentLessonIndex) => {
+            if (currentLessonIndex !== lessonIndex) return lesson;
+
+            return {
+              ...lesson,
+              title: lesson.title?.trim()
+                ? lesson.title
+                : getAutoLessonTitle(metadata, lessonIndex),
+              duration: metadata.duration || lesson.duration,
+              durationSeconds:
+                metadata.durationSeconds || lesson.durationSeconds || 0,
+              originalVideoName:
+                metadata.originalVideoName || lesson.originalVideoName || "",
+              sizeBytes: metadata.sizeBytes || lesson.sizeBytes || 0,
+              mimeType: metadata.mimeType || lesson.mimeType || "",
+              videoKey: metadata.videoKey || lesson.videoKey || "",
+              videoUrl: metadata.videoUrl || lesson.videoUrl || "",
+              videoAssetId:
+                metadata.videoAssetId || lesson.videoAssetId || null,
+              hlsManifestKey:
+                metadata.hlsManifestKey || lesson.hlsManifestKey || "",
+              hlsOutputPrefix:
+                metadata.hlsOutputPrefix || lesson.hlsOutputPrefix || "",
+            };
+          }),
+        };
+      }),
+    };
+  };
+
+  const resolveLessonUploadContext = async ({
+    sectionIndex,
+    lessonIndex,
+    metadata,
+  }) => {
+    if (!course?._id) {
+      throw new Error("Course id is missing. Please reload the edit page.");
+    }
+
+    const currentLesson =
+      course.sections?.[sectionIndex]?.lessons?.[lessonIndex];
+    const alreadySavedLessonId =
+      currentLesson?._id && !String(currentLesson._id).startsWith("temp_")
+        ? currentLesson._id
+        : "";
+
+    if (alreadySavedLessonId) {
+      return {
+        courseId: course._id,
+        lessonId: alreadySavedLessonId,
+        courseSlug: course.slug || course.title || "course",
+      };
+    }
+
+    try {
+      setSaving(true);
+      setError("");
+      setMessage("Saving lesson first, then video upload will start...");
+
+      const courseWithVideoMeta = applyLessonVideoMetadataToCourse(
+        course,
+        sectionIndex,
+        lessonIndex,
+        metadata,
+      );
+
+      setCourse(courseWithVideoMeta);
+
+      const payload = buildCoursePayload(courseWithVideoMeta);
+
+      const response = await tryUpdateCourse({
+        courseId: course._id,
+        payload,
+      });
+
+      const savedCourse = getCourseFromResponse(response);
+
+      if (!savedCourse?._id) {
+        throw new Error("Course was not saved correctly.");
+      }
+
+      const normalizedSavedCourse = preserveClientIdsAfterSave({
+        previousCourse: courseWithVideoMeta,
+        savedCourse,
+      });
+      const savedLesson =
+        normalizedSavedCourse.sections?.[sectionIndex]?.lessons?.[lessonIndex];
+
+      if (!savedLesson?._id || String(savedLesson._id).startsWith("temp_")) {
+        throw new Error(
+          "Lesson id was not created. Please check required lesson fields.",
+        );
+      }
+
+      setCourse(normalizedSavedCourse);
+      setOpenLessonKey(getLessonRefKey(sectionIndex, lessonIndex));
+      setMessage("Lesson saved. Video upload started.");
+      showToast("Lesson saved. Video upload started.");
+
+      return {
+        courseId: normalizedSavedCourse._id,
+        lessonId: savedLesson._id,
+        courseSlug:
+          normalizedSavedCourse.slug || normalizedSavedCourse.title || "course",
+      };
+    } catch (autoSaveError) {
+      console.error("AUTO_SAVE_LESSON_BEFORE_VIDEO_ERROR:", autoSaveError);
+
+      setError(
+        autoSaveError?.response?.data?.message ||
+          autoSaveError?.message ||
+          "Auto-save failed. Section and lesson titles were auto-filled; please check course required fields and try again.",
+      );
+
+      throw autoSaveError;
+    } finally {
+      setSaving(false);
+    }
   };
 
   const updateLessonResources = (lessonId, nextResources) => {
@@ -451,8 +654,11 @@ const AdminCourseEditPage = () => {
       sections: [
         ...normalizeArray(previousCourse.sections),
         {
+          clientId: createClientId(),
           _id: createTempId(),
-          title: "",
+          title: getAutoSectionTitle(
+            normalizeArray(previousCourse.sections).length,
+          ),
           order: normalizeArray(previousCourse.sections).length + 1,
           lessons: [],
         },
@@ -499,8 +705,9 @@ const AdminCourseEditPage = () => {
           lessons: [
             ...normalizeArray(section.lessons),
             {
+              clientId: createClientId(),
               _id: createTempId(),
-              title: "",
+              title: `Lesson ${nextLessonIndex + 1}`,
               duration: "",
               durationSeconds: 0,
               order: normalizeArray(section.lessons).length + 1,
@@ -986,7 +1193,11 @@ const AdminCourseEditPage = () => {
                 <div className="space-y-6">
                   {course.sections.map((section, sectionIndex) => (
                     <article
-                      key={section._id || sectionIndex}
+                      key={
+                        section.clientId ||
+                        section._id ||
+                        `section-${sectionIndex}`
+                      }
                       className={innerCardClass}
                     >
                       <div className="mb-5 flex flex-wrap items-end gap-4">
@@ -1058,7 +1269,11 @@ const AdminCourseEditPage = () => {
 
                             return (
                               <div
-                                key={lesson._id || lessonIndex}
+                                key={
+                                  lesson.clientId ||
+                                  lesson._id ||
+                                  `lesson-${sectionIndex}-${lessonIndex}`
+                                }
                                 ref={(element) => {
                                   if (element) {
                                     lessonRefs.current[lessonKey] = element;
@@ -1315,6 +1530,16 @@ const AdminCourseEditPage = () => {
                                           Lesson Video
                                         </label>
 
+                                        {!hasRealLessonId && (
+                                          <div className="mb-4 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm font-bold text-blue-800 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-200">
+                                            New lesson: choose a video and the
+                                            app will auto-fill the
+                                            title/duration, save the lesson,
+                                            create its id, and then upload the
+                                            video.
+                                          </div>
+                                        )}
+
                                         <VideoUploadField
                                           value={lesson.videoUrl}
                                           courseSlug={
@@ -1327,6 +1552,16 @@ const AdminCourseEditPage = () => {
                                             hasRealLessonId
                                               ? lesson._id
                                               : undefined
+                                          }
+                                          disabled={saving}
+                                          resolveUploadContext={({
+                                            metadata,
+                                          }) =>
+                                            resolveLessonUploadContext({
+                                              sectionIndex,
+                                              lessonIndex,
+                                              metadata,
+                                            })
                                           }
                                           onMetaChange={(metadata) => {
                                             handleLessonVideoMeta(

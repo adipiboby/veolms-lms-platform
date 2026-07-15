@@ -1,13 +1,23 @@
 import { useEffect, useRef, useState } from "react";
-import { CheckCircle, FileVideo, Info } from "lucide-react";
+import {
+  CheckCircle,
+  FileVideo,
+  Info,
+  Loader2,
+  Pause,
+  Play,
+  RefreshCw,
+  UploadCloud,
+  XCircle,
+} from "lucide-react";
 
 import { api } from "../../services/api";
 
-const PART_SIZE = 10 * 1024 * 1024; // 10 MB
+const PART_SIZE = 10 * 1024 * 1024;
 const STORAGE_PREFIX = "veolms-video-upload:";
 
 const normalizeETag = (etag = "") => {
-  const clean = String(etag).trim();
+  const clean = String(etag || "").trim();
 
   return clean.startsWith('"') ? clean : `"${clean}"`;
 };
@@ -18,8 +28,8 @@ const getSessionStorageKey = (file) => {
 
 const getAnySavedUploadExists = () => {
   try {
-    for (let i = 0; i < localStorage.length; i += 1) {
-      const key = localStorage.key(i);
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const key = localStorage.key(index);
 
       if (key?.startsWith(STORAGE_PREFIX)) return true;
     }
@@ -59,18 +69,18 @@ const clearAllSavedUploadSessions = () => {
     .forEach((key) => localStorage.removeItem(key));
 };
 
-const getApiErrorMessage = (err) => {
+const getApiErrorMessage = (error) => {
   return (
-    err.response?.data?.message ||
-    err.response?.data?.error ||
-    err.message ||
+    error?.response?.data?.message ||
+    error?.response?.data?.error ||
+    error?.message ||
     "Video upload failed."
   );
 };
 
-const isOldUploadOwnershipError = (err) => {
-  const status = Number(err?.response?.status || 0);
-  const message = getApiErrorMessage(err).toLowerCase();
+const isOldUploadOwnershipError = (error) => {
+  const status = Number(error?.response?.status || 0);
+  const message = getApiErrorMessage(error).toLowerCase();
 
   return (
     status === 403 &&
@@ -82,7 +92,6 @@ const isOldUploadOwnershipError = (err) => {
 
 const formatVideoDuration = (seconds) => {
   const totalSeconds = Math.floor(Number(seconds) || 0);
-
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const remainingSeconds = totalSeconds % 60;
@@ -97,7 +106,7 @@ const formatVideoDuration = (seconds) => {
 };
 
 const getTitleFromFileName = (fileName = "") => {
-  return fileName
+  return String(fileName || "Lesson Video")
     .replace(/\.[^/.]+$/, "")
     .replace(/[-_]+/g, " ")
     .replace(/\s+/g, " ")
@@ -108,28 +117,30 @@ const getTitleFromFileName = (fileName = "") => {
 };
 
 const getVideoDurationFromFile = (file) => {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const video = document.createElement("video");
     const objectUrl = URL.createObjectURL(file);
+
+    const cleanup = () => {
+      video.removeAttribute("src");
+      video.load();
+      URL.revokeObjectURL(objectUrl);
+    };
 
     video.preload = "metadata";
     video.muted = true;
     video.playsInline = true;
 
     video.onloadedmetadata = () => {
-      URL.revokeObjectURL(objectUrl);
+      const duration = Number.isFinite(video.duration) ? video.duration : 0;
 
-      if (!Number.isFinite(video.duration)) {
-        resolve(0);
-        return;
-      }
-
-      resolve(video.duration);
+      cleanup();
+      resolve(duration);
     };
 
     video.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      reject(new Error("Unable to read video duration."));
+      cleanup();
+      resolve(0);
     };
 
     video.src = objectUrl;
@@ -138,12 +149,15 @@ const getVideoDurationFromFile = (file) => {
 
 const getVideoMetadataFromFile = async (file) => {
   const durationSeconds = await getVideoDurationFromFile(file);
+  const title = getTitleFromFileName(file.name);
 
   return {
-    title: getTitleFromFileName(file.name),
+    title,
+    displayTitle: title,
     duration: formatVideoDuration(durationSeconds),
     durationSeconds: Math.floor(durationSeconds || 0),
     originalVideoName: file.name,
+    fileName: file.name,
     mimeType: file.type || "video/mp4",
     sizeBytes: file.size,
     sizeMB: Number((file.size / 1024 / 1024).toFixed(2)),
@@ -192,11 +206,172 @@ const uploadPartWithProgress = ({ uploadUrl, chunk, onProgress, xhrRef }) => {
   });
 };
 
+const StatusBox = ({ type = "info", children }) => {
+  const className =
+    type === "success"
+      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+      : type === "warning"
+        ? "border-yellow-500/30 bg-yellow-500/10 text-yellow-100"
+        : type === "error"
+          ? "border-red-500/30 bg-red-500/10 text-red-200"
+          : "border-blue-500/30 bg-blue-500/10 text-blue-200";
+
+  return (
+    <div className={`rounded-xl border p-3 text-sm font-semibold ${className}`}>
+      {children}
+    </div>
+  );
+};
+
+const UploadBusyPanel = ({
+  uploadStage,
+  selectedMetadata,
+  progress,
+  message,
+  warning,
+  paused,
+  onPause,
+  onResume,
+  onCancel,
+}) => {
+  const isReading = uploadStage === "reading";
+  const isCreating = uploadStage === "creating";
+  const isUploading = uploadStage === "uploading";
+  const isFinalizing = uploadStage === "finalizing";
+  const isProcessing = uploadStage === "processing";
+
+  const title = isReading
+    ? "Reading video details..."
+    : isCreating
+      ? "Creating course and lesson id..."
+      : isUploading
+        ? "Uploading video..."
+        : isFinalizing
+          ? "Finalizing uploaded video..."
+          : isProcessing
+            ? "Processing video qualities..."
+            : paused
+              ? "Upload paused"
+              : "Preparing video upload...";
+
+  const displayProgress =
+    isReading || isCreating ? 5 : isFinalizing ? 100 : progress;
+
+  return (
+    <div className="rounded-xl border border-dashed border-blue-500/40 bg-blue-500/10 p-5">
+      <div className="flex flex-col items-center text-center">
+        {paused ? (
+          <Pause className="mb-3 text-yellow-200" size={38} />
+        ) : isProcessing ? (
+          <RefreshCw className="mb-3 animate-spin text-blue-200" size={38} />
+        ) : (
+          <Loader2 className="mb-3 animate-spin text-blue-200" size={38} />
+        )}
+
+        <p className="text-base font-black text-white">{title}</p>
+
+        <p className="mt-2 max-w-xl text-sm text-slate-300">
+          Please wait. Do not refresh this page and do not choose the same video
+          again.
+        </p>
+      </div>
+
+      {selectedMetadata && (
+        <div className="mt-4 rounded-xl border border-blue-400/20 bg-slate-950/60 p-3">
+          <p className="flex items-center gap-2 text-sm font-bold text-blue-100">
+            <FileVideo size={16} />
+            {selectedMetadata.title}
+          </p>
+
+          <div className="mt-2 space-y-1 text-xs text-slate-300">
+            <p>Duration: {selectedMetadata.duration || "0:00"}</p>
+            <p>File: {selectedMetadata.originalVideoName}</p>
+            <p>Size: {selectedMetadata.sizeMB} MB</p>
+            <p>Type: {selectedMetadata.mimeType}</p>
+          </div>
+        </div>
+      )}
+
+      <div className="mt-4">
+        <div className="mb-2 flex items-center justify-between text-xs font-bold text-blue-100">
+          <span>{paused ? "Paused" : "Progress"}</span>
+          <span>
+            {Math.max(0, Math.min(100, Number(displayProgress || 0)))}%
+          </span>
+        </div>
+
+        <div className="h-2 overflow-hidden rounded-full bg-slate-800">
+          <div
+            className="h-full rounded-full bg-blue-500 transition-all duration-300"
+            style={{
+              width: `${Math.max(0, Math.min(100, Number(displayProgress || 0)))}%`,
+            }}
+          />
+        </div>
+      </div>
+
+      {message && (
+        <div className="mt-3">
+          <StatusBox type="success">{message}</StatusBox>
+        </div>
+      )}
+
+      {warning && (
+        <div className="mt-3">
+          <StatusBox type="warning">{warning}</StatusBox>
+        </div>
+      )}
+
+      {isUploading && !paused && (
+        <div className="mt-4 flex flex-wrap justify-center gap-2">
+          <button
+            type="button"
+            onClick={onPause}
+            className="rounded-xl border border-slate-600 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/10"
+          >
+            Pause Upload
+          </button>
+
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-xl border border-red-500/40 px-4 py-2 text-sm font-semibold text-red-300 hover:bg-red-500/10"
+          >
+            Cancel Upload
+          </button>
+        </div>
+      )}
+
+      {paused && (
+        <div className="mt-4 flex flex-wrap justify-center gap-2">
+          <button
+            type="button"
+            onClick={onResume}
+            className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500"
+          >
+            <Play size={15} />
+            Resume Upload
+          </button>
+
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-xl border border-red-500/40 px-4 py-2 text-sm font-semibold text-red-300 hover:bg-red-500/10"
+          >
+            Cancel Upload
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const VideoUploadField = ({
   value,
   onChange,
   onMetaChange,
   onUploadSuccess,
+  resolveUploadContext,
   courseSlug,
   courseId,
   lessonId,
@@ -208,18 +383,45 @@ const VideoUploadField = ({
   const sessionRef = useRef(null);
   const storageKeyRef = useRef("");
   const resumeModeRef = useRef(false);
+  const processingPollTimerRef = useRef(null);
 
   const [selectedFile, setSelectedFile] = useState(null);
   const [selectedMetadata, setSelectedMetadata] = useState(null);
   const [hasSavedUpload, setHasSavedUpload] = useState(false);
-  const [uploading, setUploading] = useState(false);
+
+  const [uploadStage, setUploadStage] = useState("idle");
   const [paused, setPaused] = useState(false);
   const [progress, setProgress] = useState(0);
+
   const [message, setMessage] = useState("");
+  const [warning, setWarning] = useState("");
   const [error, setError] = useState("");
+
+  const [processingStatus, setProcessingStatus] = useState("");
+  const [processingMessage, setProcessingMessage] = useState("");
+
+  const hasRequiredLessonTarget = Boolean(courseId && lessonId);
+  const canResolveUploadContext = typeof resolveUploadContext === "function";
+  const isBusy =
+    uploadStage === "reading" ||
+    uploadStage === "creating" ||
+    uploadStage === "uploading" ||
+    uploadStage === "finalizing" ||
+    uploadStage === "processing";
+  const uploadDisabled = disabled || isBusy;
+  const showBusyPanel = isBusy || paused;
+
+  const missingTargetMessage =
+    "Course and lesson id are missing. Choose a video again so the app can create them automatically before upload.";
 
   useEffect(() => {
     setHasSavedUpload(getAnySavedUploadExists());
+
+    return () => {
+      if (processingPollTimerRef.current) {
+        clearTimeout(processingPollTimerRef.current);
+      }
+    };
   }, []);
 
   const resetInput = () => {
@@ -236,7 +438,7 @@ const VideoUploadField = ({
 
     setSelectedFile(null);
     setSelectedMetadata(null);
-    setUploading(false);
+    setUploadStage("idle");
     setPaused(false);
     setProgress(0);
 
@@ -245,24 +447,31 @@ const VideoUploadField = ({
   };
 
   const openFilePicker = () => {
-    if (disabled || uploading) return;
+    if (disabled || isBusy) return;
+
+    if (!hasRequiredLessonTarget && !canResolveUploadContext) {
+      setError(missingTargetMessage);
+      setMessage("");
+      return;
+    }
 
     fileInputRef.current?.click();
   };
 
   const handleClearOldUploads = () => {
-    if (uploading) return;
+    if (isBusy) return;
 
     clearAllSavedUploadSessions();
     resetUploadState();
 
     setHasSavedUpload(false);
     setError("");
+    setWarning("");
     setMessage("Old upload sessions cleared. Choose video again.");
   };
 
   const handleRemoveVideo = () => {
-    if (uploading) return;
+    if (isBusy) return;
 
     onChange?.("");
 
@@ -281,7 +490,10 @@ const VideoUploadField = ({
 
     resetUploadState();
 
+    setProcessingStatus("");
+    setProcessingMessage("");
     setMessage("Video removed from this lesson.");
+    setWarning("");
     setError("");
   };
 
@@ -291,9 +503,139 @@ const VideoUploadField = ({
 
     setHasSavedUpload(false);
     setMessage("");
+    setWarning("");
     setError(
       "Old upload session was removed because it belongs to another admin or old login. Please click Choose Video and upload again fresh.",
     );
+  };
+
+  const getActiveUploadTarget = async ({ file, metadata, session }) => {
+    if (session?.courseId && session?.lessonId) {
+      return {
+        activeCourseSlug: session.courseSlug || courseSlug || "course",
+        activeCourseId: session.courseId,
+        activeLessonId: session.lessonId,
+      };
+    }
+
+    if (courseId && lessonId) {
+      return {
+        activeCourseSlug: courseSlug || "course",
+        activeCourseId: courseId,
+        activeLessonId: lessonId,
+      };
+    }
+
+    if (!canResolveUploadContext) {
+      throw new Error(missingTargetMessage);
+    }
+
+    setUploadStage("creating");
+    setProgress(5);
+    setMessage("Creating course and lesson id...");
+    setWarning("Please wait. Do not select the same video again.");
+
+    const context = await resolveUploadContext({
+      file,
+      metadata,
+    });
+
+    const activeCourseId = context?.courseId;
+    const activeLessonId = context?.lessonId;
+    const activeCourseSlug = context?.courseSlug || courseSlug || "course";
+
+    if (!activeCourseId || !activeLessonId) {
+      throw new Error(
+        "Unable to create a lesson id automatically. Please check required course and lesson fields, then try again.",
+      );
+    }
+
+    return {
+      activeCourseSlug,
+      activeCourseId,
+      activeLessonId,
+    };
+  };
+
+  const pollProcessingStatus = async ({ videoId, jobId, attempt = 1 }) => {
+    if (!videoId && !jobId) return;
+
+    try {
+      if (!videoId) {
+        setUploadStage("idle");
+        setProcessingStatus("processing");
+        setProcessingMessage(
+          "Upload completed. Video processing is running in background. Refresh after some time to see ready status.",
+        );
+        return;
+      }
+
+      const response = await api.get(`/videos/admin/job-status/${videoId}`);
+      const video = response.data.video || response.data.data || response.data;
+
+      const hlsStatus =
+        video?.hlsStatus || video?.status || video?.mediaConvertJobStatus || "";
+
+      if (
+        hlsStatus === "ready" ||
+        hlsStatus === "COMPLETE" ||
+        video?.mediaConvertJobStatus === "COMPLETE"
+      ) {
+        setUploadStage("idle");
+        setProcessingStatus("ready");
+        setProcessingMessage(
+          "Video processing completed. 720p / 480p / 360p is ready.",
+        );
+        setWarning("");
+        return;
+      }
+
+      if (
+        hlsStatus === "failed" ||
+        hlsStatus === "ERROR" ||
+        video?.mediaConvertJobStatus === "ERROR"
+      ) {
+        setUploadStage("idle");
+        setProcessingStatus("failed");
+        setProcessingMessage(
+          video?.processingError ||
+            video?.mediaConvertError ||
+            "Video processing failed. Please check MediaConvert logs.",
+        );
+        setWarning("");
+        return;
+      }
+
+      setUploadStage("processing");
+      setProcessingStatus("processing");
+      setProcessingMessage(
+        "Upload completed. Please wait while 720p / 480p / 360p video quality conversion finishes.",
+      );
+
+      if (attempt >= 60) {
+        setUploadStage("idle");
+        setProcessingMessage(
+          "Upload completed. Video processing is still running in background. You can refresh later.",
+        );
+        return;
+      }
+
+      processingPollTimerRef.current = setTimeout(() => {
+        pollProcessingStatus({
+          videoId,
+          jobId,
+          attempt: attempt + 1,
+        });
+      }, 5000);
+    } catch (pollError) {
+      console.warn("VIDEO_PROCESSING_STATUS_POLL_WARNING:", pollError);
+
+      setUploadStage("idle");
+      setProcessingStatus("processing");
+      setProcessingMessage(
+        "Upload completed. Video processing is running in background. Refresh after some time to see ready status.",
+      );
+    }
   };
 
   const startOrResumeUpload = async (
@@ -308,10 +650,12 @@ const VideoUploadField = ({
 
     try {
       setSelectedFile(file);
-      setUploading(true);
       setPaused(false);
       setError("");
+      setWarning("");
       setProgress(0);
+      setProcessingStatus("");
+      setProcessingMessage("");
       pausedRef.current = false;
 
       const metadata =
@@ -320,32 +664,39 @@ const VideoUploadField = ({
         (await getVideoMetadataFromFile(file));
 
       setSelectedMetadata(metadata);
-
       onMetaChange?.(metadata);
 
       let session = shouldResume ? loadSavedSessionForFile(file) : null;
 
-      /*
-        Choose Video = fresh upload.
-        Resume Upload = use saved multipart session.
-      */
       if (!shouldResume) {
         clearSession(storageKey);
         session = null;
       }
 
+      const { activeCourseSlug, activeCourseId, activeLessonId } =
+        await getActiveUploadTarget({
+          file,
+          metadata,
+          session,
+        });
+
       if (session?.uploadId && session?.key) {
+        setUploadStage("uploading");
         setMessage("Resuming previous upload...");
       } else {
-        setMessage("Starting fresh upload...");
+        setUploadStage("uploading");
+        setMessage("Starting video upload...");
+        setWarning(
+          "Please wait. Video upload is in progress. Do not close this page or upload same video again.",
+        );
 
         const initiateRes = await api.post("/videos/admin/multipart/initiate", {
           fileName: file.name,
           contentType: file.type || "video/mp4",
           sizeBytes: file.size,
-          courseSlug,
-          courseId,
-          lessonId,
+          courseSlug: activeCourseSlug,
+          courseId: activeCourseId,
+          lessonId: activeLessonId,
         });
 
         session = {
@@ -355,6 +706,9 @@ const VideoUploadField = ({
           contentType: file.type || "video/mp4",
           sizeBytes: file.size,
           lastModified: file.lastModified,
+          courseSlug: activeCourseSlug,
+          courseId: activeCourseId,
+          lessonId: activeLessonId,
           completedParts: [],
         };
 
@@ -393,7 +747,11 @@ const VideoUploadField = ({
           continue;
         }
 
+        setUploadStage("uploading");
         setMessage(`Uploading part ${partNumber} of ${totalParts}...`);
+        setWarning(
+          "Upload is running. Please do not refresh or choose the video again.",
+        );
 
         const start = (partNumber - 1) * PART_SIZE;
         const end = Math.min(start + PART_SIZE, file.size);
@@ -448,7 +806,12 @@ const VideoUploadField = ({
         setProgress(Math.round((uploadedBytes / file.size) * 100));
       }
 
-      setMessage("Completing upload...");
+      setUploadStage("finalizing");
+      setProgress(100);
+      setMessage("Finalizing uploaded video...");
+      setWarning(
+        "Upload completed. Now starting video processing. Please wait.",
+      );
 
       const completeRes = await api.post("/videos/admin/multipart/complete", {
         key: session.key,
@@ -459,9 +822,9 @@ const VideoUploadField = ({
         mimeType: file.type || "video/mp4",
         sizeBytes: file.size,
 
-        courseSlug,
-        courseId,
-        lessonId,
+        courseSlug: session.courseSlug || activeCourseSlug,
+        courseId: session.courseId || activeCourseId,
+        lessonId: session.lessonId || activeLessonId,
 
         displayTitle: metadata.title,
         duration: metadata.duration,
@@ -492,29 +855,52 @@ const VideoUploadField = ({
       setHasSavedUpload(getAnySavedUploadExists());
       setProgress(100);
       setMessage("Video uploaded successfully.");
+      setWarning(
+        "Please wait. HLS quality conversion is processing in the background. Do not upload the same video again.",
+      );
       setPaused(false);
       setError("");
-    } catch (err) {
-      if (err.message === "UPLOAD_PAUSED") {
+      setUploadStage("processing");
+      setProcessingStatus("processing");
+      setProcessingMessage(
+        "MediaConvert is creating 720p / 480p / 360p video qualities...",
+      );
+
+      const videoId = video?._id || finalMetadata.videoAssetId || "";
+      const jobId =
+        video?.mediaConvertJobId || completeRes.data.mediaConvertJobId || "";
+
+      if (videoId || jobId) {
+        pollProcessingStatus({
+          videoId,
+          jobId,
+        });
+      }
+    } catch (error) {
+      if (error.message === "UPLOAD_PAUSED") {
+        setUploadStage("idle");
         setPaused(true);
         setMessage("Upload paused. Click Resume Upload to continue.");
+        setWarning("");
         setError("");
         return;
       }
 
-      console.error("VIDEO_UPLOAD_ERROR:", err);
+      console.error("VIDEO_UPLOAD_ERROR:", error);
 
-      if (isOldUploadOwnershipError(err)) {
+      if (isOldUploadOwnershipError(error)) {
         handleOldSessionOwnershipError();
         return;
       }
 
-      const errorMessage = getApiErrorMessage(err);
+      const errorMessage = getApiErrorMessage(error);
 
+      setUploadStage("idle");
+      setPaused(false);
       setError(errorMessage);
       setMessage("");
+      setWarning("");
     } finally {
-      setUploading(false);
       xhrRef.current = null;
       resumeModeRef.current = false;
       resetInput();
@@ -529,7 +915,12 @@ const VideoUploadField = ({
 
     try {
       setError("");
+      setWarning(
+        "Please wait. Reading details first, then upload will start automatically.",
+      );
       setMessage("Reading video details...");
+      setProgress(3);
+      setUploadStage("reading");
 
       const metadata = await getVideoMetadataFromFile(file);
 
@@ -544,18 +935,21 @@ const VideoUploadField = ({
       await startOrResumeUpload(file, metadata, {
         resume: shouldResume,
       });
-    } catch (err) {
-      console.error("VIDEO_METADATA_ERROR:", err);
+    } catch (error) {
+      console.error("VIDEO_METADATA_ERROR:", error);
 
-      setError(err.message || "Unable to read video details.");
+      setUploadStage("idle");
+      setPaused(false);
+      setError(error.message || "Unable to read video details.");
       setMessage("");
+      setWarning("");
       resumeModeRef.current = false;
       resetInput();
     }
   };
 
   const handlePauseUpload = () => {
-    if (!uploading) return;
+    if (uploadStage !== "uploading") return;
 
     pausedRef.current = true;
     xhrRef.current?.abort();
@@ -595,15 +989,16 @@ const VideoUploadField = ({
       resetUploadState();
 
       setMessage("Upload cancelled.");
+      setWarning("");
       setError("");
       setHasSavedUpload(getAnySavedUploadExists());
-    } catch (err) {
-      if (isOldUploadOwnershipError(err)) {
+    } catch (error) {
+      if (isOldUploadOwnershipError(error)) {
         handleOldSessionOwnershipError();
         return;
       }
 
-      setError(getApiErrorMessage(err));
+      setError(getApiErrorMessage(error));
     }
   };
 
@@ -617,7 +1012,25 @@ const VideoUploadField = ({
         onChange={handleFileChange}
       />
 
-      {value ? (
+      {!hasRequiredLessonTarget && !canResolveUploadContext && (
+        <div className="mb-4 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-3 text-sm font-semibold text-yellow-200">
+          {missingTargetMessage}
+        </div>
+      )}
+
+      {showBusyPanel ? (
+        <UploadBusyPanel
+          uploadStage={uploadStage}
+          selectedMetadata={selectedMetadata}
+          progress={progress}
+          message={message}
+          warning={warning}
+          paused={paused}
+          onPause={handlePauseUpload}
+          onResume={handleResumeUpload}
+          onCancel={handleCancelUpload}
+        />
+      ) : value ? (
         <div className="space-y-3">
           <p className="flex items-center gap-2 text-sm font-semibold text-emerald-300">
             <CheckCircle size={16} />
@@ -646,7 +1059,7 @@ const VideoUploadField = ({
             <button
               type="button"
               onClick={openFilePicker}
-              disabled={disabled || uploading}
+              disabled={uploadDisabled}
               className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
             >
               Replace Video
@@ -655,7 +1068,7 @@ const VideoUploadField = ({
             <button
               type="button"
               onClick={handleRemoveVideo}
-              disabled={disabled || uploading}
+              disabled={uploadDisabled}
               className="rounded-xl border border-red-500/40 px-4 py-2 text-sm font-semibold text-red-300 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
             >
               Remove Video
@@ -665,8 +1078,8 @@ const VideoUploadField = ({
               <button
                 type="button"
                 onClick={handleClearOldUploads}
-                disabled={disabled || uploading}
-                className="rounded-xl border border-yellow-500/40 px-4 py-2 text-sm font-semibold text-yellow-300 hover:bg-yellow-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={uploadDisabled}
+                className="rounded-xl border border-yellow-500/40 px-4 py-2 text-sm font-semibold text-yellow-200 hover:bg-yellow-500/10 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Clear Old Uploads
               </button>
@@ -674,131 +1087,102 @@ const VideoUploadField = ({
           </div>
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-slate-600 bg-slate-900/70 px-4 py-8 text-center">
-          <p className="text-sm text-slate-300">Video is not available.</p>
+        <div className="rounded-xl border border-dashed border-slate-600 bg-slate-900/70 p-6 text-center">
+          <UploadCloud className="mx-auto mb-3 text-slate-400" size={38} />
 
-          <p className="max-w-md text-xs text-slate-500">
-            Select a video. Lesson title and duration will auto-fill from the
-            video file before upload.
+          <p className="font-semibold text-slate-200">
+            Video is not available.
           </p>
 
-          <div className="flex flex-wrap justify-center gap-2">
+          <p className="mt-2 text-sm text-slate-500">
+            Select a video. The app reads details, creates the lesson id if
+            needed, then uploads the same file.
+          </p>
+
+          <div className="mt-5 flex flex-wrap justify-center gap-3">
             <button
               type="button"
               onClick={openFilePicker}
-              disabled={disabled || uploading}
-              className="rounded-xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={uploadDisabled}
+              className="rounded-xl bg-blue-600 px-5 py-2.5 font-semibold text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {uploading ? "Uploading..." : "Choose Video"}
+              Choose Video
             </button>
 
-            {(paused || hasSavedUpload) && (
-              <button
-                type="button"
-                onClick={handleResumeUpload}
-                disabled={disabled || uploading}
-                className="rounded-xl bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Resume Upload
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={handleResumeUpload}
+              disabled={uploadDisabled}
+              className="rounded-xl bg-emerald-600 px-5 py-2.5 font-semibold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Resume Upload
+            </button>
 
             {hasSavedUpload && (
               <button
                 type="button"
                 onClick={handleClearOldUploads}
-                disabled={disabled || uploading}
-                className="rounded-xl border border-yellow-500/40 px-5 py-2 text-sm font-semibold text-yellow-300 hover:bg-yellow-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={uploadDisabled}
+                className="rounded-xl border border-yellow-500/50 px-5 py-2.5 font-semibold text-yellow-200 hover:bg-yellow-500/10 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Clear Old Uploads
               </button>
             )}
           </div>
-
-          {hasSavedUpload && !selectedFile && (
-            <p className="text-xs text-yellow-300">
-              Old upload session found. Use Resume only for the same video, or
-              Clear Old Uploads.
-            </p>
-          )}
         </div>
       )}
 
-      {selectedMetadata && !value && (
-        <div className="mt-4 rounded-xl border border-blue-500/20 bg-blue-500/10 p-3">
-          <p className="flex items-center gap-2 text-sm font-bold text-blue-200">
-            <Info size={15} />
-            Auto-filled from video
-          </p>
+      {processingMessage && !showBusyPanel && (
+        <div className="mt-3">
+          <StatusBox
+            type={
+              processingStatus === "ready"
+                ? "success"
+                : processingStatus === "failed"
+                  ? "error"
+                  : "info"
+            }
+          >
+            <div className="flex items-start gap-2">
+              {processingStatus === "ready" ? (
+                <CheckCircle size={17} className="mt-0.5 shrink-0" />
+              ) : processingStatus === "failed" ? (
+                <XCircle size={17} className="mt-0.5 shrink-0" />
+              ) : (
+                <RefreshCw size={17} className="mt-0.5 shrink-0 animate-spin" />
+              )}
 
-          <p className="mt-1 text-sm text-slate-300">
-            {selectedMetadata.title}
-          </p>
-
-          <p className="mt-1 text-xs text-slate-400">
-            Duration: {selectedMetadata.duration} • Size:{" "}
-            {selectedMetadata.sizeMB} MB
-          </p>
+              <span>{processingMessage}</span>
+            </div>
+          </StatusBox>
         </div>
-      )}
-
-      {(uploading || paused || progress > 0) && (
-        <div className="mt-4 space-y-3">
-          <div className="flex justify-between text-xs text-slate-400">
-            <span>{message}</span>
-            <span>{progress}%</span>
-          </div>
-
-          <div className="h-2 overflow-hidden rounded-full bg-slate-800">
-            <div
-              className="h-full rounded-full bg-blue-500 transition-all"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            {uploading && (
-              <button
-                type="button"
-                onClick={handlePauseUpload}
-                className="rounded-xl border border-yellow-500/40 px-4 py-2 text-sm font-semibold text-yellow-300 hover:bg-yellow-500/10"
-              >
-                Pause Upload
-              </button>
-            )}
-
-            {paused && (
-              <button
-                type="button"
-                onClick={handleResumeUpload}
-                className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500"
-              >
-                Resume Upload
-              </button>
-            )}
-
-            {(uploading || paused) && (
-              <button
-                type="button"
-                onClick={handleCancelUpload}
-                className="rounded-xl border border-red-500/40 px-4 py-2 text-sm font-semibold text-red-300 hover:bg-red-500/10"
-              >
-                Cancel Upload
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {!uploading && !paused && message && (
-        <p className="mt-3 text-sm text-emerald-300">{message}</p>
       )}
 
       {error && (
-        <p className="mt-3 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">
-          {error}
-        </p>
+        <div className="mt-3">
+          <StatusBox type="error">{error}</StatusBox>
+        </div>
       )}
+
+      {message && !showBusyPanel && (
+        <div className="mt-3">
+          <StatusBox type="success">{message}</StatusBox>
+        </div>
+      )}
+
+      {warning && !showBusyPanel && (
+        <div className="mt-3">
+          <StatusBox type="warning">{warning}</StatusBox>
+        </div>
+      )}
+
+      <div className="mt-3 flex items-start gap-2 text-xs text-slate-500">
+        <Info size={14} className="mt-0.5 shrink-0" />
+        <span>
+          Choose Video is one user action. Reading video details happens locally
+          before uploading; it is not a second upload.
+        </span>
+      </div>
     </div>
   );
 };
